@@ -873,35 +873,24 @@ Notation I := nat.
 Implicit Type (F : (I -> O) -> A).
 
 (* TODO : move this elsewhere or streamline it *)
-Lemma nth_map_iota :
-  forall (f : I -> O) m n k o, (n <= m) ->
+Lemma nth_map_iota  (f : nat -> O) m n k o : (n <= m) ->
                                nth o (map f (iota k (S m))) n = f (k + n).
 Proof.
-  intros.
-  rewrite (nth_map k) ?size_iota //.
-  now erewrite nth_iota. 
+move=> lenm.
+have -> : k + n = nth k (iota k m.+1) n by rewrite nth_iota.
+rewrite (nth_map k) // size_iota //.
 Qed.
 
 (* TODO : move this elsewhere or streamline it *)
 Lemma iota_rcons (i j : nat) : rcons (iota i j) (i + j) = iota i j.+1.
-Proof.
-  revert i ; induction j ; cbn in * ; intros ; [now erewrite <- plus_n_O |].
-  f_equal.
-  erewrite <- IHj ; cbn.
-  now erewrite plus_n_Sm.
+Proof. 
+have -> : iota i j.+1 = iota i (j + 1) by rewrite addn1.
+by rewrite -cats1 iotaD.
 Qed.  
 
 (* TODO : move this elsewhere or streamline it *)
-Lemma leq_le i j :
-  i <= j -> le i j.
-Proof.
-  revert j.
-  induction i ; intros j H ; [now eapply le_0_n |].
-  destruct j ; [erewrite ltn0 in H ; inversion H |].
-  eapply le_n_S.
-  eapply IHi.
-  now eapply ltnSE.
-Qed.
+Lemma leq_le i j : i <= j -> le i j.
+Proof. by move/leP. Qed.
 
 
 Definition Bext_tree := list O -> option A.
@@ -913,6 +902,7 @@ Fixpoint Beval_ext_tree_aux (tau : Bext_tree) (f : I -> O) (n : nat) (l : seq O)
   |_, _ =>  tau l
   end.
                
+
 Definition Beval_ext_tree tau f n := Beval_ext_tree_aux tau f n nil 0.
 
 Definition Bseq_cont F :=
