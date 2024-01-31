@@ -199,3 +199,80 @@ Proof.
   intros α. exists (N α).
   intros. now eapply HN.
 Qed.
+
+Lemma T14 Y :
+  has_continuous_modulus Y ->
+  exists N, Mod N Y /\ Mod N N.
+Proof.
+  intros (N & HN & HNY).
+  assert (exists Z, forall α, N (ext (pref α (Z α))) < (Z α) /\
+                      forall m, N (ext (pref α m)) < m ->
+                           Z α <= m
+         ) as [Z HZ]. {
+     unshelve eexists (fun α => proj1_sig (epsilon_smallest
+                                _
+                                _
+                                (L N HN α))).
+    - cbn. intros n. eapply lt_dec.
+    - cbn. intros α.
+      destruct epsilon_smallest as [n Hn]. cbn.
+      eapply Hn.
+  }
+  exists Z. split.
+  - intros α β Hpref. 
+    destruct (HZ α) as [Hα _].
+    assert (H12 : forall α m,
+                N (ext (pref α m)) < m ->
+               Y (ext (pref α m)) = Y (pref α m ⋆ (fun n => α (n + m)))).
+    {
+      clear - HNY. intros α m Hα.
+      eapply HNY.
+      rewrite <- pref_le. 2: lia.
+      eapply map_ext_in_iff.
+      intros k [H _] % in_seq.
+      unfold prep_list.
+      rewrite pref_length.
+      destruct (lt_dec k m).
+      * unfold pref. symmetry. eapply nth_error_nth.
+        erewrite map_nth_error. reflexivity.
+        erewrite nth_error_nth'.
+        2: now rewrite seq_length.
+        now rewrite seq_nth. 
+      * rewrite nth_overflow.
+      + f_equal. lia.
+      + rewrite pref_length. lia.
+    }
+    unshelve epose proof (H12 α (Z α) _) as H1. lia.
+    unshelve epose proof (H12 β (Z α) _) as H2.
+    { rewrite <- Hpref. lia. }
+    unfold prep_list in H1, H2.
+    rewrite pref_length in H1, H2.
+    rewrite <- Hpref in H2 at 1.
+    rewrite H1 in H2.
+    enough (forall α m, Y α = Y (fun n => nth n (pref α m) (α (n - m + m)))) as E.
+    1: now erewrite E, H2, <- E.
+    intros. eapply HNY.
+    eapply map_ext_in_iff.
+    intros k [H _] % in_seq.
+    destruct (lt_dec k m).
+    * unfold pref. symmetry. eapply nth_error_nth.
+      erewrite map_nth_error. reflexivity.
+      erewrite nth_error_nth'.
+      2: now rewrite seq_length.
+      now rewrite seq_nth. 
+    * rewrite nth_overflow.
+      + f_equal. lia.
+      + rewrite pref_length. lia.
+  - intros α β H.
+    assert (Z α >= Z β). {
+      eapply HZ.
+      rewrite <- H. eapply HZ.
+    }
+    enough (~ Z α > Z β) by lia.
+    intros Hcon.
+    eapply pref_le_eq with (n := Z β) in H.
+    2: lia.
+    enough (Z α <= Z β) by lia.
+    eapply HZ. rewrite H. eapply HZ.
+    Unshelve. all: exact 0.
+Qed.
