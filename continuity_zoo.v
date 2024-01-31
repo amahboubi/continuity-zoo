@@ -124,7 +124,9 @@ Proof.
 Qed.    
 
 Lemma eval_ext_tree_output_unique tau f l n1 n2 o1 o2 :
-  eval_ext_tree_aux tau f n1 l = output o1 -> eval_ext_tree_aux tau f n2 l = output o2 -> o1 = o2.
+  eval_ext_tree_aux tau f n1 l = output o1 ->
+  eval_ext_tree_aux tau f n2 l = output o2 ->
+  o1 = o2.
 Proof.
 elim: n1 n2 l => [| n1 ihn1] [ | n2] l /=.
 1, 2: by move=> -> [].
@@ -139,9 +141,7 @@ Fixpoint eval_ext_tree_trace_aux (tau : ext_tree) (f : I -> O) (n : nat) (l : li
   | _ , _ => [::]
   end.
 
-(* Related: Andrej Bauer pointed to them 1.7.5 van Oosten's "Relaizability: an introduction to its 
-   categorical side" book introducing the trace
-   associated to a run from a query a to a result b using oracle f, called an f-dialogue.
+(* Related: Andrej Bauer pointed to them 1.7.5 van Oosten's "Relaizability: an introduction to its categorical side" book introducing the trace associated to a run from a query a to a result b using oracle f, called an f-dialogue.
    He later called this "interrogations" *)
 Definition eval_ext_tree_trace tau f n := eval_ext_tree_trace_aux tau f n [::].
 
@@ -469,7 +469,7 @@ by rewrite /from_pref; rewrite (nth_map 0) ?size_iota // nth_iota // size_iota.
 Qed.
 
 (* TODO : weaken the self modulating hypothesis in the lemma above, using Fujiwara-Kawai's proof 
-   from "equivalence of bar induction and bar recursion (...) that, in part in Coq, we can prove 
+   from "equivalence of bar induction and bar recursion (...)" that, in part in Coq, we can prove 
    that modulus F M -> modulus M M' -> exists M'', modulus M'' M'' /\ modulus F M'' *)
 End SelfModulation.
 
@@ -656,12 +656,50 @@ Qed.
   Qed.
 
 
+(*The trace of evaluation of an extensional tree is a modulus of continuity
+ for the evaluation of that extensional tree.*)
+Lemma eval_ext_tree_continuous (tau : ext_tree I O A) n l :
+  modulus (fun alpha => eval_ext_tree_aux tau alpha n l)
+    (fun alpha => eval_ext_tree_trace_aux tau alpha n l).
+Proof.
+  revert l.
+  induction n as [ | n IHn] ; intros l alpha beta eqab ; [reflexivity |].
+  cbn in *.
+  destruct (tau l) ; [ | reflexivity].
+  inversion eqab as [Heqab ].
+  now eapply IHn.
+Qed.  
 
-(* Weak seq continuity implies modulus continuity *)
+Lemma eval_ext_tree_trace_continuous (tau : ext_tree I O A) n l :
+  modulus (fun alpha => eval_ext_tree_trace_aux tau alpha n l)
+    (fun alpha => eval_ext_tree_trace_aux tau alpha n l).
+  revert l.
+  induction n as [ | n IHn] ; intros l alpha beta eqab ; [reflexivity |].
+  cbn in *.
+  destruct (tau l) ; [ | reflexivity].
+  inversion eqab as [Heqab ].
+  f_equal.
+  now eapply IHn.
+Qed.
+
+(*Continuity via extensional trees implies continuity via moduli*)
+Lemma continuous_ext_tree_to_modulus F : seq_contW F -> continuous_via_modulus F.
+Proof.
+  move=> [] tau F_eq_eval.
+  exists (fun alpha => eval_ext_tree_trace_aux tau alpha (projT1 (F_eq_eval alpha)) nil).
+  intros alpha beta H.
+  eapply (eval_ext_tree_output_unique (I := I)).
+  + rewrite - (projT2 (F_eq_eval alpha)) ; unfold eval_ext_tree.
+    now rewrite (@eval_ext_tree_continuous tau (projT1 (F_eq_eval alpha)) nil alpha beta H).
+  + now eapply (projT2 (F_eq_eval beta)).
+Qed.  
+
+
+(* Weak seq continuity implies modulus continuity (old version) :
 Lemma continuous_ext_tree_to_modulus F : seq_contW F -> modulus_continuous F.
 Proof.
   move=> [] tau F_eq_eval f.
-    case: (F_eq_eval f) => n F_eq_eval_f.
+  case: (F_eq_eval f) => n F_eq_eval_f.
     exists (eval_ext_tree_trace tau f n) => g g_coin.
     have eval_f_g_eq : eval_ext_tree tau g n = eval_ext_tree tau f n.
     { revert tau g_coin F_eq_eval_f F_eq_eval.
@@ -680,6 +718,8 @@ Proof.
     rewrite F_eq_eval_f in eval_f_g_eq.
     now destruct (eval_ext_tree_output_unique mP eval_f_g_eq).
 Qed.
+
+*)
 
 
 End AxiomFreeImplications.
@@ -868,6 +908,9 @@ End Cantor.
 *)
 Section Brouwer_ext_tree.
 
+  (*The goal of this Section is to provide an extensional tree equivalent to Brouwer trees,
+   and to prove that it is equivalent to seq_contW. *)
+
 Variable O A : Type.
 Notation I := nat.
 Implicit Type (F : (I -> O) -> A).
@@ -893,6 +936,28 @@ Lemma leq_le i j : i <= j -> le i j.
 Proof. by move/leP. Qed.
 
 
+(* TODO : move this elsewhere or streamline it *)
+Lemma from_pref_finite_equal l (alpha : I -> O) o :
+  forall n, le (List.list_max l) n -> 
+  map (from_pref o (map alpha (iota 0 (S n)))) l = map alpha l.
+Proof.
+  induction l ; cbn in * ; [reflexivity |] ; intros n Hle.
+  unfold from_pref in *.
+  f_equal.
+  2:{ eapply IHl.
+      unfold List.list_max.
+      etransitivity ; [ | eassumption].
+      now eapply PeanoNat.Nat.max_lub_r.
+  }
+  change (nth o ([seq alpha i | i <- iota 0 (S n)]) a = alpha a).
+  erewrite nth_map_iota ; [reflexivity |].
+  destruct (@leP a n)  as [ | notle] ; auto.
+  exfalso ; apply notle.
+  etransitivity ; [ | eassumption ].
+  now eapply PeanoNat.Nat.max_lub_l.
+Qed.
+
+(*Brouwer extensional trees: they go to option A, and None is considered to be "next query".*)
 Definition Bext_tree := list O -> option A.
 
 Fixpoint Beval_ext_tree_aux (tau : Bext_tree) (f : I -> O) (n : nat) (l : seq O) (i : I) :
@@ -905,9 +970,13 @@ Fixpoint Beval_ext_tree_aux (tau : Bext_tree) (f : I -> O) (n : nat) (l : seq O)
 
 Definition Beval_ext_tree tau f n := Beval_ext_tree_aux tau f n nil 0.
 
+(*Continuity via Brouwer extensional trees*)
 Definition Bseq_cont F :=
   {tau : Bext_tree & forall alpha, {n : nat & Beval_ext_tree tau alpha n = Some (F alpha)} }.
 
+
+(*The following is a bunch of lemmas that mimick lemmas about extensional trees,
+ albeit for Brouwer extensional trees this time. *)
 Definition Bvalid_ext_tree (tau : Bext_tree) (f : I -> O) :=
   forall (k : I) (a : A), tau (map f (iota 0 k)) = Some a ->
                           tau (map f (iota 0 k.+1)) = Some a.
@@ -958,6 +1027,7 @@ Proof.
     now rewrite H.
 Qed.
 
+(* Moved to Axiom Free Implications.
 
 Lemma eval_ext_tree_continuous (tau : ext_tree I O A) n l :
   modulus (fun alpha => eval_ext_tree_aux tau alpha n l)
@@ -982,6 +1052,11 @@ Lemma eval_ext_tree_trace_continuous (tau : ext_tree I O A) n l :
   f_equal.
   now eapply IHn.
 Qed.  
+ *)
+
+(*Now we try to turn extensional trees into Brouwer extensional trees.
+ We start by proving that eval_ext_tree on an oracle can be seen as eval_ext_tree
+ on a partial oracle computed via a list*)
 
 Lemma eval_ext_tree_from_pref (tau : ext_tree I O A) f n l o :
   eval_ext_tree_aux tau f n (map f l) =
@@ -1009,27 +1084,7 @@ Proof.
     now erewrite cat_rcons.
 Qed.
 
-
-Lemma from_pref_finite_equal l (alpha : I -> O) o :
-  forall n, le (List.list_max l) n -> 
-  map (from_pref o (map alpha (iota 0 (S n)))) l = map alpha l.
-Proof.
-  induction l ; cbn in * ; [reflexivity |] ; intros n Hle.
-  unfold from_pref in *.
-  f_equal.
-  2:{ eapply IHl.
-      unfold List.list_max.
-      etransitivity ; [ | eassumption].
-      now eapply PeanoNat.Nat.max_lub_r.
-  }
-  change (nth o ([seq alpha i | i <- iota 0 (S n)]) a = alpha a).
-  erewrite nth_map_iota ; [reflexivity |].
-  destruct (@leP a n)  as [ | notle] ; auto.
-  exfalso ; apply notle.
-  etransitivity ; [ | eassumption ].
-  now eapply PeanoNat.Nat.max_lub_l.
-Qed.
-
+(*Same for the trace of eval_ext_tree*)
 Lemma eval_ext_tree_trace_from_pref (tau : ext_tree I O A) f n k l o :
   le (List.list_max (l ++ (eval_ext_tree_trace_aux tau f n (map f l)))) k ->
   eval_ext_tree_trace_aux tau f n (map f l) =
@@ -1062,7 +1117,7 @@ Proof.
     now erewrite cat_rcons.
 Qed.    
 
-
+(*TODO : move this to some Section with lemmas about eval_ext_tree*)
 Lemma eval_ext_tree_monotone (tau : ext_tree I O A) f n k a l :
   eval_ext_tree_aux tau f n l = output a ->
   eval_ext_tree_aux tau f (n + k) l = output a.
@@ -1073,6 +1128,7 @@ Proof.
   now eapply IHn.
 Qed.
 
+(*TODO : move this to some Section with lemmas about eval_ext_tree*)
 Lemma eval_ext_tree_trace_monotone (tau : ext_tree I O A) f n k a l :
   eval_ext_tree_aux tau f n l = output a ->
   eval_ext_tree_trace_aux tau f n l = eval_ext_tree_trace_aux tau f (n + k) l.
@@ -1084,7 +1140,8 @@ Proof.
   now eapply IHn.
 Qed.
 
-
+(*A technical lemma to prove that eval_ext_tree using lists as partial oracles
+ is monotone*)
 Lemma eval_ext_tree_pref_monotone_aux (tau : ext_tree I O A) f n a o l :
   eval_ext_tree_aux tau f n (map f l) = output a ->
   eval_ext_tree_aux tau (from_pref o (map f (iota 0 (n + (S (List.list_max (l ++ (eval_ext_tree_trace_aux tau f n (map f l)))))))))
@@ -1115,6 +1172,7 @@ Proof.
   now apply: eval_ext_tree_pref_monotone_aux _ _ _ _ _ nil.
 Qed.
 
+(*Turning ext_tree to Brouwer ext_tree*)
 Definition extree_to_extree (tau : ext_tree I O A) (o : O) : ext_tree I O A :=
   fun l => eval_ext_tree tau (from_pref o l) (size l).
 
@@ -1225,7 +1283,7 @@ Proof.
   now eapply ltnSE.
 Qed.
 
-
+(*Continuity via ext_trees implies continuity via Brouwer ext_trees*)
 Lemma seq_cont_to_Brouwer_aux F (o : O) tau alpha :
   {n : I & eval_ext_tree tau alpha n = output (F alpha) } ->
   {n : I & Beval_ext_tree (extree_to_Bextree tau o) alpha n = Some (F alpha)}.
@@ -1260,6 +1318,8 @@ Proof.
   apply IHm ; [now erewrite <- plus_n_Sm | assumption].
 Qed.  
 
+
+(*Getting rid of the o:O assumption*)
 Definition extree_to_Bextree_noo (tau : ext_tree I O A) : Bext_tree :=
   fun l => match l with
            | nil => match (tau l) with
@@ -1303,12 +1363,16 @@ Qed.
 End Brouwer_ext_tree.
 
 Section BarInduction.
-  
+
+
+  (*The aim of this Section is to prove that Sequential continuity + Bar Induction
+   implies Dialogue continuity.*)
 Variable BI : forall A T, @BI_ind A T.
 Variable O A : Type.
 Notation I := nat.
 Implicit Type (F : (I -> O) -> A).
 Local Notation Bext_tree := (Bext_tree O A).
+
 
 Fixpoint Bextree_to_valid (tau : Bext_tree) (l acc : list O) : option A :=
   match l with
