@@ -662,24 +662,18 @@ Lemma eval_ext_tree_continuous (tau : ext_tree I O A) n l :
   modulus (fun alpha => eval_ext_tree_aux tau alpha n l)
     (fun alpha => eval_ext_tree_trace_aux tau alpha n l).
 Proof.
-  revert l.
-  induction n as [ | n IHn] ; intros l alpha beta eqab ; [reflexivity |].
-  cbn in *.
-  destruct (tau l) ; [ | reflexivity].
-  inversion eqab as [Heqab ].
-  now eapply IHn.
-Qed.  
+elim: n l => [| n ihn] l alpha beta /= eqab //=.
+case: (tau l) eqab => // i /= [<- e].
+exact: ihn.
+Qed.
 
 Lemma eval_ext_tree_trace_continuous (tau : ext_tree I O A) n l :
   modulus (fun alpha => eval_ext_tree_trace_aux tau alpha n l)
     (fun alpha => eval_ext_tree_trace_aux tau alpha n l).
-  revert l.
-  induction n as [ | n IHn] ; intros l alpha beta eqab ; [reflexivity |].
-  cbn in *.
-  destruct (tau l) ; [ | reflexivity].
-  inversion eqab as [Heqab ].
-  f_equal.
-  now eapply IHn.
+Proof.
+elim: n l => [| n ihn] l alpha beta //= eqab.
+case: (tau l) eqab => // i [<- e]; congr (_ :: _).
+exact: ihn.
 Qed.
 
 (*Continuity via extensional trees implies continuity via moduli*)
@@ -986,13 +980,10 @@ Lemma Bvalid_plus (tau : Bext_tree) f :
       tau (map f (iota 0 k)) = Some a ->
       tau (map f (iota 0 (k + j))) = Some a.
 Proof.
-  intros H k j ; revert H k ; induction j ; intros H k a Heq.
-  1: now rewrite <- plus_n_O.
-  erewrite <- plus_n_Sm ; erewrite <- plus_Sn_m.
-  eapply IHj ; [assumption |].
-  now apply H.
+move=> H k j; elim: j k => [| j ihj] k a e; first by rewrite addn0.
+rewrite addnS; apply: (ihj k.+1).
+exact: H.
 Qed.
-
 
 Fixpoint Beval_ext_tree_trace_aux
   (tau : Bext_tree) (f : I -> O) (n : nat) (l : seq O) (i : I) : I :=
@@ -1007,25 +998,15 @@ Lemma Beval_ext_tree_map_aux tau f n l i :
   Beval_ext_tree_aux tau f n l i =
     tau (l ++ map f (iota i ((Beval_ext_tree_trace_aux tau f n l i)))).
 Proof.
-  elim: n l i =>[|n ihn] l i //=.
-  1: now erewrite cats0.
-  + case e: (tau l) => [a | ] /=.
-    1: now erewrite cats0.
-    erewrite <- cat_rcons.
-    now apply ihn.
+elim: n l i =>[| n ihn] l i /=; first by rewrite cats0.
+case e: (tau l) => [a |] /=; first by rewrite cats0.
+by rewrite -cat_rcons.
 Qed.    
 
-Lemma Beval_ext_tree_constant (tau : Bext_tree) (f : I -> O) :
-  forall n a l i,
+Lemma Beval_ext_tree_constant (tau : Bext_tree) (f : I -> O) n a l i :
     tau l = Some a ->
     Beval_ext_tree_aux tau f n l i = Some a.
-Proof.
-  intros n a.
-  induction n ; intros l i H.
-  - assumption.
-  - cbn.
-    now rewrite H.
-Qed.
+Proof. by elim: n l i => [| n ihn] l i //= ->. Qed.
 
 (* Moved to Axiom Free Implications.
 
@@ -1033,30 +1014,25 @@ Lemma eval_ext_tree_continuous (tau : ext_tree I O A) n l :
   modulus (fun alpha => eval_ext_tree_aux tau alpha n l)
     (fun alpha => eval_ext_tree_trace_aux tau alpha n l).
 Proof.
-  revert l.
-  induction n as [ | n IHn] ; intros l alpha beta eqab ; [reflexivity |].
-  cbn in *.
-  destruct (tau l) ; [ | reflexivity].
-  inversion eqab as [Heqab ].
-  now eapply IHn.
-Qed.  
+elim: n l => [| n ihn] l alpha beta /= eqab //=.
+case: (tau l) eqab => // i /= [<- e].
+exact: ihn.
+Qed.
 
 Lemma eval_ext_tree_trace_continuous (tau : ext_tree I O A) n l :
   modulus (fun alpha => eval_ext_tree_trace_aux tau alpha n l)
     (fun alpha => eval_ext_tree_trace_aux tau alpha n l).
-  revert l.
-  induction n as [ | n IHn] ; intros l alpha beta eqab ; [reflexivity |].
-  cbn in *.
-  destruct (tau l) ; [ | reflexivity].
-  inversion eqab as [Heqab ].
-  f_equal.
-  now eapply IHn.
-Qed.  
+Proof.
+elim: n l => [| n ihn] l alpha beta //= eqab.
+case: (tau l) eqab => // i [<- e]; congr (_ :: _).
+exact: ihn.
+Qed.
  *)
 
 (*Now we try to turn extensional trees into Brouwer extensional trees.
  We start by proving that eval_ext_tree on an oracle can be seen as eval_ext_tree
  on a partial oracle computed via a list*)
+
 
 Lemma eval_ext_tree_from_pref (tau : ext_tree I O A) f n l o :
   eval_ext_tree_aux tau f n (map f l) =
