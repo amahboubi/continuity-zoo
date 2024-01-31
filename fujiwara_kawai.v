@@ -1,0 +1,201 @@
+Require Import List Lia Arith.
+Import ListNotations.
+
+Variable enc : list nat -> nat.
+
+Implicit Type Y : (nat -> nat) -> nat.
+Implicit Types α β : nat -> nat.
+Implicit Types n : nat.
+Implicit Types γ : list nat -> bool.
+Implicit Types s : list nat.
+
+Definition pref α n :=
+  map α (seq 0 n).
+
+Definition ext s :=
+  fun n => nth n s 0.
+
+Definition prep_list s α :=
+  fun n => nth n s (α (n - length s)).
+
+Infix "⋆" := prep_list (at level 30).
+
+Definition Cont Y :=
+  forall α, exists n, forall β, pref α n = pref β n -> Y α = Y β.
+
+Definition Mod N Y :=
+  forall α β, pref α (N α) = pref β (N α) -> Y α = Y β.
+
+Definition has_continuous_modulus Y :=
+  exists N, Cont N /\ Mod N Y.
+
+Definition bar γ :=
+  forall α, exists n, γ (pref α n) = true.
+
+Definition monotone γ :=
+  forall s s', γ s = true -> γ (s ++ s') = true.
+
+Definition securing γ Y :=
+  forall s, γ s = true -> forall β, Y (ext s) = Y (s ⋆ β).
+
+Lemma pref_S α n :
+  pref α (S n) = pref α n ++ [α n].
+Proof.
+  unfold pref. replace (S n) with (n + 1) by lia.
+  now rewrite seq_app, map_app.
+Qed.
+
+Lemma pref_le_eq n m α β :
+  pref α m = pref β m ->
+  n <= m ->
+  pref α n = pref β n.
+Proof.
+  intros H (k & -> & Hk) % Nat.le_exists_sub.
+  unfold pref in H.
+  replace (k + n) with (n + k) in * by lia.
+  rewrite seq_app, !map_app in H.
+  eapply (f_equal (firstn n)) in H.
+  rewrite !firstn_app in H.
+  rewrite !map_length, seq_length in H.
+  rewrite !minus_diag in H.
+  rewrite !firstn_O, !app_nil_r in H.
+  rewrite !firstn_all2 in H.
+  - assumption.
+  - rewrite map_length, seq_length. lia.
+  - rewrite map_length, seq_length. lia.
+Qed.
+
+Lemma pref_le n m α :
+  n <= m ->
+  pref α n = pref (ext (pref α m)) n.
+Proof.
+  intros H.
+  unfold pref.
+  eapply map_ext_in_iff.
+  intros k [_ Hk] % in_seq.
+  unfold ext.
+  erewrite nth_indep.
+  rewrite map_nth, seq_nth.
+  - reflexivity.
+  - lia.
+  - rewrite map_length, seq_length. lia.
+    Unshelve. exact 0.
+Qed.
+
+Lemma L N :
+  Cont N -> forall α, exists n, N (ext (pref α n)) < n.
+Proof.
+  intros H α. destruct (H α) as [n Hn]. 
+  exists (1 + n + N α). rewrite <- Hn.
+  lia.
+  eapply pref_le. lia.
+Qed.
+
+Definition extensional Y :=
+  forall α β, (forall n, α n = β n) -> Y α = Y β.
+
+Lemma T12 Y :
+  has_continuous_modulus Y -> exists N, Mod N Y /\ forall α, exists n, N (ext (pref α n)) < n.
+Proof.
+  intros (N & HN & HNY).
+  exists N. split. 1: assumption.
+  apply L. assumption.
+Qed.
+
+Lemma pref_length α n :
+  length (pref α n) = n.
+Proof.
+  unfold pref. now rewrite map_length, seq_length.
+Qed.
+
+(* Lemma map_ext [A B : Type] (f g : A -> B) : *)
+(*   (forall a : A, f a = g a) -> forall l : list A, map f l = map g l. *)
+
+
+Lemma T23 Y :
+  (exists N, Mod N Y /\ forall α, exists n, N (ext (pref α n)) < n) -> exists γ, securing γ Y /\ bar γ /\ extensional Y.
+Proof.
+  intros (N & HNY & HN).
+  pose (γ := fun s => N (ext s) <? length s).
+  exists γ. repeat split.
+  - intros s Hs β.
+    eapply (HNY (ext s) (s ⋆ β)).
+    unfold γ in Hs.
+    apply Nat.ltb_lt in Hs.
+    unfold pref.
+    symmetry.
+    eapply map_ext_in_iff.
+    intros n [_ H] % in_seq. 
+    unfold prep_list.
+    unfold ext.
+    eapply nth_indep.
+    lia.
+  - unfold γ. intros α.
+    destruct (HN α) as [n Hn].
+    exists n. rewrite pref_length. now apply Nat.ltb_lt.
+  - intros α β H. eapply HNY.
+    unfold pref. now eapply map_ext.
+Qed.
+
+Require Import ConstructiveEpsilon.
+
+Lemma T34 γ Y :
+  securing γ Y -> bar γ -> extensional Y -> exists N, Mod N Y /\ Mod N N.
+Proof.
+  intros Hsec Hbar Hext.
+  assert (exists N, forall α, γ (pref α (N α)) = true /\
+                      (forall k : nat, γ (pref α k) = true -> N α <= k)
+         ) as [N HN]. {
+    unshelve eexists (fun α => proj1_sig (epsilon_smallest
+                                (fun n => γ (pref α n) = true)
+                                _
+                                (Hbar α))).
+    - intros n; cbn. clear.
+      destruct γ; firstorder congruence.
+    - cbn. intros α.
+      destruct epsilon_smallest as [n Hn]. cbn.
+      assumption.
+  }
+  exists N. split.
+  - intros α β Hpref. red in Hsec.
+    destruct (HN α) as [Hα _].
+    pose proof (Hsec _ Hα (fun n => α (n + N α))) as H1.
+    rewrite Hpref in Hα.
+    pose proof (Hsec _ Hα (fun n => β (n + N α))) as H2.
+    unfold prep_list in H1, H2.
+    rewrite pref_length in H1, H2.
+    rewrite <- Hpref in H2 at 1.
+    rewrite H1 in H2.
+    enough (forall α m, Y α = Y (fun n => nth n (pref α m) (α (n - m + m)))) as E.
+    1: now erewrite E, H2, <- E.
+    clear - Hext. intros. eapply Hext. intros.
+    destruct (lt_dec n m).
+    * unfold pref. symmetry. eapply nth_error_nth.
+      erewrite map_nth_error. reflexivity.
+      erewrite nth_error_nth'.
+      2: now rewrite seq_length.
+      now rewrite seq_nth. 
+    * rewrite nth_overflow.
+      + f_equal. lia.
+      + rewrite pref_length. lia.
+  - intros α β H.
+    assert (N α >= N β). {
+      eapply HN.
+      rewrite <- H. eapply HN.
+    }
+    enough (~ N α > N β) by lia.
+    intros Hcon.
+    eapply pref_le_eq with (n := N β) in H.
+    2: lia.
+    enough (N α <= N β) by lia.
+    eapply HN. rewrite H. eapply HN.
+    Unshelve. exact 0.
+Qed.
+
+Lemma T41 Y :
+  (exists N, Mod N Y /\ Mod N N) -> Cont Y.
+Proof.
+  intros (N & HN & _).
+  intros α. exists (N α).
+  intros. now eapply HN.
+Qed.
