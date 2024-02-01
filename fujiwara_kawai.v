@@ -1,19 +1,20 @@
 Require Import List Lia Arith.
 Import ListNotations.
 
-Variable enc : list nat -> nat.
+Variable A : Type.
+Variable a : A.
 
-Implicit Type Y : (nat -> nat) -> nat.
-Implicit Types α β : nat -> nat.
+Implicit Type Y : (nat -> A) -> nat.
+Implicit Types α β : nat -> A.
 Implicit Types n : nat.
-Implicit Types γ : list nat -> bool.
-Implicit Types s : list nat.
+Implicit Types γ : list A -> bool.
+Implicit Types s : list A.
 
 Definition pref α n :=
   map α (seq 0 n).
 
 Definition ext s :=
-  fun n => nth n s 0.
+  fun n => nth n s a.
 
 Definition prep_list s α :=
   fun n => nth n s (α (n - length s)).
@@ -22,6 +23,9 @@ Infix "⋆" := prep_list (at level 30).
 
 Definition Cont Y :=
   forall α, exists n, forall β, pref α n = pref β n -> Y α = Y β.
+
+Definition ContL Y :=
+  forall α, exists m, forall β, map α m = map β m -> Y α = Y β.
 
 Definition Mod N Y :=
   forall α β, pref α (N α) = pref β (N α) -> Y α = Y β.
