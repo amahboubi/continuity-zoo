@@ -1,11 +1,14 @@
 Require Import List Lia Arith.
 Import ListNotations.
 
-Variable A : Type.
-Variable a : A.
+Section sec.
 
-Implicit Type Y : (nat -> A) -> nat.
-Implicit Types α β : nat -> A.
+Variables A O : Type.
+Variable a : A.
+Notation Q := nat.
+
+Implicit Type Y : (Q -> A) -> O.
+Implicit Types α β : Q -> A.
 Implicit Types n : nat.
 Implicit Types γ : list A -> bool.
 Implicit Types s : list A.
@@ -21,23 +24,14 @@ Definition prep_list s α :=
 
 Infix "⋆" := prep_list (at level 30).
 
-Definition Cont Y :=
+Definition Cont {O} (Y : (nat -> A) -> O) :=
   forall α, exists n, forall β, pref α n = pref β n -> Y α = Y β.
 
-Definition ContL {Q O} (Y : (Q -> A) -> O) :=
-  forall α : Q -> A, exists m : list Q, forall β : Q -> A, map α m = map β m -> Y α = Y β.
-
-Definition Mod N Y :=
+Definition Mod {O} N (Y : (nat -> A) -> O) :=
   forall α β, pref α (N α) = pref β (N α) -> Y α = Y β.
-
-Definition ModL {Q O} (N : (Q -> A) -> list Q) (Y : (Q -> A) -> O) :=
-  forall (α β : Q -> A), map α (N α) = map β (N α) -> Y α = Y β.
 
 Definition has_continuous_modulus Y :=
   exists N, Cont N /\ Mod N Y.
-
-Definition has_continuous_modulusL {Q O} (Y : (Q -> A) -> O) :=
-  exists N, ContL N /\ ModL N Y.
 
 Definition bar γ :=
   forall α, exists n, γ (pref α n) = true.
@@ -92,6 +86,8 @@ Proof.
     Unshelve. exact 0.
 Qed.
 
+Variable embed : list O -> nat.
+
 Lemma L N :
   Cont N -> forall α, exists n, N (ext (pref α n)) < n.
 Proof.
@@ -99,30 +95,6 @@ Proof.
   exists (1 + n + N α). rewrite <- Hn.
   lia.
   eapply pref_le. lia.
-Qed.
-
-Variable Q : Type.
-Variable Q_eq_dec : forall n m : Q, {n = m} + {n <> m}.
-
-Definition extL (α : Q -> A) m :=
-  fun x => if in_dec Q_eq_dec x m then α x else a.
-
-Variable O : Type.
-
-Variable embed : O -> Q.
-
-Lemma L' (N : (Q -> A) -> O) :
-  ContL N -> forall α : Q -> A, exists m, In (embed (N (extL α m))) m.
-Proof.
-  intros H α. destruct (H α) as [m Hm]. 
-  exists (embed (N α) :: m). rewrite <- Hm.
-  firstorder.
-  generalize (incl_refl m).
-  generalize m at 2 4 as m'.
-  clear. induction m.
-  - reflexivity.
-  - cbn. intros. f_equal. 2: eapply IHm; firstorder congruence.
-    unfold extL. destruct in_dec; firstorder.
 Qed.
 
 Definition extensional Y :=
@@ -234,14 +206,6 @@ Proof.
   intros. now eapply HNY.
 Qed.
 
-Lemma T41L {Q O} (Y : (Q -> A) -> O) :
-  (exists N, ModL N Y /\ ModL N N) -> has_continuous_modulusL Y.
-Proof.
-  intros (N & HN & HNY). exists N. split; auto.
-  intros α. exists (N α).
-  intros. now eapply HNY.
-Qed.
-
 Lemma T14 Y :
   has_continuous_modulus Y ->
   exists N, Mod N Y /\ Mod N N.
@@ -319,13 +283,7 @@ Proof.
     Unshelve. all: exact 0.
 Qed.
 
-Lemma T14L {Q O} (Y : (Q -> A) -> O) :
-  has_continuous_modulusL Y ->
-  exists N : (Q -> A) -> list Q, ModL N Y /\ ModL N N.
-Proof.
-  intros (N & HN & HNY).
-Abort.
-(* here we now need that Q is enumerable. We already need that Q is discrete, so in summary we're just assuming Q to be a datatype.
-   Furthermore, for finite Q continuity is boring, because one can always use the full list of Q.
-   So: strengthening to lists makes no sense.
- *)
+End sec.
+
+About T14.
+About T41.
