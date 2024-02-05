@@ -93,8 +93,6 @@ observable variant:
 M α := min {N (padded_prefix α n) | N (padded_prefix α n) < n}
 or, rather the simpler
 M α := min {n | N (padded_prefix α n) < n}
-
-(to be confirmed)
  *)
 case=> N [ContN ModYN].
 pose good_pref α n :=  N (padded_prefix α n) <= n.
@@ -123,8 +121,8 @@ have ModYM : Mod Y M.
   by move=> α β; apply: good_prefP. 
 suff ModMM : Mod M M by exists M; split.
 move=> α β eq_pref.
-(* Here is where extensionnality matters *)                               
-have eq_padded k : k <= M α -> padded_prefix α k =  padded_prefix β k.
+(* Here is where extensionality matters *)                               
+have eq_padded k : k <= M α -> padded_prefix α k = padded_prefix β k.
   move=> lekMα.
   suff e : pref α k = pref β k by rewrite /padded_prefix e.
   exact: (pref_le_eq lekMα).
