@@ -80,7 +80,7 @@ Definition Mod {O} (Y : (nat -> A) -> O) N :=
 
 (* Y has a continuous modulus *)
 Definition has_continuous_modulus Y :=
-  exists N & Cont N, Mod Y N.
+  exists N, Cont N /\ Mod Y N.
 
 (* Name from Yannick + Fujiwara - Kawai *)
 Lemma T14 Y :
@@ -135,6 +135,13 @@ suff leMαβ : M α <= M β by apply/eqP; rewrite eqn_leq leMαβ.
 apply: minM.
 rewrite /good_pref eq_padded //. 
 exact: good_prefM.
+Qed.
+
+Lemma T41 Y :
+  (exists N, Mod Y N /\ Mod N N) -> has_continuous_modulus Y.
+Proof.
+  case=> N [HN HNY]; exists N; split=> // α.
+  exists (N α) => *; exact: HNY.
 Qed.
 
 End sec.
