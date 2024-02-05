@@ -186,14 +186,14 @@ Definition valid_ext_tree (tau : ext_tree) :=
   forall l o,  tau l = output o -> forall a, tau (rcons l a) = output o.
 
 (* Interrogations (van Oosten) *)
-Inductive interrogation (f : I -> O) : seq O -> (seq O -> result I A) -> Type :=
+Inductive interrogation (f : I -> O) : seq (I * O) -> (seq O -> result I A) -> Type :=
   NoQuestions τ : interrogation f [::] τ
 | Ask l τ q a : f q = a ->
                 interrogation f l τ ->
-                τ l = ask q -> interrogation f (rcons l a) τ.
+                τ (map snd l) = ask q -> interrogation f (rcons l (q, a)) τ.
 
 Definition continuous_via_interrogations_ex F τ :=
-  forall f, { ans & prod (interrogation f ans τ) (τ ans = output (F f)) }.
+  forall f, { ans & prod (interrogation f ans τ) (τ (map snd ans) = output (F f)) }.
 
 Definition continuous_via_interrogations F :=
   { τ & continuous_via_interrogations_ex F τ }.
@@ -893,6 +893,145 @@ Qed.
 
 End Cantor.
 
+Module generalised.
+
+Require Import List.
+Import ListNotations.
+
+Inductive Forall (A : Type) (P : A -> Type) : seq.seq A -> Type :=
+    Forall_nil : Forall P [] | Forall_cons : forall (x : A) (l : seq.seq A), P x -> Forall P l -> Forall P (x :: l).
+
+Definition barred {A B} T :=
+  forall α : A -> B, { u : list (A * B) & (Forall (fun '(a,b) => α a = b) u * T u)%type }.
+
+Inductive indbarred {A B} T : list (A * B) -> Type :=
+| ieta u' u : T u' -> indbarred T (u' ++ u)
+| ibeta a v : ~ In a (map fst v) ->
+              (forall b, indbarred T (v ++ [(a,b)])) ->
+              indbarred T v.
+
+Lemma indbarred_lem {A B} {b0 : B} T l :
+  @indbarred A B T l ->
+  ({ u' & { u & { a & {b & ((l = u' ++ u ++ [(a,b)])%SEQ * T u')%type}}}} + { u & T (l ++ u)%SEQ }).
+Proof.
+  induction 1.
+  - destruct u using last_ind.
+    + right. exists []. now rewrite !cats0.
+    + clear IHu. left. destruct x. exists u'. exists u. exists a, b. split; eauto.
+      rewrite <- cat_rcons. now rewrite cats0.
+  - destruct v.
+    + cbn in *.
+      destruct (X b0) as [(? & ? & ? & ? & ? & ?) | (? & ?) ].
+      eauto. eauto. 
+    + destruct p as [a' b].
+      cbn in *. 
+      destruct (X b) as [(? & ? & ? & ? & ? & ?) | (? & ?) ].
+      * rewrite <- !cat_rcons in e. rewrite !cats0 in e.
+        rewrite <- !rcons_cat in e.
+        rewrite <- !rcons_cons in e.
+        eapply rcons_inj in e. inversion e. subst.
+        admit.
+      * right. eexists ((a, b) :: x). rewrite <- app_assoc in t.
+        cbn in *. eassumption.
+Admitted.
+
+Definition GBI {A B} T :=
+  @barred A B T -> indbarred T [].
+
+(* Theorem GBI_to  {I O A}F : *)
+(*   (forall T, @GBI I O T) -> *)
+(*   seq_contW F -> *)
+(*   @dialogue_cont I O A F. *)
+(* Proof. *)
+(*   intros gbi [tau Htau]. red in Htau. *)
+(*   assert (valid_ext_tree tau) as Hvalid by admit. *)
+(*   pose (T := fun (l : list (I * O)) => {a : A & tau (map snd l) = output a}). *)
+(*   have Help : barred T. *)
+(*   { intros α. *)
+(*     specialize (Htau α) as [n Hn]. rename tau into τ. *)
+(*     exists (seq.map (fun i => (i, α i)) (eval_ext_tree_trace τ α n)). *)
+(*     split. *)
+(*     + clear. induction (eval_ext_tree_trace τ α n); cbn; econstructor; eauto. *)
+(*     + exists (F α). rewrite <- map_comp.  *)
+(*       rewrite <- Hn. symmetry. *)
+(*       rewrite eval_ext_tree_map. reflexivity. *)
+(*   } *)
+(*   eapply gbi in Help. *)
+(*   revert Help Htau. *)
+(*   unfold eval_ext_tree. *)
+(*   change (@nil O) with (seq.map snd (@nil (I * O))). *)
+(*   generalize (@nil (I * O)) ; intros l Help HF. *)
+(*   unshelve eexists. *)
+(*   { clear HF Hvalid. *)
+(*     induction Help as [l l' [a Heqa] | i l ? ? IH] ; intros. *)
+(*     1: exact (eta a). *)
+(*     unshelve refine (beta i IH). *)
+(*   } *)
+(*   intros alpha. *)
+(*   set (t:= deval _) ; suff: output (TI := I) (F alpha) = output (t alpha) by  *)
+(*     intro H ; injection H. *)
+(*   rewrite {}/t. *)
+(*   specialize (HF alpha) as [n HFn]. *)
+(*   rewrite <- HFn ; revert HFn ; generalize (F alpha) ; intros x HFn ; clear F. *)
+(*   revert alpha HFn; induction Help as [l l' [a Heqa] | i l ? ? IH] ; intros. *)
+(*   { cbn. *)
+(*     assert (tau [seq i.2 | i <- l ++ l'] = output a) as Heq by admit. *)
+(*     now eapply eval_ext_tree_constant. *)
+(*   } *)
+(*   cbn in *. *)
+(*   erewrite <- IH. *)
+(*   admit. *)
+(*   admit. *)
+
+Require Import Lia.
+
+Theorem GBI_to {I O A} F {i0 : I} :
+  (forall T, @GBI I O T) ->
+  seq_contW F ->
+  @dialogue_cont I O A F.
+Proof.
+  intros gbi [τ Hτ]. red in Hτ.
+  pose (T := fun v => let qs := [seq i.1 | i <- v] in
+                   let ans := [seq i.2 | i <- v] in
+                   forall n, PeanoNat.Nat.lt n (length v) ->
+                        τ (take n ans) = ask (nth n qs i0) (* TODO: this is too strong *)
+        ).
+  unshelve epose proof (gbi (fun v => {o | τ [seq i.2 | i <- v] = output o
+                                        /\ T v
+                          }) _) as Barred.
+  - intros α. destruct (Hτ α) as (n & Hn). exists (seq.map (fun i => (i, α i)) (eval_ext_tree_trace τ α n)).
+    split.
+    + clear. induction (eval_ext_tree_trace τ α n); cbn; econstructor; eauto.
+    + exists (F α). 
+      rewrite <- map_comp. 
+      cbn. 
+      rewrite <- Hn. split. symmetry.
+      rewrite eval_ext_tree_map. reflexivity. admit.
+  - red.
+    revert Hτ.
+    revert Barred. unfold eval_ext_tree.
+    assert (T []).
+    { red. cbn. intros. lia. }
+    revert H.
+    change (@nil O) with (seq.map snd (@nil (I * O))).
+    generalize (@nil (I * O)).
+    intros. unshelve eexists.
+    clear Hτ H.
+    { induction Barred.
+      + destruct t as [o _]. apply (eta o).
+      + apply beta. exact a. exact X. }
+    intros f. specialize (Hτ f). 
+    induction Barred; cbn; intros.
+    + destruct t. cbn in *. admit.
+    + pose proof (i (f a)) as i'.
+      eapply indbarred_lem in i'.
+      eapply H0.
+      * cbn. admit.
+      * destruct Hτ as [m Hm]. rewrite <- Hm. exists m.
+        admit.
+Admitted.
+
+End generalised.
 
 (* Now let's prove seq_contW + bar induction -> dialogue or Brouwer 
    May be find a better principle for reasoning on trees, equivalent to bar induction
@@ -900,6 +1039,7 @@ End Cantor.
    the "bar-induction-like" principle
    TODO : tame the le vs <= mess.
 *)
+
 Section Brouwer_ext_tree.
 
   (*The goal of this Section is to provide an extensional tree equivalent to Brouwer trees,

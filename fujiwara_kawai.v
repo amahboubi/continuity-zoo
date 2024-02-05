@@ -86,8 +86,6 @@ Proof.
     Unshelve. exact 0.
 Qed.
 
-Variable embed : list O -> nat.
-
 Lemma L N :
   Cont N -> forall α, exists n, N (ext (pref α n)) < n.
 Proof.
