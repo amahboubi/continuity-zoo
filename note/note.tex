@@ -1,0 +1,441 @@
+\documentclass[a4paper,UKenglish,cleveref, autoref, thm-restate]{lipics-v2021}
+
+\bibliographystyle{plainurl}% the mandatory bibstyle
+
+% % \newtheorem{fact}[theorem]{Fact}
+
+% \usepackage[T1]{fontenc} % optional
+% \usepackage{amsmath, amssymb, amsthm}
+\usepackage{xspace}
+\usepackage{macros}
+% \usepackage{hyperref}
+% \usepackage{cleveref}
+%\usepackage{coqtheorem}
+\usepackage{tikz-cd}
+% \usepackage{adjustbox}
+% \usepackage[noadjust]{cite}
+\usepackage{mathpartir}
+\usepackage{dsfont}
+% \usepackage{enumitem}
+\usepackage[disable]{todonotes}
+\usepackage{csquotes}
+% \usepackage{multicol}
+
+% % \newcoqtheorem{theorem}[dummy]{Theorem}
+% % \newcoqtheorem{lemma}[dummy]{Lemma}
+% \newcoqtheorem{fact}[dummy]{Fact}
+% % \newcoqtheorem{corollary}[dummy]{Corollary}
+
+% \crefname{lemmaAux}{Lemma}{Lemmas} %
+% \crefname{lemma}{Lemma}{Lemmas} %
+% \crefname{corollaryAux}{Corollary}{Corollaries} %
+% \crefname{theoremAux}{Theorem}{Theorems} %
+% \crefname{factAux}{Fact}{Facts} %
+%\setBaseUrl{{https://ps.uni-saarland.de/extras/reducibility-degrees/coqdoc/Undecidability.}}
+%\setBaseUrl{{../code-synthetic-reducibility/website/Undecidability.}}
+
+\providecommand{\definedas}{:=}
+\newcommand{\lipicsNumber}[1]{\text{{\color{lipicsGray}\sffamily\textbf{#1}}}}
+
+\newcommand{\pto}{\nrightarrow}
+\renewcommand{\pto}{\rightharpoonup}
+\renewcommand{\pfun}{\rightharpoonup}
+\newcommand{\fto}{\rightsquigarrow}
+\renewcommand\fto{{\;\mathbin{\clipbox{0pt {-\height} {.24\width} {-\height}}{\ensuremath{\rightsquigarrow}}}{\clipbox{{.72\width} {-\height} 0pt {-\height}}{\ensuremath{\rightharpoonup}}}}\;}
+
+\newcommand\truthtable{\ensuremath{\mathsf{tt}}}
+
+\ccsdesc[500]{Theory of computation~Constructive mathematics}
+\ccsdesc[500]{Type theory}
+% \ccsdesc[100]{\textcolor{red}{Replace ccsdesc macro with valid one}} %mandatory: Please choose ACM 2012 classifications from https://dl.acm.org/ccs/ccs_flat.cfm 
+\Copyright{} %mandatory, please use full first names. LIPIcs license is "CC-BY";  http://creativecommons.org/licenses/by/3.0/
+
+\keywords{type theory, computability theory, constructive reverse mathematics, Coq} %mandatory; please add comma-separated list of keywords
+
+\category{} %optional, e.g. invited paper
+
+%\relatedversion{} %optional, e.g. full version hosted on arXiv, HAL, or other respository/website
+% \relatedversiondetails[linktext={xxxx.0000}]{Full version with appendices in main part of paper available on arxiv}{bla} %linktext and cite are optional
+
+% \supplement{{\texttt{\href{https://github.com/uds-psl/coq-synthetic-computability/tree/degrees}{github.com/uds-psl/coq-synthetic-computability/tree/degrees}}}.}%optional, e.g. related research data, source code, ... hosted on a repository like zenodo, figshare, GitHub, ...
+%\supplementdetails[linktext={opt. text shown instead of the URL}, cite=DBLP:books/mk/GrayR93, subcategory={Description, Subcategory}, swhid={Software Heritage Identifier}]{General Classification (e.g. Software, Dataset, Model, ...)}{URL to related version} %linktext, cite, and subcategory are optional
+
+%\funding{(Optional) general funding statement \dots}%optional, to capture a funding statement, which applies to all authors. Please enter author specific funding statements as fifth argument of the \author macro.
+
+\nolinenumbers %uncomment to disable line numbering
+
+\hideLIPIcs
+
+\title{Kleene's second algebra over functions and partial functions in constructive type theory}
+% \subtitle{Post's Problem for Many-one and Truth-table Reducibility in Coq}
+
+\titlerunning{Notions of continuity in constructive type theory}
+
+%\author{Yannick Forster}{Inria, Gallinette Project-Team, Nantes, France}{yannick.forster@inria.fr}{https://orcid.org/0000-0002-8676-9819}{}%received funding from the European Union’s Horizon 2020 research and innovation programme under the Marie Skłodowska-Curie grant agreement No. 101024493.}
+
+%\authorrunning{Y.~Forster} % mandatory. First: Use abbreviated first/middle names. Second (only in severe cases): Use first author plus 'et al.'
+
+\newcommand{\Baire}{\mathcal{B}}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+  We explain different definitions of continuity in constructive type theory.
+  We treat continuity of functions $F : (Q \to A) \to R$,
+  i.e.\ with query type $Q$,
+  answer type $A$,
+  and result type $R$.
+  Concretely, we discuss
+  modulus continuity (defined by making the list $L \of \List Q$ of queries explicit),
+  sequential continuity (defined via tree predicates),
+  and forms of
+  eloquent continuity (defined via inductive dialogue trees).
+  We prove equivalences where possible and isolate necessary and sufficient axioms for equivalence proofs,
+  in the spirit of constructive reverse mathematics.  
+
+  % We discuss a definition of Kleene's second algebra in constructive type theory,
+  % i.e.\ a partial combinatory algebra (pca) over Baire space $\Baire := \nat \to \nat$.
+  % A pca over type $A$ has an application operator $\star \of A \to A \to A$
+  % which allows to define operators $K$ and $S$ as in combinatory logic.
+
+  % We then go on to generalise the definitions of continuity to partial functions $F \of (Q \pfun A) \pfun R$
+  % and again consider equivalence of the various definitions.
+  % We discuss a definition of Kleene's second algebra over partial functions
+  % i.e.\ a partial combinatory algebra (pca) over partial Baire space $\mathfrak{B} := \nat \pfun \nat$.
+\end{abstract}
+
+\renewcommand\of[1]{: #1}
+
+% \section{Introduction}
+
+\section{Definitions of continuity for total functions}
+
+For the rest of this section we fix a query type $Q$,
+answer type $A$,
+and result type $O$.
+We also fix $F \of (Q \to A) \to R$.
+
+\newcommand\f{f}
+\newcommand\g{g}
+
+\subsection{Modulus continuity}
+
+We say that $F$  
+has modulus $L \of \List Q$
+at $\f : Q \to A$
+if
+$F$ is determined solely by the queries to $f$ in $L$,
+i.e.\ $F \g$ for any $\g$ such that $\forall x \in L.\;  \f x = \g x$ we have $F \f = F \g$.
+
+A function $F$ is \textit{modulus-continuous} if 
+\[ \forall \f \of Q \to A.\exists L \of \List Q.\; \forall \g \of Q \to A.\; (\forall x \in L.\;f x = g x) \to F \f = F \g \]
+
+A function $F$ has a
+\textit{modulus of continuity function} $M \of (Q \to A) \to \List Q$ if
+for all $\f$, $M \f$ is a modulus of continuity for $F \f$.
+Formally:
+\[ \forall \f \g \of Q \to A.\; (\forall x \in M \f.\;\f x = \g x) \to F \f = F \g \]
+
+\subsection{Eloquent continuity}
+
+We define an inductive type of \textit{dialogue trees} $\mathbb{D}$ with leafs $\eta$ labelled by a result $R$
+and internal nodes $\beta$ labelled by a query $q \of Q$ and branching via answers in type $A$:
+\begin{mathpar}
+  \infer{o \of O}{\eta o \of {\mathbb{D}}}
+
+  \infer{q \of Q \and k \of A \to \mathbb{D}}{\beta q k \of {\mathbb{D}}}
+\end{mathpar}
+
+We define an evaluation function $\eval \of {(Q \to A) \to \mathbb{D} \to O}$ as
+\begin{align*}
+  &\eval \f (\eta o) := o && \eval \f (\beta q k) := \eval \f (k (\f q))
+\end{align*}
+
+A function $F$ is \textit{eloquent} via $d : \mathbb{D}$ such that
+\[ \forall \f \of Q \to A.\;F \f = \eval \f d \]
+and say that $F$ is eloquent if such a $d$ exists.
+
+\begin{lemma}
+  Given an eloquency function $d$ for $F$, one can compute a modulus of continuity function $M$ for $F$.
+\end{lemma}
+\begin{proof}
+  Define $M \of {\mathbb{D} \to (Q \to A) \to \List Q}$ by recursion on the tree as
+  \begin{align*}
+    M (\eta o) \f := [] && M (\beta qk) \f := q :: M (k (f q)) \f 
+  \end{align*}
+\end{proof}
+
+\subsubsection{Intensional eloquent continuity}
+\newcommand\idiag{\mathbb{D}_{\textsf{i}}}
+
+We define the following more intensional variant of continuity.
+We define an inductive \textit{predicate} $\idiag : (Q \to A) \to O$ as
+%
+\begin{mathpar}
+  \infer{o \of O}{\eta_{\textsf{i}} o : \idiag (\lambda \f.\; o)}
+
+  \infer{q \of Q \and k \of A \to (Q \to A) \to O \and H : \forall a : A.\; \idiag (k a)}
+  {\beta_{\textsf{i}} q k H :  \idiag (\lambda \f.\;k (\f q) \f)}
+\end{mathpar}
+
+\begin{lemma}
+  If $\idiag F$, then one can construct $d : {\mathbb{D}}$ such that $F$ is eloquent via $d$.
+\end{lemma}
+\begin{proof}
+  We define a function
+  $\delta : \forall F' : (Q \to A) \to O.\;\idiag F' \to \mathbb{D}$
+  as
+  \begin{mathpar}
+    \delta F' (\eta_{\textsf{i}} o) := \eta o \and
+    \delta F' (\eta_{\textsf{i}} o) := \beta q (\lambda a.\; \delta (k a) (d a))
+  \end{mathpar}
+  Then 
+  $\forall F'.\;\eval \f (\delta F' d) = F' \f$
+  follows by induction on $d$.
+\end{proof}
+
+\begin{lemma}
+  The converse of the lemma is provable assuming functional extensionality.
+\end{lemma}
+
+We conjecture that functional extensionality is required here, but do not go into details.
+
+\subsubsection{Brouwer trees}
+
+\subsection{Sequential continuity}
+
+Sequential continuity has a similar intuition than eloquent continuity.
+However, instead of defining trees inductively, it relies on an extensional notion of tree predicates:
+
+\newcommand\R{O}
+
+We take any function $\tau \of \List A \to (Q + \R)$ to describe a tree
+
+\newcommand\ask{\mathsf{ask}\;}
+\newcommand\return{\mathsf{ret}\;}
+We write $\ask q$ for $\mathsf{inl}\; q$
+and $\return r$ for $\mathsf{inr}\; r$.
+
+Given a tree $\tau$, we define an operation $\hat\tau : (Q \to A) \to \nat \to Q + \R$ as follows:
+%
+\begin{mathpar}
+  \hat\tau\;f\;(\succN n) := \hat\tau\;(\lambda l.\;\tau (l ++ [f q]))\;\f\;n \text{~~\small if $\tau\;[\;] = \ask q$}
+  \and
+  \hat\tau\;f\;n := \tau \; [\;]
+\end{mathpar}
+
+% \begin{align*}
+%   \hat\tau\;f\;0 &:= \None \tag*{\small if $\tau\;[\;] = \None$} \\
+%   \hat\tau\;f\;0 &:= \Some (\inr o) \tag*{\small if $\tau\;[\;] = \Some (\inr o)$} \\
+%   \hat\tau\;f\;0 &:= \Some (\inl o) \tag*{\small if $\tau\;[\;] = \Some (\inr o)$} \\
+%   \hat\tau\;f\;(\succN n) &:= \Some (\inr o) \tag*{\small if $\hat\tau\;f\;n = \Some (\inr o)$} \\
+%   \hat\tau\;f\;(\succN n) &:= \Some (\inr o) \tag*{\small if $\hat\tau\;f\;n = \Some (\inl (l, q))$ and $\tau (l \app [f q]) = \Some (\inr o)$} \\
+%   \hat\tau\;f\;(\succN n) &:= \Some (\inl (l \app [f q], q') \tag*{\small if $\hat\tau\;f\;n = \Some (\inl (l, q))$ and $\tau (l \app [f q]) = \Some (\inl q')$} 
+% \end{align*}
+
+\begin{lemma}
+  If $\hat \tau\;f\;n_1 = \return r_1$ and $\hat \tau\;f\;n_2 = \return r_2$ then $r_1 = r_2$.
+\end{lemma}
+
+We call a tree $\tau$ well-founded if for any $\f : Q \to A$
+there exist $n$ and $o$ s.t.\ $\hat\tau\;f\;n = \return o$.
+Thus, every well-founded total tree $\tau$ gives rise to a function $\hat\tau \of (Q \to A) \to R$.
+
+We say that $F$ is \textit{sequentially continuous} if there exists a tree $\tau : \List A \to Q + R$
+such that for % every $i$, $\tau_i$ is well-founded and total and
+$\forall f.\;\exists n.\; \hat \tau\;f\;n = \return (F f)$.
+
+\begin{lemma}
+  If $F$ is eloquent, $F$ is sequentially continuous.
+\end{lemma}
+\begin{proof}
+  We construct a function $T$ from dialogue trees to well-founded total trees:
+  \begin{mathpar}
+    T (\eta o) l := \return o \and
+    T (\beta q k) [] := \ask q \and
+    T (\beta q k) (l \app [a]) := T (k a) l
+  \end{mathpar}
+
+  The equation $\eval\;d\;f = \hat{T d} f$ follows by induction on $d$.
+  % In the second case, we need to prove that
+  % $\hat{T (\beta q k)}\; f\; (1 + m) = \Some (\inr (\eval\;f\;(k (f q))))$
+  % given that
+  % $\hat{T (k (f q))}\; f\; m = \Some (\inr (\eval\;f\;(k (f q))))$.
+
+  % This follows with $n_1 = 0$ from the following suitably generalised lemma to be proved by induction on $n_2$:
+
+  % \itshape
+  % If  $\hat \tau\; f\; n_1 = \Some (\inl (l, q))$,
+  % $\tau_2 l' := \tau (l ++ [f q] ++ l')$.
+  % Then there are three cases:
+  % \begin{enumerate}
+  % \item $\hat {\tau_2} f n_2 = \Some (\inr o)$ and $\hat \tau\; f\; (1 + n_1 + n_2) = \Some (\inr o)$,
+  % \item $\hat {\tau_2} f n_2 = \Some (\inl (l', q'))$ and $\hat \tau\; f\; (1 + n_1 + n_2) = \Some (\inl (l ++ [f q] ++ l', q'))$,
+  % \item $\hat {\tau_2} f n_2 = \None$ and $\hat \tau\; f\; (1 + n_1 + n_2)$.
+  % \end{enumerate}
+\end{proof}
+
+\section{Self-modulating Moduli}
+
+In this section, we show that sequential continuity is equivalent
+to having a modulus of continuity function which forms is also a modulus function for itself,
+a result due to Fujiwara and Kawai.
+The backwards direction of the equivalence crucially only works for $Q = \nat$,
+and then on the availability of $\Delta^0_1\textsf{-AC}_{X,\nat}$ for any type $X$.
+This choice principle is available in all constructive foundations.
+
+\begin{lemma}
+  If $F$ is sequentially continuous it has a continuous modulus of continuity function.
+\end{lemma}
+\begin{proof}
+  Let $\tau$ witness sequential continuity of $F$.
+  We construct a function $M' \of (Q \to A) \to \nat \to \List Q \times (Q + \R)$ similar to the equations of $\hat \tau$, but threading the list of queries around $l$.
+  \begin{mathpar}
+    M'\;f\;(\succN n) := q :: M'\;(\lambda l.\;\tau (l \app [f q]))\;\f\;n \text{~~\small if $\tau\;[\;] = \ask q$}
+    \and
+    M'\;f\;n := []
+  \end{mathpar}
+  Note that since
+  $\forall \f.\exists n.\exists r.\;\hat\tau\;\f\;n = \return r$
+  we can compute this $n$ since the condition is decidable.
+  let $N : (Q \to A) \to \nat$ be the resulting choice function
+  and define
+  $M f := M'\;\f\;(N \f)$,
+  which is a modulus of continuity for $F$ and continuous itself.
+\end{proof}
+
+We are now going to prove that for the special case $Q = \nat$ one can turn
+any continuous modulus of continuity function $M$ for a given $F$ into a self-modulating
+modulus of continuity function $N$ for $F$.
+For $Q = \nat$, we can use the alternative definition of continuity where the returned modulus is just a natural number rather than a list of questions.
+
+Ideally, we would then like to define $N f := \mu k.\;\forall g.\;(\forall m < k.\;f m = g m) \to F f = F g$.
+However, the condition on the right is not $\Sigma^0_1$, and thus the minimisation is not computable.
+Minimality of $k$ is however not important:
+it suffices to pick any unique $k$ respecting extensionality of $f$.
+\todo{Assia, is this true? We use minimality in the proof, but could we relax it somewhat?}
+
+We follow Fujiwara and Kawai and define $N f := \mu n.\;M (f \downharpoonright n) < n$
+where $f \downharpoonright n$ is the function that behaves like $f$ on input $m < n$, and returns a fixed dummy element $a_0$ otherwise.
+
+\begin{lemma}
+  If $Q = \nat$, $a_0 : A$, and $F$ has a continuous modulus of continuity function,
+  then $F$ has a self-modulating modulus of continuity function.
+\end{lemma}
+\begin{proof}
+  Let $M$ be a continuous modulus of continuity function for $F$.
+  Note that we can assume $M : (\nat \to A) \to \nat$ with
+  \[\forall f g.\; (\forall m < M f.\;f m = g m) \to F f = F g\]
+  because we are working with $Q = \nat$.
+
+  First observe that since $M$ is continuous, we can prove
+  \[ \forall f.\;\exists n.\; M (f \downharpoonright n) < n \]
+  where $f \downharpoonright n$ is the function that behaves like $f$ on input $m < n$, and returns $a_0$ otherwise.
+  The proof is straightforward: Given $f$, use continuity of $M$ on $f$ to obtain a modulus $m : \nat$, then pick
+  pick $1 + M f + n$.
+  
+  Since $<$ is decidable, we can define a function $N$ returning the \textit{least} $n$ such that this condition holds.
+  We call the property that $N$ returns one such $n$ its defining property, and that its the least such $n$ its minimality property.
+  
+  We first prove that $N$ is self-modulating.
+  Let $f$ and $g$ with $(*) : \forall n < N f.\; f n = g n$ be given.
+  We have to prove $N f = N g$.
+  We show $N f \geq N g$ and $N f \leq N g$.
+
+  For the first,
+  we use the minimality property of $N$ and
+  $N (g \downharpoonright N f) =
+  N (g \downharpoonright N f) < N f$,
+  where the equality is by $(*)$ and the inequality by the defining property of $N$.
+
+  For the second, we may additionally assume $N g < N f$.
+  We apply the minimality property of $N$ again and have
+  to prove $N (f \downharpoonright N g) < N g$,
+  which by $(*)$ and $N g < N f$ is equivalent to $N (f \downharpoonright N g) < N g$, which follows by the defining property of $N$ again.
+
+  TODO
+\end{proof}
+
+Note that generalising beyond $Q = \nat$ seems infeasible.
+One route to go would be to generalise to any retract of $\nat$,
+but this only extends the result to finite types,
+where any function with finite query type is continuous.
+
+Other generalisations, at least of the present proof, seem not possible:
+First, turning a list of queries and answers into a function requires decidable equality on $Q$.
+Secondly, the necessary choice function has to return minimal elements,
+meaning we would either have to require a size function into natural numbers and a minimising choice principle w.r.t.\ this size,
+or a decidable, antisymmetric, linear order on $Q$ with a minimising choice principle.
+Both properties seem rather strong and possibly are equivalent to $Q$ being a retract of $\nat$ again.  
+
+\section{Eloquent continuity, sequential continuity, and (generalised) bar induction}
+
+\newcommand\CI{\mathsf{CI}}
+\newcommand\GBI{\mathsf{GBI}}
+\newcommand\BI{\mathsf{BI}}
+
+In this section we deal with the statement that sequentially continuous functions $F : (Q \to A) \to \R$ are eloquent.
+Since this principle allows turning an extensional tree into an inductive tree,
+we call this principle $\CI(Q,A,R)$ (continuity induction).
+The notion is inspired by Brede and Herbelin's generalised bar induction principle $\GBI(Q,A)$.
+$\GBI(Q,A)$ states that bars with internal nodes labeled with $Q$ and branching over $A$
+which are barred are in fact inductively barred.
+A bar is the complement of a tree,
+and the inverse of a barred bar is a well-founded tree.
+
+They prove that $\GBI(\nat,A)$ is equivalent to regular bar induction $\BI(A)$,
+where the nodes of the bars are unlabeled and they still branch via $A$.
+
+We extend their contribution proving that in fact this equivalence preserves the logical complexity of
+trees under mild assumption on the complexity class.
+
+We then prove that $\Delta^0_1\text{-}\GBI(Q,A)$ implies $\CI(Q,A)$,
+and $\CI(\nat,A)$ implies $\Delta^0_1\text{-}\BI(A)$.
+Since $\BI$ deals with unlabeled trees,
+we here need to use the equivalence between eloquent continuity via dialogue and via Brouwer trees.
+
+\begin{lemma}
+  $C\text{-}\GBI(\nat,A) \leftrightarrow C\text{-}\BI(A)$,
+  for $C$ being a class of predicates, i.e.\ $C : \forall X.\;(X \to \mathbb{P}) \to \mathbb{P}$
+  closed under TODO.
+\end{lemma}
+
+\begin{lemma}
+  $\GBI(Q,A) \to \CI(Q,A,R)$
+\end{lemma}
+\begin{proof}
+  TODO
+\end{proof}
+
+\textbf{Note that the following proof is not a proof, just a wish, I have not checked the details and just outlined how a really nice proof could look:}
+
+\begin{lemma}
+  $\CI(\nat,A,\List A) \to \BI(A)$.
+\end{lemma}
+\begin{proof}
+  Via the equivalence proved before, we assume that any sequentially continuous function over query type $\nat$
+  is eloquent via a Brouwer tree.
+
+  Let a bar $\tau : \List A \to \bool$ be given.
+  Assume that $\tau$ is barred, i.e.\ that
+  $\forall \f : (\nat \to A).\exists n.\;\tau [f0,\dots,fn]$.
+
+  We first turn $\tau$ into a valid computable tree $\tau' : \List A \to Q + \R$.
+  $\tau' l$ searches for the shortest prefix $l'$ of $l$ such that $\tau l'$,
+  and if this exists returns $\return (\iota l)$.
+  or otherwise asks the length of $l$ as question.
+
+  Since $\tau$ is barred, $\tau'$ is well-founded.
+  Now $\tau$ computes the function $F : (Q \to A) \to \List A$
+  which on input $f$ uses $\Delta^0_1\text{-AC}_{\nat \to A, \nat}$ to extract the natural number from the barredness assumption.  
+  Consequently, $F$ is sequentially continuous.
+
+  By assumption, we obtain a Brouwer tree computing $F$.
+  By induction on this Brouwer tree, we show that $\tau$ is inductively barred.
+\end{proof}
+
+\bibliography{biblio.bib}
+
+\end{document}
