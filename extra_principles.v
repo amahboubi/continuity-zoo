@@ -24,7 +24,7 @@ Definition prefix A (a : nat -> A) (u : seq A) :=
   u = map a (iota 0 (size u)).
 
 Definition barred (A : Type) (T : seq A -> Type) :=
-  forall a, { u & prod (prefix a u) (T u) }.
+  forall a : nat -> A, {u : seq A & prod (prefix a u) (T u)}.
 
 Definition BI_ind A (T : seq A -> Type) := barred T -> inductively_barred T.
 
