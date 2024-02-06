@@ -160,6 +160,31 @@ Proof.
 rewrite /eval_ext_tree_trace /eval_ext_tree; exact:eval_ext_tree_map_aux.
 Qed.
 
+
+(*TODO : move this to some Section with lemmas about eval_ext_tree*)
+Lemma eval_ext_tree_monotone (tau : ext_tree ) f n k a l :
+  eval_ext_tree_aux tau f n l = output a ->
+  eval_ext_tree_aux tau f (n + k) l = output a.
+Proof.
+  revert l ; induction n as [ | n IHn] ; cbn in * ; intros l H.
+  1: now eapply eval_ext_tree_constant.
+  destruct (tau l) ; [ | assumption].
+  now eapply IHn.
+Qed.
+
+(*TODO : move this to some Section with lemmas about eval_ext_tree*)
+Lemma eval_ext_tree_trace_monotone (tau : ext_tree) f n k a l :
+  eval_ext_tree_aux tau f n l = output a ->
+  eval_ext_tree_trace_aux tau f n l = eval_ext_tree_trace_aux tau f (n + k) l.
+Proof.
+  revert l ; induction n as [ | n IHn] ; cbn in * ; intros l H.
+  destruct k ; cbn ; [reflexivity | now rewrite H].
+  destruct (tau l) ; [ | reflexivity].
+  f_equal.
+  now eapply IHn.
+Qed.
+
+
 (* this one had more hypotheses about "total" and "well-founded" *)
 Definition ext_tree_for F (τ : ext_tree) : Type :=
   forall f : I -> O, {n : nat & eval_ext_tree τ f n = output (F f)}.
@@ -184,6 +209,16 @@ Definition seq_cont F :=
 
 Definition valid_ext_tree (tau : ext_tree) := 
   forall l o,  tau l = output o -> forall a, tau (rcons l a) = output o.
+
+Lemma valid_cat (tau : ext_tree) l l' o :
+  valid_ext_tree tau -> tau l = output o -> tau (l ++ l') = output o.
+Proof.
+  destruct l' using last_ind ; intros.
+  - now rewrite cats0.
+  - rewrite - rcons_cat.
+    eapply H.
+    now eapply IHl'.
+Qed.
 
 (* Interrogations (van Oosten) *)
 Inductive interrogation (f : I -> O) : seq (I * O) -> (seq O -> result I A) -> Type :=
@@ -930,10 +965,23 @@ Proof.
         rewrite <- !rcons_cat in e.
         rewrite <- !rcons_cons in e.
         eapply rcons_inj in e. inversion e. subst.
-        admit.
+        destruct x0 using last_ind.
+        { right.
+          exists nil.
+          now rewrite cats0 H0 cats0.
+        }
+        left.
+
+        inversion e.
+        exists x.
+        exists x0.
+        destruct x3 as [a b].
+        exists a ; exists b.
+        rewrite - cats1 in H1.
+        now split.
       * right. eexists ((a, b) :: x). rewrite <- app_assoc in t.
         cbn in *. eassumption.
-Admitted.
+Qed.
 
 Definition GBI {A B} T :=
   @barred A B T -> indbarred T [].
@@ -985,6 +1033,9 @@ Definition GBI {A B} T :=
 
 Require Import Lia.
 
+
+
+
 Theorem GBI_to {I O A} F {i0 : I} :
   (forall T, @GBI I O T) ->
   seq_contW F ->
@@ -994,7 +1045,8 @@ Proof.
   pose (T := fun v => let qs := [seq i.1 | i <- v] in
                    let ans := [seq i.2 | i <- v] in
                    forall n, PeanoNat.Nat.lt n (length v) ->
-                        τ (take n ans) = ask (nth n qs i0) (* TODO: this is too strong *)
+                             τ (take n ans) = ask (seq.nth i0 qs n) \/
+                              exists o : A, τ (take n ans) = output o
         ).
   unshelve epose proof (gbi (fun v => {o | τ [seq i.2 | i <- v] = output o
                                         /\ T v
@@ -1020,15 +1072,122 @@ Proof.
     { induction Barred.
       + destruct t as [o _]. apply (eta o).
       + apply beta. exact a. exact X. }
-    intros f. specialize (Hτ f). 
+    intros f. specialize (Hτ f).
+    have Hvalid: valid_ext_tree τ by admit.
     induction Barred; cbn; intros.
     + destruct t. cbn in *. admit.
     + pose proof (i (f a)) as i'.
-      eapply indbarred_lem in i'.
+      unshelve eapply indbarred_lem in i'.
+      exact (f i0).
       eapply H0.
-      * cbn. admit.
+      * cbn.
+        destruct i' as [[l [l' [x [y [Heqvl [o [Heqtau Hyp]]]]]]] | [l [o [Heqtau Hyp]]]].
+        { assert (x = a /\ y = f a /\ v = l ++ l') as [H1 [H2 H3]] by admit.
+          subst.
+          unfold T ; unfold T in Hyp ; cbn.
+          intros m Hm.
+          assert (PeanoNat.Nat.lt m (size l) \/ PeanoNat.Nat.le (size l) m) as Hl by lia.
+          repeat erewrite map_app.
+          destruct Hl as [Hl | Hl].
+          { assert (m < size l) as mlt by admit.
+            specialize (Hyp _ Hl).
+            erewrite takel_cat.
+            2:{ erewrite size_cat.
+                erewrite size_map.
+                admit.
+            }
+            erewrite takel_cat.
+            2:{ erewrite size_map.
+                admit.
+            }
+            cbn.
+            erewrite <- catA.
+            erewrite cats1.
+            erewrite (@nth_cat _ i0 (map [eta fst] l) (rcons (map [eta fst] l') a) m).
+            rewrite size_map.
+            rewrite mlt.
+            assumption.
+          }
+          clear Hyp.
+          right.
+          exists o.
+          erewrite <- catA.
+          erewrite take_cat.
+          assert (m < size (map [eta snd] l) = false) as H1 by admit.
+          rewrite H1 ; clear H1.
+          now eapply valid_cat.
+        }
+        unfold T ; unfold T in Hyp ; intros m Hltm.
+        assert (PeanoNat.Nat.lt m (length ((v ++ [(a, f a)]) ++ l))) as Hltm'.
+        { erewrite size_cat.
+          now eapply PeanoNat.Nat.lt_lt_add_r.
+        }
+        specialize (Hyp m Hltm') ; clear Hltm'.
+        assert (m <= (length (v ++ [(a, f a)]))) as Hlem by admit.
+        repeat erewrite map_cat in Hyp.
+        erewrite takel_cat in Hyp.
+        2:{ erewrite size_cat, size_map, size_map.
+            now erewrite size_cat in Hlem.
+        }
+        erewrite nth_cat in Hyp.
+        assert (m < size ([seq i.1 | i <- v] ++ [seq i.1 | i <- [(a, f a)]])) as H' by admit.
+        rewrite H' in Hyp ; clear H'.
+        repeat erewrite map_cat.
+        assumption.
       * destruct Hτ as [m Hm]. rewrite <- Hm. exists m.
-        admit.
+        destruct i' as [[l [l' [x [y [Heqvl [o [Heqtau Hyp]]]]]]] | [l [o [Heqtau Hyp]]]].
+        -- assert (x = a /\ y = f a /\ v = l ++ l') as [H1 [H2 H3]] by admit.
+           subst.
+           repeat erewrite map_app.
+           set (t1 := eval_ext_tree_aux _ _ _ _).
+           set (t2 := eval_ext_tree_aux _ _ _ _).
+           have eq1: t1 = output o.
+           { rewrite {}/t1.
+             eapply eval_ext_tree_constant.
+             erewrite valid_cat ; try eassumption.
+             reflexivity.
+             erewrite valid_cat ; try eassumption ; reflexivity.
+           }
+           have eq2: t2 = output o.
+           { rewrite {}/t2.
+             eapply eval_ext_tree_constant.
+             erewrite valid_cat ; try eassumption.
+             reflexivity.
+           }
+           now rewrite eq1 eq2.
+        -- unfold T in Hyp ; cbn in Hyp.
+           have Hlt: PeanoNat.Nat.lt (size (map snd v)) (length ((v ++ [(a, f a)]) ++ l))
+             by admit.
+           specialize (Hyp (size (map snd v)) Hlt) ; clear Hlt.
+           assert (Haux := take_size_cat (n := size (map [eta snd] v)) (s1:= (map [eta snd] v))).
+           repeat erewrite map_app in Hyp.
+           erewrite <- catA in Hyp.
+           erewrite Haux in Hyp by reflexivity ; clear Haux.
+           destruct Hyp as [Hyp | [o' Hyp]].
+           { assert ((seq.nth i0 ((map [eta fst] v ++ [a]) ++ map [eta fst] l) 
+                        (size (map snd v))) = a)
+               as eqa by admit.
+             cbn in Hyp.
+             rewrite eqa in Hyp ; clear eqa.
+             destruct m.
+             { cbn in *.
+               rewrite Hyp in Hm.
+               now inversion Hm.
+             }
+             rewrite Hm.
+             erewrite <- PeanoNat.Nat.add_1_r.
+             eapply eval_ext_tree_monotone.
+             cbn in Hm.
+             rewrite Hyp in Hm.
+             erewrite map_app.
+             change (map snd [(a, f a)]) with ([f a]).
+             erewrite cats1.
+             exact Hm.
+           }
+           erewrite eval_ext_tree_constant.
+           { erewrite eval_ext_tree_constant ; [reflexivity | eassumption]. }
+           erewrite map_app.
+           now eapply valid_cat.
 Admitted.
 
 End generalised.
@@ -1065,10 +1224,6 @@ have -> : iota i j.+1 = iota i (j + 1) by rewrite addn1.
 by rewrite -cats1 iotaD.
 Qed.  
 
-(* TODO : move this elsewhere or streamline it *)
-Lemma leq_le i j : i <= j -> le i j.
-Proof. by move/leP. Qed.
-
 
 (* TODO : move this elsewhere or streamline it *)
 Lemma from_pref_finite_equal l (alpha : I -> O) o :
@@ -1090,6 +1245,12 @@ Proof.
   etransitivity ; [ | eassumption ].
   now eapply PeanoNat.Nat.max_lub_l.
 Qed.
+
+
+(* TODO : move this elsewhere or streamline it *)
+Lemma leq_le i j : i <= j -> le i j.
+Proof. by move/leP. Qed.
+
 
 (*Brouwer extensional trees: they go to option A, and None is considered to be "next query".*)
 Definition Bext_tree := list O -> option A.
@@ -1232,29 +1393,6 @@ Proof.
     eapply IHn.
     now erewrite cat_rcons.
 Qed.    
-
-(*TODO : move this to some Section with lemmas about eval_ext_tree*)
-Lemma eval_ext_tree_monotone (tau : ext_tree I O A) f n k a l :
-  eval_ext_tree_aux tau f n l = output a ->
-  eval_ext_tree_aux tau f (n + k) l = output a.
-Proof.
-  revert l ; induction n as [ | n IHn] ; cbn in * ; intros l H.
-  1: now eapply eval_ext_tree_constant.
-  destruct (tau l) ; [ | assumption].
-  now eapply IHn.
-Qed.
-
-(*TODO : move this to some Section with lemmas about eval_ext_tree*)
-Lemma eval_ext_tree_trace_monotone (tau : ext_tree I O A) f n k a l :
-  eval_ext_tree_aux tau f n l = output a ->
-  eval_ext_tree_trace_aux tau f n l = eval_ext_tree_trace_aux tau f (n + k) l.
-Proof.
-  revert l ; induction n as [ | n IHn] ; cbn in * ; intros l H.
-  destruct k ; cbn ; [reflexivity | now rewrite H].
-  destruct (tau l) ; [ | reflexivity].
-  f_equal.
-  now eapply IHn.
-Qed.
 
 (*A technical lemma to prove that eval_ext_tree using lists as partial oracles
  is monotone*)
@@ -1473,7 +1611,7 @@ Proof.
   1: change [:: alpha 0] with (map alpha (iota 0 1)) ; now erewrite extree_to_Bextree_noo_eq.
   suff: @output I _ a = output (F alpha) ; [intros H ; now inversion H |].
   rewrite - Htau ; symmetry.
-  now eapply (@eval_ext_tree_monotone _ _ 0).
+  now eapply (@eval_ext_tree_monotone _ _ _ _ _ 0).
 Qed.  
 
 End Brouwer_ext_tree.
