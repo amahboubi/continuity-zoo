@@ -984,57 +984,26 @@ Proof.
 Qed.
 
 Definition GBI {A B} T :=
+  inhabited (forall l, (T l) + (T l -> False)) ->
   @barred A B T -> indbarred T [].
-
-(* Theorem GBI_to  {I O A}F : *)
-(*   (forall T, @GBI I O T) -> *)
-(*   seq_contW F -> *)
-(*   @dialogue_cont I O A F. *)
-(* Proof. *)
-(*   intros gbi [tau Htau]. red in Htau. *)
-(*   assert (valid_ext_tree tau) as Hvalid by admit. *)
-(*   pose (T := fun (l : list (I * O)) => {a : A & tau (map snd l) = output a}). *)
-(*   have Help : barred T. *)
-(*   { intros α. *)
-(*     specialize (Htau α) as [n Hn]. rename tau into τ. *)
-(*     exists (seq.map (fun i => (i, α i)) (eval_ext_tree_trace τ α n)). *)
-(*     split. *)
-(*     + clear. induction (eval_ext_tree_trace τ α n); cbn; econstructor; eauto. *)
-(*     + exists (F α). rewrite <- map_comp.  *)
-(*       rewrite <- Hn. symmetry. *)
-(*       rewrite eval_ext_tree_map. reflexivity. *)
-(*   } *)
-(*   eapply gbi in Help. *)
-(*   revert Help Htau. *)
-(*   unfold eval_ext_tree. *)
-(*   change (@nil O) with (seq.map snd (@nil (I * O))). *)
-(*   generalize (@nil (I * O)) ; intros l Help HF. *)
-(*   unshelve eexists. *)
-(*   { clear HF Hvalid. *)
-(*     induction Help as [l l' [a Heqa] | i l ? ? IH] ; intros. *)
-(*     1: exact (eta a). *)
-(*     unshelve refine (beta i IH). *)
-(*   } *)
-(*   intros alpha. *)
-(*   set (t:= deval _) ; suff: output (TI := I) (F alpha) = output (t alpha) by  *)
-(*     intro H ; injection H. *)
-(*   rewrite {}/t. *)
-(*   specialize (HF alpha) as [n HFn]. *)
-(*   rewrite <- HFn ; revert HFn ; generalize (F alpha) ; intros x HFn ; clear F. *)
-(*   revert alpha HFn; induction Help as [l l' [a Heqa] | i l ? ? IH] ; intros. *)
-(*   { cbn. *)
-(*     assert (tau [seq i.2 | i <- l ++ l'] = output a) as Heq by admit. *)
-(*     now eapply eval_ext_tree_constant. *)
-(*   } *)
-(*   cbn in *. *)
-(*   erewrite <- IH. *)
-(*   admit. *)
-(*   admit. *)
 
 Require Import Lia.
 
+Lemma rev_list_rect {A} : forall P:list A-> Type,
+    P [] ->
+    (forall (a:A) (l:list A), P (rev l) -> P (rev (a :: l))) ->
+    forall l:list A, P (rev l).
+Proof.
+  intros P ? ? l; induction l; auto.
+Qed.
 
-
+Theorem rev_rect {A} : forall P:list A -> Type,
+    P [] ->
+    (forall (x:A) (l:list A), P l -> P (l ++ [x])) -> forall l:list A, P l.
+Proof.
+  intros P ? ? l. rewrite <- (rev_involutive l).
+  apply (@rev_list_rect A P); cbn; auto.
+Qed.
 
 Theorem GBI_to {I O A} F {i0 : I} :
   (forall T, @GBI I O T) ->
@@ -1050,7 +1019,21 @@ Proof.
         ).
   unshelve epose proof (gbi (fun v => {o | τ [seq i.2 | i <- v] = output o
                                         /\ T v
-                          }) _) as Barred.
+                          }) _ _) as Barred.
+  - constructor. intros l. clear. induction l using rev_rect.
+    + destruct τ.
+      * right. firstorder congruence.
+      * left. exists a. split; try red; intros; cbn in *. eauto. lia.
+    + destruct IHl as [(? & ? & ?) | ?].
+      * left. exists x0. split. admit.
+        red; intros. rewrite app_length in H1; cbn in H1.
+        assert (PeanoNat.Nat.lt n (length l) \/ n = (length l)) as [Hn | Hn] by lia.
+        -- left. 
+           rewrite <- map_take. rewrite take_size_cat.
+           admit.
+        -- admit.
+      * admit.
+      * admit.
   - intros α. destruct (Hτ α) as (n & Hn). exists (seq.map (fun i => (i, α i)) (eval_ext_tree_trace τ α n)).
     split.
     + clear. induction (eval_ext_tree_trace τ α n); cbn; econstructor; eauto.
@@ -1188,6 +1171,20 @@ Proof.
            { erewrite eval_ext_tree_constant ; [reflexivity | eassumption]. }
            erewrite map_app.
            now eapply valid_cat.
+Admitted.
+
+Set Bullet Behavior "Strict Subproofs".
+
+Theorem to_BI {O A} :
+  forall inj : list O -> A,
+  (forall F, seq_contW F ->
+        @btree_contP O A F) -> forall T, (forall l, (T l) + (T l -> False)) -> @BI_ind O T.
+Proof.
+  intros inj ci T T_dec Hbar.
+  epose (τ l := match T_dec l with
+                | inl _ => output (inj l)
+                | inr _ => ask (length l)
+                end).
 Admitted.
 
 End generalised.
