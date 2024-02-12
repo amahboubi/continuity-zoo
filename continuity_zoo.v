@@ -790,10 +790,6 @@ Proof.
   rewrite <- cat_rcons.
   now apply IHq.  
 Qed.
-
-Lemma leq_decid m n :
-  (m <= n) + (n < m).
-Admitted.
   
 Lemma eval_ext_tree_valid_eqtau
   (tau : ext_tree I O A) (n : nat) (f : I -> O) a :
@@ -811,15 +807,14 @@ Proof.
   case_eq (tau l) ; intros j eqj ; rewrite eqj in H ; [ | assumption]. 
   apply IHn ; [ | assumption ].
   intros k.
-  assert ((S (size l) <= k) + (k < (size l).+1)) as dij by eapply leq_decid.
-  destruct dij as [inf | sup].
-  { rewrite <- (size_rcons l (f j)) in inf.
+  case: (leqP (S (size l)) k).
+  { intros inf ; rewrite <- (size_rcons l (f j)) in inf.
     erewrite take_oversize ; [ | assumption].
     unfold ext_tree_valid.
     erewrite ext_tree_valid_eqtau_ask ; [reflexivity |].
     erewrite <- eqj ; erewrite <- take_size at 1 2.
     now apply Hyp. }
-  erewrite <- cats1.
+  intros sup ; erewrite <- cats1.
   erewrite takel_cat ; [ | now eapply ltnSE].
   now apply Hyp.
 Qed.
