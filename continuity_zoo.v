@@ -751,6 +751,99 @@ Qed.
 *)
 
 
+
+Fixpoint ext_tree_valid_aux
+  (tau : ext_tree I O A) (l l' : list O) : result I A := 
+  match l, tau l' with
+  |cons a u, ask q => ext_tree_valid_aux tau u (rcons l' a)
+  |_, _ => tau l'
+  end.
+
+Definition ext_tree_valid
+  (tau : ext_tree I O A) (l : list O) : result I A :=
+  ext_tree_valid_aux tau l nil.
+
+Lemma ext_tree_valid_valid tau l l' l'' a:
+  ext_tree_valid_aux tau l l' = output a ->
+  ext_tree_valid_aux tau (l ++ l'') l' = output a.
+Proof.
+  revert l' l'' ; induction l as [ | u q IHq] ; cbn ; intros * Heq.
+  { destruct l'' ; cbn ; [ assumption | now rewrite Heq]. }
+  case_eq (tau l') ; intros i Heqi ; rewrite Heqi in Heq ; [ | assumption].
+  now apply IHq.
+Qed.  
+
+Lemma ext_tree_valid_eqtau_ask
+  (tau : ext_tree I O A) (l l' : list O) i o :
+  ext_tree_valid_aux tau l l' = ask i ->
+  ext_tree_valid_aux tau (rcons l o) l' = tau (rcons (l' ++ l) o).
+Proof.
+  revert l'.
+  induction l as [ | u q IHq].
+  { cbn ; intros l' Heq.
+    rewrite Heq.
+    now rewrite cats0. }
+  cbn ; intros l' Heq.
+  case_eq (tau l').
+  all: intros a eqtau ; rewrite eqtau in Heq.
+  2: now inversion Heq.
+  rewrite <- cat_rcons.
+  now apply IHq.  
+Qed.
+
+Lemma leq_decid m n :
+  (m <= n) + (n < m).
+Admitted.
+  
+Lemma eval_ext_tree_valid_eqtau
+  (tau : ext_tree I O A) (n : nat) (f : I -> O) a :
+  eval_ext_tree_aux tau f n nil = output a ->
+  eval_ext_tree_aux (ext_tree_valid tau) f n nil = output a.
+Proof.
+  assert (forall j,
+             ext_tree_valid tau (take j nil) = tau (take j nil)) as Hyp.
+  { induction j ; cbn ; now reflexivity. }
+  revert Hyp.
+  generalize (@nil O).
+  induction n ; cbn ; intros ; erewrite <- (take_size l) ; erewrite Hyp.
+  { now rewrite take_size. }
+  rewrite (take_size l).
+  case_eq (tau l) ; intros j eqj ; rewrite eqj in H ; [ | assumption]. 
+  apply IHn ; [ | assumption ].
+  intros k.
+  assert ((S (size l) <= k) + (k < (size l).+1)) as dij by eapply leq_decid.
+  destruct dij as [inf | sup].
+  { rewrite <- (size_rcons l (f j)) in inf.
+    erewrite take_oversize ; [ | assumption].
+    unfold ext_tree_valid.
+    erewrite ext_tree_valid_eqtau_ask ; [reflexivity |].
+    erewrite <- eqj ; erewrite <- take_size at 1 2.
+    now apply Hyp. }
+  erewrite <- cats1.
+  erewrite takel_cat ; [ | now eapply ltnSE].
+  now apply Hyp.
+Qed.
+
+Lemma seq_cont_valid F :
+  seq_contW F ->
+  {tau & prod (ext_tree_for F tau) (valid_ext_tree tau)} .
+Proof.
+  intros [tau Htau].
+  exists (ext_tree_valid tau).
+  split.
+  { intros alpha.
+    specialize (Htau alpha) as [n Hn].
+    exists n.
+    now apply eval_ext_tree_valid_eqtau.
+  }
+  intros l a Heq o.
+  unfold ext_tree_valid in * ; rewrite - cats1.
+  now apply ext_tree_valid_valid.
+Qed.  
+  
+    
+  
+
 End AxiomFreeImplications.
 
 
