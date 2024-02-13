@@ -24,7 +24,7 @@ Proof. by move=> eqs12 /eq_cat; move/(_ eqs12) => []. Qed.
 Section sec.
 
 Variables A O : Type.
-Variable a : A.
+(*Variable a : A.*)
 Notation Q := nat.
 
 Implicit Type Y : (Q -> A) -> O.
@@ -35,7 +35,7 @@ Implicit Types s : list A.
 
 (* n first values of α *)
 Definition pref α n :=
-  map α (iota 0 n).
+  map α (iota 0 n.+1).
 
 Lemma pref_le_eq n m α β :
   n <= m ->
@@ -44,28 +44,28 @@ Lemma pref_le_eq n m α β :
 
 Proof.
   rewrite /pref => lenm.
-  have -> : m = n + (m - n) by lia.
+  have -> : m.+1 = n.+1 + (m.+1 - n.+1) by lia.
   rewrite iotaD !map_cat.
   apply: eq_catl.
   by rewrite !size_map size_iota.
 Qed.
 
-Definition padded_seq (s : seq A) :=
+Definition padded_seq (s : seq A) (a : A) :=
   nth a s.
 
 (* n first values of α, then deflt value a. Importantly defined in terms of
    pref, so as to avoid extensionality issues later on under a modulus *)
 Definition padded_prefix α n :=
-  padded_seq (pref α n).
+  padded_seq (pref α n) (α 0).
 
 (* pref and the prefix of a padded prefix coincide*)
 Lemma pref_padded_prefix α n k :
   k <= n -> pref (padded_prefix α n) k = pref α k.
 Proof.
   move=> lekn.
-  apply: (@eq_from_nth _ a); rewrite /pref !size_map !size_iota // /padded_prefix.
+  apply: (@eq_from_nth _ (α 0)); rewrite /pref !size_map !size_iota // /padded_prefix.
   move=> i ltin.
-  congr (nth a _ i).
+  congr (nth _ _ i).
   apply/eq_in_map=> j; rewrite mem_iota add0n /padded_seq => /andP[_ hj].
   rewrite (nth_map 0) ?nth_iota ?add0n ?size_iota //; lia.
 Qed.
@@ -124,7 +124,10 @@ move=> α β eq_pref.
 (* Here is where extensionality matters *)                               
 have eq_padded k : k <= M α -> padded_prefix α k = padded_prefix β k.
   move=> lekMα.
-  suff e : pref α k = pref β k by rewrite /padded_prefix e.
+  suff e : pref α k = pref β k.
+  { rewrite /padded_prefix e.
+    assert (α 0 = β 0) as Heq by (cbn in * ; now inversion e).
+    now rewrite Heq. }
   exact: (pref_le_eq lekMα).
 have leMβα : M β <= M α.
   apply: minM.
