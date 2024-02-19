@@ -1552,6 +1552,16 @@ Qed.
   
 End ContinuousInduction.
 
+Section GBI_BI.
+  
+Definition GBI' {A B} T :=
+  @barred A B T -> @indbarred T nil.
+Definition GBI' : 
+  
+Lemma GBI_to_BI : 
+  
+End GBI_BI.
+
 (* Now let's prove seq_contW + bar induction -> dialogue or Brouwer 
    May be find a better principle for reasoning on trees, equivalent to bar induction
    TODO: find a better way to separate the concern of orders in queries and 
