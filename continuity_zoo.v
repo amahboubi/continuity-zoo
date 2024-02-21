@@ -184,6 +184,16 @@ Proof.
   now eapply IHn.
 Qed.
 
+Lemma eval_ext_tree_trace_size_eval (tau : ext_tree) f n a l :
+  eval_ext_tree_aux tau f n l = output a ->
+  eval_ext_tree_aux tau f (size (eval_ext_tree_trace_aux tau f n l)) l = output a.
+Proof.
+  revert l ; induction n as [ | n IHn] ; cbn in * ; intros l H ; [assumption |].
+  case_eq (tau l) ; intros i Heq ; rewrite Heq in H ; cbn ; rewrite Heq.
+  2: now trivial.
+  now eapply IHn.
+Qed.  
+
 
 (* this one had more hypotheses about "total" and "well-founded" *)
 Definition ext_tree_for F (τ : ext_tree) : Type :=
@@ -1291,8 +1301,6 @@ Section ContinuousInduction.
   Variable O : Type.
   Notation I := nat.
   Notation A := (seq O).
-  Variables o1 o2 : O.
-  Variable eqnoteq : ({o : O & forall o' : O, o' = o} + (o1 = o2 -> False)).
   Implicit Type (F : (I -> O) -> A).
 
 Variable CI : forall F, seq_contW F -> dialogue_cont F.
@@ -1449,60 +1457,41 @@ Proof.
   destruct (dialogue_to_btree_cont (CI (ext_tree_to_fun_seqW Hwf))) as [b H].
   assert (ext_tree_to_fun Hwf =1 fun f => beval_aux b f 0) as Hb.
   { intros alpha ; erewrite H ; exact (beval_beval' _ _). }
-  clear H ; revert Hwf Hb.
+  clear H.
+  revert Hwf Hb.
   unfold ext_tree_to_fun, wf_ext_tree', eval_ext_tree.
-  change 0 with (size (@nil O)).
-  generalize (@nil O).
+  change 0 with (size (@nil O)) ; generalize (@nil O) as l.
   induction b as [ | k IHk].
-  (*To deal with the spit case, where eval_ext_tree_aux (pred_to_ext_tree P) alpha n l
-   always return the same a, we need to assume that O features only one element, or 
-   at least two distinct elements. This is the point of the variable eqnoteq.
-*)
-  { cbn in * ; intros l Hwf Hb.
-    destruct eqnoteq as [[o Heqo] | noteq].
-    (*If O has only one element o : O, then the proof of hereditary_closure will be
-     a straight line of hereditary_sons o, ended with hereditary_self*)
-    { specialize (Hb (fun _ => o)) ; cbn in *.
-      destruct (Hwf (fun=> o)) as [n [x Hx]] ; cbn in * ; subst.
-      clear Hwf ; revert l Hx.
-      induction n as [ | n IHn] ; intros.
-      { cbn in * ; unfold pred_to_ext_tree in *.
-        case_eq (P l) ; intros HeqP ; rewrite HeqP in Hx ; [| now inversion Hx].
-        now econstructor.
-      }
-      case_eq (P l) ; intros HeqP ; [now econstructor |].
-      eapply hereditary_sons.
-      intros o' ; specialize (Heqo o') ; subst.
-      apply IHn.
-      cbn in Hx ; unfold pred_to_ext_tree in Hx ; rewrite HeqP in Hx.
-      exact Hx.
-    }
-    (*If O has two distinct elements o1,o2 : O, then P has to be true on l,
-     anything else leads to falsity.
-     We first prove that the evaluation of pred_to_ext_tree P leads to output a 
-     no matter the oracle.*)
-    assert (forall alpha,
-               eval_ext_tree_aux (pred_to_ext_tree P) alpha (S (projT1 (Hwf alpha))) l =
-              output a).
-    { intros alpha ; erewrite <- PeanoNat.Nat.add_1_r.
+  { cbn in * ; intros.
+    (*Making use of Hwf and Hb, we can extract a uniform n : nat that constitutes
+     the maximum number of questions the evaluation of (pred_to_ext_tree P) is
+     going to take. We can then conclude by induction on this n.*)
+    assert ({n : nat & forall alpha,
+                   eval_ext_tree_aux (pred_to_ext_tree P) alpha n l = output a})
+      as [n Hyp].
+    { exists (size a) ; intros alpha.
+      rewrite - (Hb alpha).
+      destruct (Hwf alpha) as [n [x Hx]] ; cbn in *.
+      assert (Hx' := Hx).
+      rewrite eval_ext_tree_map_aux in Hx'.
+      eapply pred_to_ext_tree_inv1 in Hx'.
+      rewrite <- Hx' at 1.
+      rewrite -> size_cat, size_map, PeanoNat.Nat.add_comm.
       eapply eval_ext_tree_monotone.
-      specialize (Hb alpha) ; cbn in *.
-      rewrite <- Hb.
-      exact (projT2 (projT2 (Hwf alpha))).
+      now eapply eval_ext_tree_trace_size_eval.
     }
-    (*Now we use our two distinct elements o1 and o2 to derive falsity*)
-    assert (Ho1 := H (fun=> o1)) ; assert (Ho2 := H (fun=> o2)) ; clear H.
-    erewrite eval_ext_tree_map_aux in Ho1, Ho2.
-    case_eq (P l) ; intros HeqP ; [ now econstructor |].
-    (*To derive falsity we simply need to prove that o1 = o2.
-     This will follow from a combination of Ho1 and Ho2.*)
-    suff: o1 = o2 by (intros Heqo ; exfalso ; now apply noteq).
-    eapply pred_to_ext_tree_inv1 in Ho1,Ho2.
-    rewrite - Ho1 in Ho2 ; clear Ho1 ; unfold pred_to_ext_tree in Ho2.
-    cbn in Ho2 ; rewrite HeqP in Ho2 ; cbn in *.
-    apply (f_equal (drop (size l))) in Ho2.
-    do 2 erewrite (drop_size_cat _ erefl) in Ho2.
-    now inversion Ho2.
+    clear Hb Hwf ; revert l Hyp.
+    induction n as [ | n IHn] ; cbn ; intros.
+    all: case_eq (P l) ; intros Heq ; [now econstructor |].
+    all: unfold pred_to_ext_tree in Hyp ; rewrite Heq in Hyp.
+    all:  eapply hereditary_sons ; intros o.
+    { specialize (Hyp (fun=> o)) ; now inversion Hyp. }
+    change (fun l => if P l then output l else ask (size l))
+      with (pred_to_ext_tree P) in Hyp.
+    eapply IHn.
+    intros alpha.
+    rewrite <- (Hyp (pref_o l o alpha)), pref_o_sizel.
+    rewrite <- pref_o_eval ; [ | rewrite size_rcons] ; now eauto.
   }
   (*Now comes the recursive case.*)
   cbn in * ; intros.
@@ -1528,7 +1517,8 @@ Proof.
     now erewrite pref_o_sizel in Ha.
   }
   unshelve eapply (IHk o).
-  { intros alpha ; exists (projT1 (Hwf (pref_o l o alpha))).-1.
+  { intros alpha.
+    exists (projT1 (Hwf (pref_o l o alpha))).-1.
     now apply Hyp.
   }
   intros alpha ; specialize (Hb (pref_o l o alpha)) ; cbn in *.
@@ -1536,7 +1526,7 @@ Proof.
   rewrite size_rcons.
   revert Hb ; generalize (Hyp alpha) ; generalize (Hwf (pref_o l o alpha)).
   clear Hyp Hwf ; intros [n [x Hx]] [y Hy] Hb; cbn in *.
-  erewrite <- (@pref_o_beval _ l o) ; [ | now eauto].
+  rewrite - (pref_o_beval _ o (l := l)) ; [ | now eauto].
   rewrite - Hb.
   clear IHk Hb.
   destruct n ; unfold pred_to_ext_tree in * ; cbn in *.
@@ -1551,16 +1541,6 @@ Qed.
   
   
 End ContinuousInduction.
-
-Section GBI_BI.
-  
-Definition GBI' {A B} T :=
-  @barred A B T -> @indbarred T nil.
-Definition GBI' : 
-  
-Lemma GBI_to_BI : 
-  
-End GBI_BI.
 
 (* Now let's prove seq_contW + bar induction -> dialogue or Brouwer 
    May be find a better principle for reasoning on trees, equivalent to bar induction
