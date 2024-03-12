@@ -464,7 +464,6 @@ Definition modulus_to_ext_tree (a_dflt : O) F (M : (nat -> O) -> seq nat) (l : s
     then output (F g)
     else ask (size l).
 
-
 Lemma eval_modulus_to_ext a F M f m :  modulus M M ->
   eval_ext_tree_trace (modulus_to_ext_tree a F M) f m = iota 0 (minn m (\max_(i <- M f) i).+1).
 Proof.
@@ -1552,7 +1551,7 @@ Definition Tbarred T :=
   forall α : nat -> B, {u : list nat & T [seq (i, α i) | i <- u]}.
 
 Inductive indbarred T : list (nat * B) -> Type :=
-  | ieta u' u : T u' -> indbarred T (u' ++ u)
+  | ieta u' u : T u -> List.incl u u' -> indbarred T u'
   | ibeta a v : ~ List.In a (map fst v) ->
               (forall b, indbarred T (v ++ [:: (a,b)])) -> indbarred T v.
 
@@ -1565,50 +1564,522 @@ Arguments Eta {T} u l.
 Definition Monotone {C} (P : list C -> Type) :=
   forall l l', P l -> P (l ++ l').
 
-Inductive arborification {C} (T : list C -> Type) : list C -> Type :=
-| arb l l' : T l -> arborification T (l ++ l').
+Inductive monotonisation {C} (T : list C -> Type) : list C -> Type :=
+| mon l l' : T l -> monotonisation T (l ++ l').
 
-Lemma arbor_tree {C} P : @Monotone C (arborification P).
+
+Definition TMonotone {C} (P : list C -> Type) :=
+  forall l l', List.incl l l' -> P l -> P l'.
+
+Inductive Tmonotonisation {C} (T : list C -> Type) : list C -> Type :=
+| Tmon l l' : T l -> List.incl l l' -> Tmonotonisation T l'.
+
+Lemma Tmonot_monotone {C} P : @TMonotone C (Tmonotonisation P).
 Proof.
-  intros l l' H.
-  inversion H ; subst.
-  now rewrite - catA ; econstructor.
+  intros l l' Hll' Hyp.
+  inversion Hyp ; subst.
+  econstructor.
+  2: eapply List.incl_tran ; eassumption.
+  assumption.
 Qed.
 
 (* Generalized Bar Induction, phrased using the Herbelin-Brede way *)
 Definition GBI T := Tbarred T -> indbarred T [::].
 
-Lemma arbor_barred P : Tbarred P -> Tbarred (arborification P).
+Lemma monot_barred P : Tbarred P -> Tbarred (Tmonotonisation P).
 Proof.
   intros H alpha. specialize (H alpha).
   destruct H as [l Hpref].
   exists l.
-  rewrite <- cats0.
-  econstructor. assumption.
+  econstructor ; [ eassumption |].
+  now apply List.incl_refl.
 Qed.  
 
-Lemma BI_arbor :
-  (forall P : list (nat * B) -> Type, Monotone P -> GBI P) ->
-  forall (P : list (nat * B) -> Type), GBI P.
+
+Fixpoint ord_aux {C} (u : list C) (n : nat) : list (nat * C) :=
+  match u with
+  | nil => nil
+  | a :: q => (n, a) :: (ord_aux q (S n))
+  end.
+
+Definition ord {C} u := ord_aux (C := C) u 0.
+
+Lemma ord_inj {C} n (u u' : list C) : ord_aux u n = ord_aux u' n -> u = u'.
 Proof.
-  intros HBI P Hbar.
+  revert n u'.
+  induction u ; intros n u' Heq.
+  { induction u' ; [reflexivity | cbn in * ; now inversion Heq]. }
+  destruct u' ; [now inversion Heq |].
+  cbn in * ; inversion Heq ; subst.
+  f_equal.
+  eapply IHu ; eassumption.
+Qed.
+
+Lemma ord_cat {C} n (u u' : list C) : ord_aux (u ++ u') n = ord_aux u n ++ (ord_aux u' (size u + n)).
+Proof.
+  revert n ; induction u ; intros ; cbn ;  [reflexivity |].
+  f_equal.
+  erewrite plus_n_Sm.
+  exact (IHu n.+1).
+Qed.
+
+Lemma ord_take {C} n m (u : list C) : ord_aux (take n u) m = take n (ord_aux u m).
+Proof.
+  revert n m ; induction u ; intros ; cbn ; [reflexivity |].
+  destruct n ; [reflexivity |] ; cbn.
+  f_equal.
+  now apply IHu.
+Qed.
+
+
+Lemma ord_drop {C} n m (u : list C) : ord_aux (drop n u) (n + m) = drop n (ord_aux u m).
+Proof.
+  revert n m ; induction u ; intros ; cbn ; [reflexivity |].
+  destruct n ; [reflexivity |] ; cbn.
+  erewrite plus_n_Sm.
+  now apply IHu.
+Qed.
+
+
+Lemma ord_size {C} n (u : list C) : size (ord_aux u n) = size u.
+Proof.
+  revert n ; induction u ; intro n ; [reflexivity |].
+  cbn.
+  f_equal ; now apply IHu.
+Qed.
+
+Lemma ord_rcons {C} n (u : list C) a : ord_aux (rcons u a) n = rcons (ord_aux u n) (size u + n, a).
+Proof.
+  revert n ; induction u ; intros ; cbn ; [reflexivity |].
+  f_equal.
+  now erewrite IHu, plus_n_Sm.
+Qed.
+
+Lemma ord_in {C} n m (u : list C) a : List.In (m, a) (ord_aux u n) -> List.In a u.
+Proof.
+  revert a n m ; induction u ; intros * Hyp ; cbn in * ; [assumption |].
+  destruct Hyp as [Heq | Hin].
+  { left.
+    now inversion Heq.
+  }
+  right.
+  eapply IHu.
+  eassumption.
+Qed.
+
+  
+
+Lemma ord_incl {C} n m (u u' : list C) : List.incl (ord_aux u n) (ord_aux u' m) -> List.incl u u'.
+Proof.
+  revert n m u' ; induction u ; intros ; cbn.
+  { now eapply List.incl_nil_l. }
+  cbn in *.
+  apply List.incl_cons_inv in H as [H1 H2].
+  apply IHu in H2.
+  apply List.incl_cons ; [ | eassumption].
+  eapply ord_in.
+  eassumption.
+Qed.
+
+Lemma ord_notin {C} i j c (u : list C) :
+  i < j -> List.In (i, c) (ord_aux u j) -> False.
+Proof.
+  revert i j ; induction u ; intros * Hinf Hyp ; [now auto |].
+  destruct Hyp as [Heq | Hin].
+  2: { eapply IHu ; [ | eassumption] ; now apply leqW. }
+  inversion Heq ; subst.
+  rewrite ltnn in Hinf ; now inversion Hinf.
+Qed.    
+
+Lemma ord_in_2 {C} n m (u : list C) a :
+  List.In (m + n, a) (ord_aux u n) ->
+  a = nth a u m.
+Proof.
+  revert n m ; induction u ; cbn ; [now auto |].
+  intros n m [Heq | Hin].
+  { inversion Heq ; subst.
+    suff: m = 0 by (intros H ; subst ;  reflexivity).
+    apply (f_equal (subn^~ n)) in H0.
+    now rewrite -> addnK, subnn in H0.
+  }
+  case: (leqP m 0) ; intros Hm.
+  { exfalso.
+    eapply (@ord_notin _ n n.+1 a u) ; [now apply ltnSn |].
+    suff: m = 0 by (intros Heq ; rewrite Heq in Hin; cbn in * ; assumption).
+    rewrite leqn0 in Hm ; eapply elimT ; [ now apply eqP | exact Hm].
+  }
+  eapply prednK in Hm.
+  rewrite <- Hm, plus_Sn_m, plus_n_Sm in Hin.
+  apply IHu in Hin.
+  now change (a = nth a (a0 :: u) (m.-1.+1)) in Hin ; rewrite Hm in Hin.
+Qed.
+  
+
+Lemma ord_NoDup {C} n (u : list C) : List.NoDup (ord_aux u n).
+Proof.
+  revert n ; induction u ; intros ; [econstructor |].
+  cbn ; econstructor 2 ; [ | now eapply IHu].
+  intros Hyp ; eapply (ord_notin (i := n) (j := n.+1)) ; [ | eassumption].
+  now apply ltnSn.
+Qed.
+
+
+Lemma ord_incl' {C} n (u u' : list C) :
+  List.incl (ord_aux u n) (ord_aux u' n) -> ord_aux u n = take (size u) (ord_aux u' n).
+Proof.
+  revert n u' ; induction u ; intros ; cbn.
+  { now rewrite take0. }
+  assert (Hainu := (H (n,a) (or_introl (erefl)))).
+  assert (Heqa := @ord_in_2 _ n 0 u' a Hainu).
+  destruct u' ; [now inversion Hainu | cbn in * ; subst].
+  f_equal.
+  apply IHu ; clear Hainu IHu.
+  intros [m c'] Hin.
+  destruct (H (m, c') (or_intror Hin)) as [Heq | HIn] ; [ | assumption].
+  exfalso.
+  destruct ((List.NoDup_cons_iff (n, c) (ord_aux u n.+1)).1 (ord_NoDup n (c::u))) as [Hnotin Hdup].
+  inversion Heq ; subst ; now apply Hnotin.
+Qed.
+
+
+Lemma ord_inf_size_aux u n m :
+  n <= m ->
+  m < (size u + n) ->
+  {b : B & List.In (m, b) (ord_aux u n)}.
+Proof.
+  revert n m ; induction u ; intros n m Hn Hm.
+  have aux : n < n by (eapply leq_ltn_trans ; [eassumption | exact Hm]).
+  rewrite ltnn in aux ; now inversion aux.
+  cbn.
+  case: (leqP m n).
+  { intros Hmn.
+    exists a ; left.
+    suff: m = n by (intros Heq ; subst).
+    have Hyp: (m == n) by (erewrite eqn_leq, Hn, Hmn).
+    clear - Hyp.
+    revert m Hyp ; induction n ; intros.
+    { induction m ; cbn in * ; [reflexivity | now inversion Hyp]. }
+    destruct m ; [now inversion Hyp |] ; cbn in *.
+    now rewrite (IHn m Hyp).
+  }
+  clear Hn ; intros Hn.
+  edestruct (IHu n.+1 m Hn) as [b Hb].
+  2:{ exists b ; now right. }
+  change (m < (size u + n).+1 = true) in Hm.
+  now erewrite <- plus_n_Sm.
+Qed.
+
+Lemma ord_inf_size u n :
+  n < size u ->
+  {b : B & List.In (n, b) (ord u) }.
+Proof.
+  unfold ord ; intros Hn.
+  eapply ord_inf_size_aux ; [easy |].
+  now erewrite <- plus_n_O.
+Qed.
+
+Lemma ord_map_aux u n (alpha : nat -> B) : ord_aux [seq alpha i | i <- u] n =
+                                [seq (i.1, alpha i.2) | i <- ord_aux u n ].
+Proof.
+  revert n alpha ; induction u ; [ reflexivity |] ; intros.
+  cbn.
+  f_equal.
+  now eapply IHu.
+Qed.
+
+Lemma ord_iota_aux i j : ord_aux (iota i j) i =
+                             [seq (i, i) | i <- iota i j].
+Proof.
+  revert i ; induction j ; [reflexivity |] ; intros.
+  cbn ; f_equal.
+  now eapply IHj.
+Qed.
+    
+
+Definition TtoP (T : list (nat * B) -> Type) (l : list B) : Type :=
+  T (ord l).
+
+Inductive PtoT (P : list B -> Type) : list (nat * B) -> Type :=
+| ptot : forall l, P l -> PtoT P (ord l).
+
+
+Definition TtoP_inj P : forall l, P l -> TtoP (PtoT P) l :=
+  fun l Hl => ptot Hl.
+
+Lemma TtoP_PtoT (T : list (nat * B) -> Type) l :
+  PtoT (TtoP T) l -> T l. 
+Proof.
+  unfold TtoP ; intros H.
+  inversion H ; now subst.
+Qed.
+
+
+(*The next two Lemmas are Proposition 11 in Brede-Herbelin's Paper*)
+Lemma Monotone_PtoT_P P l : Monotone P -> TtoP (Tmonotonisation (PtoT P)) l -> P l.
+Proof.
+  intros HP Hl.
+  unfold TtoP in *.
+  inversion Hl as [u v Hu Hincl Heq] ; subst.
+  inversion Hu as [w Hw] ; unfold ord in * ; subst.
+  apply ord_incl' in Hincl ; rewrite - ord_take in Hincl ; apply ord_inj in Hincl.
+  erewrite <- (cat_take_drop (size w)) ; apply HP.
+  now rewrite - Hincl.
+Qed.
+
+
+Lemma P_PtoT P l : P l -> TtoP (Tmonotonisation (PtoT P)) l.
+Proof.
+  intros Hl.
+  unfold TtoP.
+  econstructor ; [econstructor ; eassumption |].
+  now apply List.incl_refl.
+Qed.
+
+
+(*The next two Lemmas are Proposition 12 in Brede-Herbelin's paper.*)
+
+Lemma inductively_barred_indbarred T l :
+  hereditary_closure (TtoP T) l -> indbarred T (ord l).
+Proof.
+  intros Hl ; induction Hl as [l Hl | l k IHl].
+  { unfold TtoP in *.
+    econstructor ; [eassumption |].
+    now apply List.incl_refl.
+  }
+  unshelve econstructor 2.
+  exact (size l).
+  { suff: forall (l : seq B) n,  ~ List.In (n + size l) [seq i.1 | i <- ord_aux l n] by
+        (intros H ; exact (H l 0)).
+    clear.
+    induction l ; intros ; cbn ; [easy |].
+    intros H.
+    destruct H.
+    { clear -H ; induction n ; cbn in * ; [now inversion H | now injection H]. }
+    specialize (IHl (n.+1)) ; cbn in *.
+    erewrite <- plus_n_Sm in H ; now apply IHl.
+  }
+  unfold ord in * ; intros a ; specialize (IHl a).
+  erewrite ord_rcons, <- plus_n_O in IHl.
+  now rewrite cats1.
+Qed.  
+
+Lemma indbarred_inductively_barred T u v :
+  TMonotone T ->
+  List.incl v (ord u) ->
+  indbarred T v ->
+  hereditary_closure (TtoP T) u.
+Proof.
+  intros Hmon Hincl Hv.
+  revert u Hincl.
+  induction Hv as [ | n v notin k IHk]; intros.
+  { econstructor.
+    unfold TtoP.
+    eapply Hmon ; [ | eassumption].
+    now eapply List.incl_tran  ; eassumption.
+  }
+  clear notin k.
+  suff : forall m, n.+1 - (size u) = m -> hereditary_closure (TtoP T) u.
+  { intros Hyp. eapply Hyp ; reflexivity. }
+  intros m ; revert u IHk Hincl.
+  induction m ; intros * IHk Hincl Heq.
+  {  case: (leqP n.+1 (size u)).
+     { intros Hninf.
+       eapply ord_inf_size in Hninf as [b Hb].
+       eapply (IHk b).
+       eapply List.incl_app ; [assumption |].
+       eapply List.incl_cons ; [ assumption | now eapply List.incl_nil_l].
+     }
+     intros Hinf.
+     exfalso.
+     unshelve eapply (PeanoNat.Nat.sub_gt _ _ _ Heq).
+     eapply (proj1 (PeanoNat.Nat.le_succ_l (size u) n.+1)).
+     exact (@leP (size u).+1 n.+1 Hinf).
+  }
+  econstructor 2 ; intros b.
+  eapply IHm ; [assumption | |].
+  { unfold ord ; erewrite ord_rcons, <- plus_n_O.
+    erewrite <- cats1.
+    now eapply List.incl_appl.
+  }
+  now erewrite size_rcons, subnS, Heq.
+Qed.
+
+
+Lemma indbarred_inductively_barred_dual P u :
+  Monotone P ->
+  indbarred (Tmonotonisation (PtoT P)) (ord u) ->
+  hereditary_closure P u.
+Proof.
+  intros Hmon Hbar.
+  suff: hereditary_closure (TtoP (Tmonotonisation (PtoT P))) u.
+  { clear Hbar.
+    intros Hbar.
+    induction Hbar as [u Hyp | u k IHk] ; [econstructor ; now eapply Monotone_PtoT_P |].
+    econstructor 2 ; assumption.
+  }
+  eapply indbarred_inductively_barred ; [ | now apply List.incl_refl | eassumption].
+  now apply Tmonot_monotone.
+Qed.
+
+Lemma in_map {X Y} (u : seq X) (f : X -> Y) a :
+  List.In a u -> List.In (f a) (map f u).
+Proof.
+  revert a ; induction u ; cbn ; [auto |].
+  intros x Hax.
+  destruct Hax as [Heq | Hin].
+  { left ; now subst. }
+  right.
+  now eapply IHu.
+Qed.
+
+
+
+Lemma map_incl {X Y} (u u' : seq X) (f : X -> Y) :
+  List.incl u u' -> List.incl (map f u) (map f u').
+Proof.
+  (*revert u ; induction u' ; intros u H.
+  { eapply List.incl_l_nil in H ; subst ; cbn.
+    now eapply List.incl_refl. } *)
+  
+  revert u' ; induction u ; intros u' H.
+  { now eapply List.incl_nil_l. }
+  intros y Hy.
+  cbn in * ; destruct Hy as [Heq | Hin].
+  { rewrite - Heq ; eapply in_map.
+    eapply H ; cbn.
+    now left.
+  }
+  eapply IHu ; [ | assumption].
+  now destruct (List.incl_cons_inv H).
+Qed.
+
+Lemma in_iota i j k : i <= j  -> j < (i + k) -> List.In j (iota i k).
+Proof.
+  revert i j ; induction k ; intros i j Hij Hjik.
+  { exfalso.
+    erewrite <- plus_n_O, leq_gtF in Hjik ; [now inversion Hjik | assumption].
+  }
+  case: (leqP i.+1 j) ; intros Hyp ; [right | left].
+  { eapply IHk ; [ assumption | now rewrite -> plus_Sn_m, plus_n_Sm]. }
+  eapply elimT ; [now eapply eqP |].
+  eapply ltnSE in Hyp ; now rewrite -> eqn_leq, Hij, Hyp.
+Qed.
+
+Lemma incl_iota_max u : List.incl u (iota 0 (List.list_max u).+1).
+Proof.
+  intros n Hin.
+  apply in_iota ; [now apply leq0n|].
+  change (0 + (List.list_max u).+1) with (List.list_max u).+1.
+  rewrite ltnS.
+  eapply introT ; [ now eapply leP | ].
+  eapply ((List.Forall_forall) (fun x => le x (List.list_max u))) ; [ | eassumption].
+  now apply (List.list_max_le u (List.list_max u)).1.
+Qed.
+
+(*The next two Lemmas are Proposition 13 in Brede-Herbelin's paper.*)
+Lemma NBbarred_barred T :
+  TMonotone T ->
+  Tbarred T ->
+  barred (TtoP T).
+Proof.
+  intros Hmon HTbar alpha.
+  specialize (HTbar alpha) as [u Hu].
+  exists [seq (alpha i) | i <- iota 0 (List.list_max u).+1].
+  split ; [ unfold prefix ; now rewrite -> size_map, size_iota |].
+  unfold TtoP, ord.
+  erewrite ord_map_aux, ord_iota_aux, <- map_comp.
+  unshelve erewrite (eq_map (g:= fun i => (i, alpha i))) ; [ | intros ? ; reflexivity].
+  eapply Hmon ; [ | eassumption].
+  intros [n b] Hin.
+  eapply map_incl ; [ | eassumption ].
+  now eapply incl_iota_max.
+Qed.
+
+
+Lemma barred_NBbarred T :
+  barred (TtoP T) ->
+  Tbarred T.
+Proof.
+  intros Hbar alpha.
+  specialize (Hbar alpha) as [u [Hpref Hu]].
+  unfold TtoP in Hu.
+  exists (map fst (ord u)).
+  suff: ord u = [seq (i, alpha i) | i <- [seq i.1 | i <- ord u]]
+    by (intro Heq; rewrite - Heq ; exact Hu).
+  clear Hu.
+  erewrite <- map_comp.
+  unfold prefix, ord in * ; revert Hpref ; generalize 0.
+  induction u ; cbn ;  intros ; [reflexivity |].
+  inversion Hpref as [H0] ; subst ; f_equal.
+  now erewrite <- H, <- IHu ; [ | assumption].
+Qed.
+  
+  
+(*GBI_monot is used in the proof of Theorem 5 in Brede-Herbelin's paper.*)
+Lemma GBI_monot :
+  (forall T : list (nat * B) -> Type, TMonotone T -> GBI T) ->
+  forall (T : list (nat * B) -> Type), GBI T.
+Proof.
+  intros HBI T Hbar.
   suff: forall l,
-      indbarred (arborification P) l ->
-      indbarred P l. 
+      indbarred (Tmonotonisation T) l ->
+      indbarred T l. 
   { intros Hyp.
     apply Hyp.
-    apply HBI ; [now apply arbor_tree |].
-    apply arbor_barred, Hbar.
+    apply HBI ; [now apply Tmonot_monotone |].
+    apply monot_barred, Hbar.
   }
   clear HBI ; intros l Hl.
   induction Hl.
   { inversion t as [l l' Hl Heq].
-    rewrite <- catA.
-    econstructor. assumption.
+    subst.
+    econstructor ; [eassumption |].
+    now eapply List.incl_tran ; eassumption.
   }
-  econstructor. eassumption.
+  econstructor 2. eassumption.
   eassumption.
 Qed.
+
+Lemma GBI_BI :
+  (forall (T : list (nat * B) -> Type), GBI T) ->
+  forall T' : list B -> Type, Monotone T' -> BI_ind T'.
+Proof.
+  intros HGBI T' Hmon BarT'.
+  unfold GBI in HGBI.
+  unfold inductively_barred.
+  apply indbarred_inductively_barred_dual ; [assumption |].
+  apply HGBI.
+  suff: Tbarred (PtoT T').
+  { intros HTbar alpha ; specialize (HTbar alpha) as [u Hu].
+    exists u.
+    econstructor ; [eassumption | now apply List.incl_refl].
+  }
+  eapply barred_NBbarred.
+  intros alpha ; specialize (BarT' alpha) as [u [prefu Hu]].
+  exists u ; split ; [assumption |].
+  now eapply TtoP_inj.
+Qed.
+
+
+Lemma inductively_barred_indbarred T l :
+  indbarred T l -> {u & prod (List.incl (ord u) l) (hereditary_closure (TtoP T) u)}.
+Proof.
+  intros Hl.
+  induction Hl as [l l' Hl | l k IHl].
+  admit.
+  assert (b : B) by admit.
+  destruct (X b) as [u [Hincl Hered]].
+  assert (Hyp : forall q (x : nat * B), {List.In x q} + {~ List.In x q}) by admit.
+  destruct (Hyp (ord u) (l, b)).
+  2:{ assert (List.incl (ord u) k) by admit.
+      exists u.
+      split ; assumption.
+  }
+  
+      
+  
+  
+
 
 (* TODO : secure the names generated by inversions and destruct using*)
 Lemma indbarredP T (b : B) (l : list (nat * B)) : indbarred T l -> indbarred_spec T l.
