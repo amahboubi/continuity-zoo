@@ -1604,6 +1604,14 @@ Fixpoint ord_aux {C} (u : list C) (n : nat) : list (nat * C) :=
 
 Definition ord {C} u := ord_aux (C := C) u 0.
 
+Lemma ord_map_snd {C} n (u : list C) : map snd (ord_aux u n) = u.
+Proof.
+  revert n ; induction u as [ | c q IHq] ; intros n ; [reflexivity |].
+  cbn ; f_equal.
+  now apply IHq.
+Qed.
+
+
 Lemma ord_inj {C} n (u u' : list C) : ord_aux u n = ord_aux u' n -> u = u'.
 Proof.
   revert n u'.
@@ -1655,6 +1663,19 @@ Proof.
   now erewrite IHu, plus_n_Sm.
 Qed.
 
+Lemma ord_nth {C} b (u : list C) n m : (n + m, nth b u m) = nth (n + m, b) (ord_aux u n) m.
+Proof.
+  revert n m ; induction u ; intros.
+  { now do 2 rewrite nth_nil. }
+  cbn.
+  destruct m.
+  { cbn ; now rewrite <- plus_n_O. }
+  cbn.
+  rewrite <- plus_n_Sm, <- plus_Sn_m.
+  now apply (IHu n.+1 m).
+Qed.  
+
+
 Lemma ord_in {C} n m (u : list C) a : List.In (m, a) (ord_aux u n) -> List.In a u.
 Proof.
   revert a n m ; induction u ; intros * Hyp ; cbn in * ; [assumption |].
@@ -1667,7 +1688,18 @@ Proof.
   eassumption.
 Qed.
 
-  
+Lemma ord_nth_in {C} n m b (u : list C) :
+  n < size u ->
+  List.In (nth (n + m, b) (ord_aux u m) n) (ord_aux u m).
+Proof.
+  revert n m b ; induction u ; intros n m b Hyp ; [now inversion Hyp |].
+  cbn.
+  destruct n.
+  { cbn in * ; now left. }
+  right ; cbn in *.
+  rewrite plus_n_Sm.
+  now apply IHu.
+Qed.
 
 Lemma ord_incl {C} n m (u u' : list C) : List.incl (ord_aux u n) (ord_aux u' m) -> List.incl u u'.
 Proof.
@@ -1690,6 +1722,18 @@ Proof.
   inversion Heq ; subst.
   rewrite ltnn in Hinf ; now inversion Hinf.
 Qed.    
+
+Lemma ord_sizeu_notin :
+  forall (l : seq B) n,  ~ List.In (n + size l) [seq i.1 | i <- ord_aux l n].
+Proof.
+  induction l ; intros ; cbn ; [easy |].
+  intros H.
+  destruct H.
+  { clear -H ; induction n ; cbn in * ; [now inversion H | now injection H]. }
+  specialize (IHl (n.+1)) ; cbn in *.
+  erewrite <- plus_n_Sm in H ; now apply IHl.
+Qed.
+
 
 Lemma ord_in_2 {C} n m (u : list C) a :
   List.In (m + n, a) (ord_aux u n) ->
@@ -1803,15 +1847,31 @@ Inductive PtoT (P : list B -> Type) : list (nat * B) -> Type :=
 | ptot : forall l, P l -> PtoT P (ord l).
 
 
-Definition TtoP_inj P : forall l, P l -> TtoP (PtoT P) l :=
+Definition TtoP_PtoT_ret P : forall l, P l -> TtoP (PtoT P) l :=
   fun l Hl => ptot Hl.
 
-Lemma TtoP_PtoT (T : list (nat * B) -> Type) l :
+Lemma TtoP_PtoT_inv P : forall l, TtoP (PtoT P) l -> P l.
+Proof.
+  intros u H.
+  inversion H.
+  now eapply ord_inj in H1 ; subst.
+Qed.  
+
+
+Lemma PtoT_TtoP_inv (T : list (nat * B) -> Type) l :
   PtoT (TtoP T) l -> T l. 
 Proof.
   unfold TtoP ; intros H.
   inversion H ; now subst.
 Qed.
+
+Lemma PtoT_TtoP_ret (T : list (nat * B) -> Type) u :
+  T (ord u) -> PtoT (TtoP T) (ord u). 
+Proof.
+  intro H ; econstructor.
+  unfold TtoP ; assumption.
+Qed.
+
 
 
 (*The next two Lemmas are Proposition 11 in Brede-Herbelin's Paper*)
@@ -1848,16 +1908,7 @@ Proof.
   }
   unshelve econstructor 2.
   exact (size l).
-  { suff: forall (l : seq B) n,  ~ List.In (n + size l) [seq i.1 | i <- ord_aux l n] by
-        (intros H ; exact (H l 0)).
-    clear.
-    induction l ; intros ; cbn ; [easy |].
-    intros H.
-    destruct H.
-    { clear -H ; induction n ; cbn in * ; [now inversion H | now injection H]. }
-    specialize (IHl (n.+1)) ; cbn in *.
-    erewrite <- plus_n_Sm in H ; now apply IHl.
-  }
+  { unfold ord ; exact (@ord_sizeu_notin l 0). }
   unfold ord in * ; intros a ; specialize (IHl a).
   erewrite ord_rcons, <- plus_n_O in IHl.
   now rewrite cats1.
@@ -2040,6 +2091,19 @@ Proof.
   eassumption.
 Qed.
 
+Lemma BI_GBI : 
+  (forall P : list B -> Type, BI_ind P) ->
+  forall (T : list (nat * B) -> Type), GBI T.
+Proof.
+  intros HBI.
+  apply GBI_monot ; intros T Hmon HTbar.
+  change (@nil (nat * B)) with (ord (@nil B)).
+  apply inductively_barred_indbarred.
+  apply HBI.
+  apply NBbarred_barred ; assumption.
+Qed.  
+  
+  
 Lemma GBI_BI :
   (forall (T : list (nat * B) -> Type), GBI T) ->
   forall T' : list B -> Type, Monotone T' -> BI_ind T'.
@@ -2057,8 +2121,431 @@ Proof.
   eapply barred_NBbarred.
   intros alpha ; specialize (BarT' alpha) as [u [prefu Hu]].
   exists u ; split ; [assumption |].
-  now eapply TtoP_inj.
+  now eapply TtoP_PtoT_ret.
 Qed.
+
+Definition is_tree (P : list B -> Type) :=
+  forall u n, P u -> P (take n u).
+
+Definition arborification (P : list B -> Type) (u : list B) : Type :=
+  forall n, P (take n u).
+
+
+CoInductive pruning (P : list B -> Type) : list B -> Type :=
+  prune a u : P u -> pruning P (rcons u a) -> pruning P u.
+
+Definition choicefun (P : list B -> Type) :=
+  {alpha : nat -> B & forall n : nat, P [seq (alpha i) | i <- iota 0 n] }.
+
+Definition DC := forall (P : list B -> Type), pruning P nil -> choicefun P.
+
+Definition ABis_tree T :=
+  forall u v, List.incl v u -> T u -> T v.
+
+Inductive UpABarborification T : list (nat * B) -> Type :=
+| Tarbor l l' : T l -> List.incl l' l -> UpABarborification T l'.
+
+Definition DownABarborification T u : Type :=
+  forall v, List.incl v u -> T v.
+
+
+Definition ABchoicefun T :=
+  {alpha : nat -> B & forall u : list nat, T [seq (i, alpha i) | i <- u]}.
+
+CoInductive ABapprox T : list (prod nat B) -> Type :=
+  approx u : DownABarborification T u ->
+             (forall n : nat, ~ List.In n (map fst u) ->
+                              {b : B & ABapprox T (rcons u (n, b))}) ->
+             ABapprox T u.
+
+Definition GDC := forall T,  ABapprox T nil -> ABchoicefun T.
+
+Lemma arbor_is_tree P : is_tree (arborification P).
+Proof.
+  intros u n Hu.
+  unfold arborification in * ; intros m.
+  case: (leqP n m) ; intros Hinf.
+  { erewrite take_taker ; [ | assumption].
+    now apply Hu.
+  }
+  erewrite take_takel ; [now apply Hu |].
+  now apply ltnW.
+Qed.
+
+Lemma DownABarbor_is_tree T : ABis_tree (DownABarborification T).
+Proof.
+  intros u n Hu.
+  unfold DownABarborification in * ; intros Hyp v Hincl.
+  apply Hyp.
+  eapply List.incl_tran ; eassumption.
+Qed.
+
+Lemma UpABarbor_is_tree T : ABis_tree (UpABarborification T).
+Proof.
+  intros u n Hu HT.
+  induction HT.
+  econstructor ; [eassumption | ].
+  now eapply List.incl_tran ; eassumption.
+Qed.
+
+Lemma Prop11 P u :
+  P u -> 
+  TtoP (UpABarborification (PtoT P)) u.
+Proof.
+  intros HP ; unfold TtoP.
+  econstructor ; [econstructor ; eassumption |].
+  now apply List.incl_refl.
+Qed.
+
+
+Lemma Prop11_rev P u :
+  is_tree P ->
+  TtoP (UpABarborification (PtoT P)) u ->
+  P u.
+Proof.
+  intros Htree HP ; unfold TtoP in *.
+  inversion HP ; subst.
+  inversion X ; subst.
+  apply ord_incl' in H.
+  rewrite - ord_take in H ; apply ord_inj in H ; rewrite H.
+  unfold is_tree in * ; now apply Htree.
+Qed.
+
+Print pruning.
+  
+
+Lemma Prop12 T u : ABis_tree T -> ABapprox T (ord u) -> pruning (TtoP T) u.
+Proof.
+  intros Htree.
+  generalize (@erefl _ (ord u)).
+  generalize (ord u) at 2 3 ; intros l Heq Happ. revert l Happ u Heq.
+  refine (cofix aux l Happ := match Happ as H in ABapprox _ u0 return
+                            forall u : seq B, ord u = u0 -> pruning (TtoP T) u with
+                            | approx l Harb Hyp => _
+                            end).
+  intros u Heq ; subst.
+  unshelve edestruct (Hyp (size u)) ; [exact (@ord_sizeu_notin u 0) |].
+  unshelve econstructor ; [assumption | |].
+  { unfold TtoP.
+    now specialize (Harb (ord u) (List.incl_refl _)).
+  }
+  eapply (aux (rcons (ord u) (size u, x))) ; [assumption |].
+  unfold ord ; now rewrite -> ord_rcons, <- plus_n_O.
+Qed.
+
+Axiom todo : False.
+Require Import paco.
+
+Lemma Prop12_rev T u v :
+  ABis_tree T ->
+  pruning (TtoP T) u ->
+  List.incl v (ord u) ->
+  ABapprox T v.
+Proof.
+  intros Htree Hprun Hincl.
+  unfold TtoP in Hprun ; revert Hprun v Hincl.
+  revert u.
+  
+  refine (cofix aux u Hprun := match Hprun as H0 in pruning _ v0
+                                     return forall w, List.incl w (ord v0) -> ABapprox T w
+                             with
+                             | prune c u Hu Hprun' => _
+                               end).
+  clear u0 Hprun ; intros w Hincl ; subst.
+  econstructor.
+  { intros x Hincl'.
+    eapply Htree ; [ | eassumption].
+    eapply List.incl_tran ; eassumption.
+  }
+  intros n _.
+  unshelve refine ((fix aux2 m :=
+            match m as m0 return
+                  forall (n : nat) (u : seq B) (c : B) (w : seq (nat * B)),
+                    T (ord u) ->
+                    pruning (fun l : seq B => T (ord l)) (rcons u c) ->
+                    List.incl w (ord u) -> n.+1 - size u = m0 ->
+                    {b : B & ABapprox T (rcons w (n, b))}
+            with
+              | 0 => _
+            | S m => _
+            end) (n.+1 - size u) _ u c _ _ _ _ _). 
+  { clear - aux ; intros n u c v Hu Hprun Hincl Heq.
+    destruct u as [ | u b IHu] using last_ind ; [now inversion Heq |] ; clear IHu.
+    exists (nth b (rcons u b) n).
+    Guarded.
+    eapply aux ; [ exact Hprun |].
+    Guarded.
+    rewrite - cats1.
+    apply List.incl_app.
+    { unfold ord ; rewrite ord_rcons - cats1 ; now apply List.incl_appl. }
+    clear v Hincl.
+    unfold ord ; rewrite -> ord_rcons, nth_rcons, <- plus_n_O.
+    rewrite size_rcons in Heq ; change (n - size u = 0) in Heq.
+    case: (leqP (size u) n) ; intros Hinf.
+    { suff: n = size u.
+      { intros Heq' ; subst.
+        rewrite -> eq_refl, <- cats1 ; cbn.
+        rewrite -> ord_rcons, <- plus_n_O, <- cats1.
+        now apply List.incl_appl, List.incl_appr, List.incl_refl.
+      }
+      suff: (n == size u) by now move/eqP.
+      now rewrite -> eqn_leq, -> Hinf, <- subn_eq0, Heq.
+    }
+    rewrite (@ord_nth _ b u 0 n) ; cbn.
+    eapply List.incl_tran.
+    2:{ rewrite <- cats1 ; apply List.incl_appl ; now apply List.incl_refl. }
+    rewrite -> ord_rcons, <- plus_n_O, <- cats1 ; apply List.incl_appl.
+    apply List.incl_cons ; [ | now apply List.incl_nil_l].
+    erewrite (plus_n_O n) at 1.
+    now eapply ord_nth_in.
+  }
+  clear - aux aux2 ; intros n u c v Hu Hprun Hincl Heq.
+  inversion Hprun ; subst.
+  eapply (aux2 _ _ (rcons u c)).
+  assumption.
+  eassumption.
+  { eapply List.incl_tran ; [eassumption | clear Hincl].
+    unfold ord ; rewrite <- cats1, ord_cat, <- plus_n_O.
+    apply List.incl_appl ; now apply List.incl_refl.
+  }
+  rewrite -> size_rcons, subnS, Heq.
+  reflexivity.
+  all: try assumption.
+  reflexivity.
+Qed.
+suff: (List.incl w (rcons w b)).
+    2:{ rewrite - cats1 ; now apply List.incl_appl, List.incl_refl. }
+    intros Hincl.
+    rewrite <- (ord_map_snd 0 w) in Hincl at 1 ; rewrite <- (ord_map_snd 0 (rcons w b)) in Hincl.
+    eapply map_incl in Hincl.
+    
+    intros (k, b') Hin.
+    apply ord_in in Hin.
+    
+  
+  { destruct Hprun. econstructor.
+  { destruct Hprun.
+  { intros w Hprun' ; subst.
+    intros x Hincl'.
+    unshelve eapply aux ; [ | eassumption | eassumption].
+  }
+
+    
+Admitted.
+
+Lemma pruning_ext P Q l :
+  (forall u, P u = Q u) ->
+            pruning P l ->
+            pruning Q l.
+Proof.
+  intros Hex ; revert l.
+  refine (cofix aux l Hprun := match Hprun as H in pruning _ l0 return pruning Q l0 with
+                            | prune b u Hu Hyp => _
+                             end).
+  econstructor ; [now erewrite <- Hex |].
+  apply aux ; eassumption.
+Qed.  
+
+Lemma choicefun_arbor P :
+  choicefun (arborification P) ->
+  choicefun P.
+Proof.
+  intros [alpha Halpha] ; exists alpha.
+  unfold arborification in Halpha.
+  intros n ; specialize (Halpha n n).
+  now rewrite <- map_take, take_iota, minnn in Halpha.
+Qed.
+
+Lemma pruning_arbor P l :
+  pruning P l ->
+  (forall n, P (take n l)) ->
+  pruning (arborification P) l.
+Proof.
+  revert l.
+  refine (cofix aux l Hprun := match Hprun as H in pruning _ l0
+                                        return (forall n, P (take n l0)) -> pruning _ l0 with
+                            | prune b u Hu Hyp => _
+                               end).
+  intros Htake.
+  econstructor ; [exact Htake |].
+  apply aux ; [eassumption |].
+  intros n.
+  case: (leqP n (size u)) ; intros Hinf.
+  { erewrite <- cats1, takel_cat ; [now apply Htake | assumption]. }
+  erewrite <- cats1, take_cat.
+  erewrite <- (subnSK Hinf).
+  apply ltnW, leq_gtF in Hinf ; rewrite Hinf ; cbn ; rewrite cats1.
+  now destruct Hyp.
+Qed.
+  
+  
+  
+Lemma prop13 T :
+  ABis_tree T ->
+  ABchoicefun T ->
+  choicefun (TtoP T).
+Proof.
+  intros Htree [alpha Halpha] ; exists alpha ; intros n.
+  unfold TtoP.
+  specialize (Halpha (iota 0 n)).
+  unfold ord ; rewrite ord_map_aux ord_iota_aux - map_comp.
+  erewrite eq_map ; [eassumption |].
+  now intros k.
+Qed.
+
+Lemma prop13_rev T :
+  ABis_tree T ->
+  choicefun (TtoP T) -> 
+  ABchoicefun T.
+Proof.
+  intros Htree [alpha Halpha] ; exists alpha ; intros u.
+  specialize (Halpha (List.list_max u).+1) ; unfold TtoP in Halpha.
+  eapply Htree ; [ | eassumption].
+  unfold ord ; rewrite ord_map_aux ord_iota_aux - map_comp.
+  unshelve erewrite (eq_map (g:= fun i => (i, alpha i)) _ (iota 0 _)) ; [now intros k |].
+  now eapply map_incl, incl_iota_max.
+Qed.
+
+Lemma prop13dual P :
+  is_tree P ->
+  ABchoicefun (UpABarborification (PtoT P)) ->
+  choicefun P.
+Proof.
+  intros Htree [alpha Halpha] ; exists alpha ; intros n.
+  specialize (Halpha (iota 0 n)). 
+  inversion Halpha as [l1 l2 Hl Hincl Heq].
+  subst.
+  inversion Hl ; subst.
+  unfold is_tree in Htree.
+  erewrite (eq_map (g := (fun i => (i.1, alpha i.2)) \o (fun n => (n, n)))),
+    map_comp, <- ord_iota_aux, <- ord_map_aux in Hincl ; [ | now intro k].
+  eapply ord_incl' in Hincl ; rewrite <- ord_take, size_map, size_iota in Hincl.
+  apply ord_inj in Hincl ; rewrite Hincl.
+  now apply Htree.
+Qed.
+
+Lemma Theorem5: DC -> forall T, ABis_tree T -> ABapprox T nil -> ABchoicefun T.
+Proof.
+  intros Hyp T Htree Happ.
+  apply prop13_rev ; [assumption |].
+  apply Hyp.
+  now apply Prop12 ; [assumption |].
+Qed.  
+
+Lemma Theorem5rev : GDC -> DC.
+Proof.
+  intros Hyp P Hprun.
+  apply choicefun_arbor.
+  apply prop13dual; [apply arbor_is_tree |].
+  unfold GDC in Hyp ; apply Hyp.
+  unshelve eapply Prop12_rev ; [exact nil | now apply UpABarbor_is_tree | | eapply List.incl_refl ].
+  eapply pruning_arbor in Hprun.
+  2:{ intros n ; cbn ; now destruct Hprun. }
+  revert Hprun ; generalize (@nil B).
+  refine (cofix aux l Hprun := match Hprun as H in pruning _ l return
+                                   pruning _ l with
+                             | prune b u Hu Hyp => _
+                             end).
+  econstructor ; [now eapply Prop11 |].
+  apply aux ; eassumption.
+Qed.  
+  
+  
+  apply prop13_rev.
+      2:{
+
+        apply Hyp.
+      unshelve eapply Prop12_rev ; [exact nil | now apply ABarbor_is_tree | | ].
+  2:{ now apply List.incl_refl. }
+  destruct Hprun as [b l HP Hprun].
+  unshelve econstructor ; [assumption | | ].
+  unfold TtoP.
+  intros v Hincl.
+  
+  
+  
+  eq_refl, ltnn, <- plus_n_O, <- cats1.
+      apply List.incl_appr, List.incl_cons ; [ now left | now apply List.incl_nil_l].
+    }
+    
+      cbn.
+      case: (ltnP n (size u)).
+      { intros Hinf ; apply ltn_eqF in Hinf ; rewrite Hinf in Heqn ; now inversion Heqn. }
+    apply List.incl_cons ; [ | now apply List.incl_nil_l].
+    
+    Print has.
+    .
+    
+subn_eq0
+
+    case: (leqP n.+1 (size u)).
+     { intros Hninf.
+       eapply ord_inf_size in Hninf as [b Hb].
+       exists b ; econstructor.
+       unfold TtoP in Hprun ; destruct Hprun as [b' u Hu].
+       eapply (IHk b).
+       eapply List.incl_app ; [assumption |].
+       eapply List.incl_cons ; [ assumption | now eapply List.incl_nil_l].
+     }
+     intros Hinf.
+     exfalso.
+     unshelve eapply (PeanoNat.Nat.sub_gt _ _ _ Heq).
+     eapply (proj1 (PeanoNat.Nat.le_succ_l (size u) n.+1)).
+     exact (@leP (size u).+1 n.+1 Hinf).
+  }
+  econstructor 2 ; intros b.
+  eapply IHm ; [assumption | |].
+  { unfold ord ; erewrite ord_rcons, <- plus_n_O.
+    erewrite <- cats1.
+    now eapply List.incl_appl.
+  }
+  now erewrite size_rcons, subnS, Heq.
+    
+
+Lemma GBI_BI' :
+  (forall (T : list (nat * B) -> Type), GBI T) ->
+  forall T' : list B -> Type, BI_ind T'.
+Proof.
+  intros HGBI T' BarT'.
+  pose (T:= (PtoT T')).
+  have aux: Tbarred (PtoT T').
+  { eapply barred_NBbarred.
+    intros alpha ; specialize (BarT' alpha) as [u [prefu Hu]].
+    exists u ; split ; [assumption |].
+    now eapply TtoP_inj.
+  }
+  apply HGBI in aux ; clear HGBI.
+  suff: forall u l,
+      l = ord u ->
+      indbarred T l -> hereditary_closure T' u by
+      (intros H ; apply (H nil (ord nil))).
+  clear aux ; intros u l Heq Hl.
+  revert u Heq.
+  induction Hl ; intros.
+  { subst.
+    econstructor.
+    unfold T in t.
+    inversion t ; subst.
+    apply ord_incl' in i ; rewrite - ord_take in i ; apply ord_inj in i.
+    erewrite <- (cat_take_drop (size l)) ; apply Hmon.
+    now rewrite - i.
+  }
+
+  
+  induction aux.
+  inversion t.
+  subst.
+  
+  eapply indbarred_inductively_barred in aux.
+  
+  
+  suff: forall l, indbarred T l -> hereditary_closure T' (map snd l) by
+      (intros H ; change (hereditary_closure T' (map (snd (A:= nat)) nil)) ; now apply H).
+  clear aux ; intros l aux ; induction aux.
+  econstructor ; unfold T in * ; clear T.
+    
+    generalize 0 ; induction u ; intros n ; [ assumption |].
+    cbn in *.
 
 
 Lemma inductively_barred_indbarred T l :
