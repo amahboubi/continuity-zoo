@@ -1546,56 +1546,6 @@ Section GBI_BI.
 Implicit Type (T : seq (nat * B) -> Type).
 
 
-(* A more handy version for concrete formal proofs *)
-Definition Tbarred T :=
-  forall α : nat -> B, {u : list nat & T [seq (i, α i) | i <- u]}.
-
-Inductive indbarred T : list (nat * B) -> Type :=
-  | ieta u' u : T u -> List.incl u u' -> indbarred T u'
-  | ibeta a v : ~ List.In a (map fst v) ->
-              (forall b, indbarred T (v ++ [:: (a,b)])) -> indbarred T v.
-
-Inductive indbarred_spec T :  list (nat * B) -> Type := 
- |Eta : forall u l, T (l ++ u) -> indbarred_spec T l
- |Beta : forall u' u a b, T u' -> indbarred_spec T (rcons (u' ++ u) (a, b)).
-
-Arguments Eta {T} u l.
-
-Definition Monotone {C} (P : list C -> Type) :=
-  forall l l', P l -> P (l ++ l').
-
-Inductive monotonisation {C} (T : list C -> Type) : list C -> Type :=
-| mon l l' : T l -> monotonisation T (l ++ l').
-
-
-Definition TMonotone {C} (P : list C -> Type) :=
-  forall l l', List.incl l l' -> P l -> P l'.
-
-Inductive Tmonotonisation {C} (T : list C -> Type) : list C -> Type :=
-| Tmon l l' : T l -> List.incl l l' -> Tmonotonisation T l'.
-
-Lemma Tmonot_monotone {C} P : @TMonotone C (Tmonotonisation P).
-Proof.
-  intros l l' Hll' Hyp.
-  inversion Hyp ; subst.
-  econstructor.
-  2: eapply List.incl_tran ; eassumption.
-  assumption.
-Qed.
-
-(* Generalized Bar Induction, phrased using the Herbelin-Brede way *)
-Definition GBI T := Tbarred T -> indbarred T [::].
-
-Lemma monot_barred P : Tbarred P -> Tbarred (Tmonotonisation P).
-Proof.
-  intros H alpha. specialize (H alpha).
-  destruct H as [l Hpref].
-  exists l.
-  econstructor ; [ eassumption |].
-  now apply List.incl_refl.
-Qed.  
-
-
 Fixpoint ord_aux {C} (u : list C) (n : nat) : list (nat * C) :=
   match u with
   | nil => nil
@@ -1838,139 +1788,8 @@ Proof.
   cbn ; f_equal.
   now eapply IHj.
 Qed.
-    
 
-Definition TtoP (T : list (nat * B) -> Type) (l : list B) : Type :=
-  T (ord l).
-
-Inductive PtoT (P : list B -> Type) : list (nat * B) -> Type :=
-| ptot : forall l, P l -> PtoT P (ord l).
-
-
-Definition TtoP_PtoT_ret P : forall l, P l -> TtoP (PtoT P) l :=
-  fun l Hl => ptot Hl.
-
-Lemma TtoP_PtoT_inv P : forall l, TtoP (PtoT P) l -> P l.
-Proof.
-  intros u H.
-  inversion H.
-  now eapply ord_inj in H1 ; subst.
-Qed.  
-
-
-Lemma PtoT_TtoP_inv (T : list (nat * B) -> Type) l :
-  PtoT (TtoP T) l -> T l. 
-Proof.
-  unfold TtoP ; intros H.
-  inversion H ; now subst.
-Qed.
-
-Lemma PtoT_TtoP_ret (T : list (nat * B) -> Type) u :
-  T (ord u) -> PtoT (TtoP T) (ord u). 
-Proof.
-  intro H ; econstructor.
-  unfold TtoP ; assumption.
-Qed.
-
-
-
-(*The next two Lemmas are Proposition 11 in Brede-Herbelin's Paper*)
-Lemma Monotone_PtoT_P P l : Monotone P -> TtoP (Tmonotonisation (PtoT P)) l -> P l.
-Proof.
-  intros HP Hl.
-  unfold TtoP in *.
-  inversion Hl as [u v Hu Hincl Heq] ; subst.
-  inversion Hu as [w Hw] ; unfold ord in * ; subst.
-  apply ord_incl' in Hincl ; rewrite - ord_take in Hincl ; apply ord_inj in Hincl.
-  erewrite <- (cat_take_drop (size w)) ; apply HP.
-  now rewrite - Hincl.
-Qed.
-
-
-Lemma P_PtoT P l : P l -> TtoP (Tmonotonisation (PtoT P)) l.
-Proof.
-  intros Hl.
-  unfold TtoP.
-  econstructor ; [econstructor ; eassumption |].
-  now apply List.incl_refl.
-Qed.
-
-
-(*The next two Lemmas are Proposition 12 in Brede-Herbelin's paper.*)
-
-Lemma inductively_barred_indbarred T l :
-  hereditary_closure (TtoP T) l -> indbarred T (ord l).
-Proof.
-  intros Hl ; induction Hl as [l Hl | l k IHl].
-  { unfold TtoP in *.
-    econstructor ; [eassumption |].
-    now apply List.incl_refl.
-  }
-  unshelve econstructor 2.
-  exact (size l).
-  { unfold ord ; exact (@ord_sizeu_notin l 0). }
-  unfold ord in * ; intros a ; specialize (IHl a).
-  erewrite ord_rcons, <- plus_n_O in IHl.
-  now rewrite cats1.
-Qed.  
-
-Lemma indbarred_inductively_barred T u v :
-  TMonotone T ->
-  List.incl v (ord u) ->
-  indbarred T v ->
-  hereditary_closure (TtoP T) u.
-Proof.
-  intros Hmon Hincl Hv.
-  revert u Hincl.
-  induction Hv as [ | n v notin k IHk]; intros.
-  { econstructor.
-    unfold TtoP.
-    eapply Hmon ; [ | eassumption].
-    now eapply List.incl_tran  ; eassumption.
-  }
-  clear notin k.
-  suff : forall m, n.+1 - (size u) = m -> hereditary_closure (TtoP T) u.
-  { intros Hyp. eapply Hyp ; reflexivity. }
-  intros m ; revert u IHk Hincl.
-  induction m ; intros * IHk Hincl Heq.
-  {  case: (leqP n.+1 (size u)).
-     { intros Hninf.
-       eapply ord_inf_size in Hninf as [b Hb].
-       eapply (IHk b).
-       eapply List.incl_app ; [assumption |].
-       eapply List.incl_cons ; [ assumption | now eapply List.incl_nil_l].
-     }
-     intros Hinf.
-     exfalso.
-     unshelve eapply (PeanoNat.Nat.sub_gt _ _ _ Heq).
-     eapply (proj1 (PeanoNat.Nat.le_succ_l (size u) n.+1)).
-     exact (@leP (size u).+1 n.+1 Hinf).
-  }
-  econstructor 2 ; intros b.
-  eapply IHm ; [assumption | |].
-  { unfold ord ; erewrite ord_rcons, <- plus_n_O.
-    erewrite <- cats1.
-    now eapply List.incl_appl.
-  }
-  now erewrite size_rcons, subnS, Heq.
-Qed.
-
-
-Lemma indbarred_inductively_barred_dual P u :
-  Monotone P ->
-  indbarred (Tmonotonisation (PtoT P)) (ord u) ->
-  hereditary_closure P u.
-Proof.
-  intros Hmon Hbar.
-  suff: hereditary_closure (TtoP (Tmonotonisation (PtoT P))) u.
-  { clear Hbar.
-    intros Hbar.
-    induction Hbar as [u Hyp | u k IHk] ; [econstructor ; now eapply Monotone_PtoT_P |].
-    econstructor 2 ; assumption.
-  }
-  eapply indbarred_inductively_barred ; [ | now apply List.incl_refl | eassumption].
-  now apply Tmonot_monotone.
-Qed.
+(*Some technical lemmas*)
 
 Lemma in_map {X Y} (u : seq X) (f : X -> Y) a :
   List.In a u -> List.In (f a) (map f u).
@@ -1984,14 +1803,9 @@ Proof.
 Qed.
 
 
-
 Lemma map_incl {X Y} (u u' : seq X) (f : X -> Y) :
   List.incl u u' -> List.incl (map f u) (map f u').
 Proof.
-  (*revert u ; induction u' ; intros u H.
-  { eapply List.incl_l_nil in H ; subst ; cbn.
-    now eapply List.incl_refl. } *)
-  
   revert u' ; induction u ; intros u' H.
   { now eapply List.incl_nil_l. }
   intros y Hy.
@@ -2027,109 +1841,11 @@ Proof.
   now apply (List.list_max_le u (List.list_max u)).1.
 Qed.
 
-(*The next two Lemmas are Proposition 13 in Brede-Herbelin's paper.*)
-Lemma NBbarred_barred T :
-  TMonotone T ->
-  Tbarred T ->
-  barred (TtoP T).
-Proof.
-  intros Hmon HTbar alpha.
-  specialize (HTbar alpha) as [u Hu].
-  exists [seq (alpha i) | i <- iota 0 (List.list_max u).+1].
-  split ; [ unfold prefix ; now rewrite -> size_map, size_iota |].
-  unfold TtoP, ord.
-  erewrite ord_map_aux, ord_iota_aux, <- map_comp.
-  unshelve erewrite (eq_map (g:= fun i => (i, alpha i))) ; [ | intros ? ; reflexivity].
-  eapply Hmon ; [ | eassumption].
-  intros [n b] Hin.
-  eapply map_incl ; [ | eassumption ].
-  now eapply incl_iota_max.
-Qed.
-
-
-Lemma barred_NBbarred T :
-  barred (TtoP T) ->
-  Tbarred T.
-Proof.
-  intros Hbar alpha.
-  specialize (Hbar alpha) as [u [Hpref Hu]].
-  unfold TtoP in Hu.
-  exists (map fst (ord u)).
-  suff: ord u = [seq (i, alpha i) | i <- [seq i.1 | i <- ord u]]
-    by (intro Heq; rewrite - Heq ; exact Hu).
-  clear Hu.
-  erewrite <- map_comp.
-  unfold prefix, ord in * ; revert Hpref ; generalize 0.
-  induction u ; cbn ;  intros ; [reflexivity |].
-  inversion Hpref as [H0] ; subst ; f_equal.
-  now erewrite <- H, <- IHu ; [ | assumption].
-Qed.
-  
-  
-(*GBI_monot is used in the proof of Theorem 5 in Brede-Herbelin's paper.*)
-Lemma GBI_monot :
-  (forall T : list (nat * B) -> Type, TMonotone T -> GBI T) ->
-  forall (T : list (nat * B) -> Type), GBI T.
-Proof.
-  intros HBI T Hbar.
-  suff: forall l,
-      indbarred (Tmonotonisation T) l ->
-      indbarred T l. 
-  { intros Hyp.
-    apply Hyp.
-    apply HBI ; [now apply Tmonot_monotone |].
-    apply monot_barred, Hbar.
-  }
-  clear HBI ; intros l Hl.
-  induction Hl.
-  { inversion t as [l l' Hl Heq].
-    subst.
-    econstructor ; [eassumption |].
-    now eapply List.incl_tran ; eassumption.
-  }
-  econstructor 2. eassumption.
-  eassumption.
-Qed.
-
-Lemma BI_GBI : 
-  (forall P : list B -> Type, BI_ind P) ->
-  forall (T : list (nat * B) -> Type), GBI T.
-Proof.
-  intros HBI.
-  apply GBI_monot ; intros T Hmon HTbar.
-  change (@nil (nat * B)) with (ord (@nil B)).
-  apply inductively_barred_indbarred.
-  apply HBI.
-  apply NBbarred_barred ; assumption.
-Qed.  
-  
-  
-Lemma GBI_BI :
-  (forall (T : list (nat * B) -> Type), GBI T) ->
-  forall T' : list B -> Type, Monotone T' -> BI_ind T'.
-Proof.
-  intros HGBI T' Hmon BarT'.
-  unfold GBI in HGBI.
-  unfold inductively_barred.
-  apply indbarred_inductively_barred_dual ; [assumption |].
-  apply HGBI.
-  suff: Tbarred (PtoT T').
-  { intros HTbar alpha ; specialize (HTbar alpha) as [u Hu].
-    exists u.
-    econstructor ; [eassumption | now apply List.incl_refl].
-  }
-  eapply barred_NBbarred.
-  intros alpha ; specialize (BarT' alpha) as [u [prefu Hu]].
-  exists u ; split ; [assumption |].
-  now eapply TtoP_PtoT_ret.
-Qed.
-
 Definition is_tree (P : list B -> Type) :=
   forall u n, P u -> P (take n u).
 
-Definition arborification (P : list B -> Type) (u : list B) : Type :=
+Definition Downarborification (P : list B -> Type) (u : list B) : Type :=
   forall n, P (take n u).
-
 
 CoInductive pruning (P : list B -> Type) : list B -> Type :=
   prune a u : P u -> pruning P (rcons u a) -> pruning P u.
@@ -2142,8 +1858,8 @@ Definition DC := forall (P : list B -> Type), pruning P nil -> choicefun P.
 Definition ABis_tree T :=
   forall u v, List.incl v u -> T u -> T v.
 
-Inductive UpABarborification T : list (nat * B) -> Type :=
-| Tarbor l l' : T l -> List.incl l' l -> UpABarborification T l'.
+Inductive ABUparborification T : list (nat * B) -> Type :=
+| Tarbor l l' : T l -> List.incl l' l -> ABUparborification T l'.
 
 Definition DownABarborification T u : Type :=
   forall v, List.incl v u -> T v.
@@ -2160,10 +1876,418 @@ CoInductive ABapprox T : list (prod nat B) -> Type :=
 
 Definition GDC := forall T,  ABapprox T nil -> ABchoicefun T.
 
-Lemma arbor_is_tree P : is_tree (arborification P).
+Definition monotone {C} (P : list C -> Type) :=
+  forall l l', P l -> P (l ++ l').
+
+Inductive Upmonotonisation {C} (T : list C -> Type) : list C -> Type :=
+| mon l l' : T l -> Upmonotonisation T (l ++ l').
+
+Definition Downmonotonisation {C} (T : list C -> Type) : list C -> Type :=
+  fun u => forall v, T (u ++ v).
+
+(* A more handy version for concrete formal proofs *)
+Definition ABbarred T :=
+  forall α : nat -> B, {u : list nat & T [seq (i, α i) | i <- u]}.
+
+Inductive indbarred T : list (nat * B) -> Type :=
+  | ieta u' u : T u -> List.incl u u' -> indbarred T u'
+  | ibeta a v : ~ List.In a (map fst v) ->
+              (forall b, indbarred T (v ++ [:: (a,b)])) -> indbarred T v.
+
+Inductive indbarred_spec T :  list (nat * B) -> Type := 
+ |Eta : forall u l, T (l ++ u) -> indbarred_spec T l
+ |Beta : forall u' u a b, T u' -> indbarred_spec T (rcons (u' ++ u) (a, b)).
+
+Arguments Eta {T} u l.
+
+Definition ABmonotone {C} (P : list C -> Type) :=
+  forall l l', List.incl l l' -> P l -> P l'.
+
+Inductive ABUpmonotonisation {C} (T : list C -> Type) : list C -> Type :=
+| Tmon l l' : T l -> List.incl l l' -> ABUpmonotonisation T l'.
+
+Definition ABDownmonotonisation {C} (T : list C -> Type) : list C -> Type :=
+  fun u => forall v, List.incl u v -> T v.
+
+Lemma Upmonot_monotone {C} P : @monotone C (Upmonotonisation P).
+Proof.
+  intros _ w [u v Hu].
+  destruct (Monoid_isLaw__to__SemiGroup_isLaw C) as [opA].
+  erewrite <- opA.
+  now econstructor.
+Qed.
+
+
+Lemma monot_barred {C} (P : list C -> Type) : barred P -> barred (Upmonotonisation P).
+Proof.
+  intros H alpha ; specialize (H alpha).
+  destruct H as [l [Hpref HP]].
+  exists l ; split ; [assumption |].
+  now erewrite <- cats0 ; econstructor.
+Qed.  
+
+  
+Lemma ABUpmonot_monotone {C} P : @ABmonotone C (ABUpmonotonisation P).
+Proof.
+  intros l l' Hll' Hyp.
+  inversion Hyp ; subst.
+  econstructor.
+  2: eapply List.incl_tran ; eassumption.
+  assumption.
+Qed.
+
+Lemma ABDownmonot_monotone {C} P : @ABmonotone C (ABDownmonotonisation P).
+Proof.
+  unfold ABDownmonotonisation ; intros u v Huv Hyp w Hvw.
+  eapply Hyp, List.incl_tran ; now eassumption.
+Qed.
+
+(* Generalized Bar Induction, phrased using the Herbelin-Brede way *)
+Definition GBI T := ABbarred T -> indbarred T [::].
+
+Lemma ABmonot_barred T : ABbarred T -> ABbarred (ABUpmonotonisation T).
+Proof.
+  intros H alpha. specialize (H alpha).
+  destruct H as [l Hpref].
+  exists l.
+  econstructor ; [ eassumption |].
+  now apply List.incl_refl.
+Qed.  
+
+
+
+Definition TtoP (T : list (nat * B) -> Type) (l : list B) : Type :=
+  T (ord l).
+
+Inductive PtoT (P : list B -> Type) : list (nat * B) -> Type :=
+| ptot : forall l, P l -> PtoT P (ord l).
+
+Definition PtoT_dual (P : list B -> Type) : list (nat * B) -> Type :=
+  fun u => forall v, u = ord v -> P v.
+
+
+Definition TtoP_PtoT_ret P : forall l, P l -> TtoP (PtoT P) l :=
+  fun l Hl => ptot Hl.
+
+Lemma TtoP_PtoT_inv P : forall l, TtoP (PtoT P) l -> P l.
+Proof.
+  intros u H.
+  inversion H.
+  now eapply ord_inj in H1 ; subst.
+Qed.  
+
+
+Lemma PtoT_TtoP_inv (T : list (nat * B) -> Type) l :
+  PtoT (TtoP T) l -> T l. 
+Proof.
+  unfold TtoP ; intros H.
+  inversion H ; now subst.
+Qed.
+
+Lemma PtoT_TtoP_ret (T : list (nat * B) -> Type) u :
+  T (ord u) -> PtoT (TtoP T) (ord u). 
+Proof.
+  intro H ; econstructor.
+  unfold TtoP ; assumption.
+Qed.
+
+Definition DCProp11 :=
+  forall P u, P u -> TtoP (ABUparborification (PtoT P)) u.
+
+Definition BIProp11Down :=
+  forall P u, monotone P -> P u -> TtoP (ABDownmonotonisation (PtoT_dual P)) u.
+
+Definition DCProp11_rev :=
+  forall P u, is_tree P -> TtoP (ABUparborification (PtoT P)) u -> P u.
+
+Definition BIProp11Down_rev :=
+  forall P u, TtoP (ABDownmonotonisation (PtoT_dual P)) u -> P u.
+
+Definition DCProp12 :=
+  forall T u, ABis_tree T -> ABapprox T (ord u) -> pruning (TtoP T) u.
+
+Definition BIProp12 :=
+  forall T u, ABmonotone T -> indbarred T (ord u) -> hereditary_closure (TtoP T) u.
+
+Definition DCProp12_rev :=
+  forall T u, ABis_tree T -> pruning (TtoP T) u -> ABapprox T (ord u).
+
+Definition BIProp12_rev :=
+  forall T u, hereditary_closure (TtoP T) u -> indbarred T (ord u).
+
+Definition DCProp12_sym :=
+  forall P u, pruning P u -> ABapprox (ABUparborification (PtoT P)) (ord u).
+
+Definition BIProp12Down :=
+  forall P u, indbarred (ABDownmonotonisation (PtoT_dual P)) (ord u) ->
+  hereditary_closure P u.
+
+Definition BIProp12Down_rev :=
+  forall P u, monotone P -> hereditary_closure P u ->
+              indbarred (ABDownmonotonisation (PtoT_dual P)) (ord u).
+
+Definition DCProp13 :=
+  forall T, ABchoicefun T -> choicefun (TtoP T).
+
+Definition BIProp13 :=
+  forall T, ABmonotone T -> ABbarred T -> barred (TtoP T).
+
+Definition DCProp13_rev :=
+  forall T, ABis_tree T -> choicefun (TtoP T) -> ABchoicefun T.
+
+Definition BIProp13_rev :=
+  forall T, barred (TtoP T) -> ABbarred T.
+
+Definition DCProp13_Up :=
+  forall P, is_tree P -> ABchoicefun (ABUparborification (PtoT P)) -> choicefun P.
+
+Definition BIProp13Down :=
+  forall P, ABbarred (ABDownmonotonisation (PtoT_dual P)) -> barred P.
+
+Definition BIProp13Down_rev :=
+  forall P, monotone P -> barred P -> ABbarred (ABDownmonotonisation (PtoT_dual P)).
+
+(*These lemmas with Upmonotonisation are true, even though they are not the duals of
+ propositions about DC and GDC.*)
+Definition BIProp11Up :=
+  forall P l, P l -> TtoP (ABUpmonotonisation (PtoT P)) l.
+
+Definition BIProp11Up_rev :=
+  forall P l, monotone P -> TtoP (ABUpmonotonisation (PtoT P)) l -> P l.
+
+Definition BIProp12Up :=
+  forall P u, monotone P -> indbarred (ABUpmonotonisation (PtoT P)) (ord u) ->
+              hereditary_closure P u.
+
+Definition BIProp12Up_rev :=
+  forall P u, hereditary_closure P u ->
+              indbarred (ABUpmonotonisation (PtoT P)) (ord u).
+
+(*The next two Lemmas are Proposition 11 in Brede-Herbelin's Paper*)
+
+Lemma P_ABUp_PtoTB : BIProp11Up.
+Proof.
+  intros P l Hl.
+  unfold TtoP.
+  econstructor ; [econstructor ; eassumption |].
+  now apply List.incl_refl.
+Qed.
+
+Lemma P_ABDown_PtoT : BIProp11Down.
+Proof.
+  intros P l HP Hl v Hincl ; unfold TtoP ; intros w Heq.
+  subst.
+  apply ord_incl' in Hincl ; erewrite <- ord_take in Hincl.
+  eapply ord_inj in Hincl ; rewrite Hincl in Hl.
+  erewrite <- cat_take_drop ; eapply HP.
+  eassumption.
+Qed.
+
+Lemma monotone_ABUp_PtoT_P : BIProp11Up_rev. 
+Proof.
+  intros P l HP Hl.
+  unfold TtoP in *.
+  inversion Hl as [u v Hu Hincl Heq] ; subst.
+  inversion Hu as [w Hw] ; unfold ord in * ; subst.
+  apply ord_incl' in Hincl ; rewrite - ord_take in Hincl ; apply ord_inj in Hincl.
+  erewrite <- (cat_take_drop (size w)) ; apply HP.
+  now rewrite - Hincl.
+Qed.
+
+Lemma monotone_ABDown_PtoT_P : BIProp11Down_rev.
+Proof.
+  intros P l Hl ; unfold TtoP, ABDownmonotonisation, PtoT_dual in *.
+  now specialize (Hl (ord l) (List.incl_refl _) l erefl).
+Qed.
+
+
+  
+(*The next two Lemmas are Proposition 12 in Brede-Herbelin's paper.*)
+
+Lemma indbarred_inductively_barred : BIProp12.
+Proof.
+  suff: forall T u v,
+      ABmonotone T ->
+      List.incl v (ord u) ->
+      indbarred T v ->
+      hereditary_closure (TtoP T) u.
+  { intros Hyp T u Hmon Hu.
+    eapply Hyp ; [assumption | now apply List.incl_refl | eassumption].
+  }
+  intros T u v Hmon Hincl Hv.
+  revert u Hincl.
+  induction Hv as [ | n v notin k IHk]; intros.
+  { econstructor.
+    unfold TtoP.
+    eapply Hmon ; [ | eassumption].
+    now eapply List.incl_tran  ; eassumption.
+  }
+  clear notin k.
+  suff : forall m, n.+1 - (size u) = m -> hereditary_closure (TtoP T) u.
+  { intros Hyp. eapply Hyp ; reflexivity. }
+  intros m ; revert u IHk Hincl.
+  induction m ; intros * IHk Hincl Heq.
+  {  case: (leqP n.+1 (size u)).
+     { intros Hninf.
+       eapply ord_inf_size in Hninf as [b Hb].
+       eapply (IHk b).
+       eapply List.incl_app ; [assumption |].
+       eapply List.incl_cons ; [ assumption | now eapply List.incl_nil_l].
+     }
+     intros Hinf.
+     exfalso.
+     unshelve eapply (PeanoNat.Nat.sub_gt _ _ _ Heq).
+     eapply (proj1 (PeanoNat.Nat.le_succ_l (size u) n.+1)).
+     exact (@leP (size u).+1 n.+1 Hinf).
+  }
+  econstructor 2 ; intros b.
+  eapply IHm ; [assumption | |].
+  { unfold ord ; erewrite ord_rcons, <- plus_n_O.
+    erewrite <- cats1.
+    now eapply List.incl_appl.
+  }
+  now erewrite size_rcons, subnS, Heq.
+Qed.
+
+Lemma inductively_barred_indbarred : BIProp12_rev.
+Proof.
+  intros T l Hl ; induction Hl as [l Hl | l k IHl].
+  { unfold TtoP in *.
+    econstructor ; [eassumption |].
+    now apply List.incl_refl.
+  }
+  unshelve econstructor 2.
+  exact (size l).
+  { unfold ord ; exact (@ord_sizeu_notin l 0). }
+  unfold ord in * ; intros a ; specialize (IHl a).
+  erewrite ord_rcons, <- plus_n_O in IHl.
+  now rewrite cats1.
+Qed.  
+
+
+Lemma indbarred_inductively_barred_dual : BIProp12Up.
+Proof.
+  intros P u Hmon Hbar.
+  suff: hereditary_closure (TtoP (ABUpmonotonisation (PtoT P))) u.
+  { clear Hbar.
+    intros Hbar.
+    induction Hbar as [u Hyp | u k IHk] ;
+      [econstructor ; now eapply monotone_ABUp_PtoT_P |].
+    econstructor 2 ; assumption.
+  }
+  eapply indbarred_inductively_barred ; [ | assumption].
+  now apply ABUpmonot_monotone.
+Qed.
+
+Lemma inductively_barred_indbarred_dual :  BIProp12Up_rev.
+Proof.
+  intros P u Hered.
+  eapply inductively_barred_indbarred ; unfold TtoP.
+  induction Hered as [u Hu | u k IHk ] ; [ | now econstructor 2].
+  do 2 econstructor ; [now econstructor ; eassumption |].
+  now apply List.incl_refl.
+Qed.
+
+Lemma indbarred_inductively_barred_Down_dual : BIProp12Down.
+Proof.
+  intros P u Hbar.
+  suff: hereditary_closure (TtoP (ABDownmonotonisation (PtoT_dual P))) u.
+  { clear Hbar.
+    intros Hbar ; unfold TtoP, ABDownmonotonisation, PtoT_dual in *.
+    induction Hbar as [u Hyp | u k IHk] ; [econstructor | ].
+    { eapply Hyp ; [ eapply List.incl_refl | reflexivity]. }
+    econstructor 2 ; eassumption.
+  }
+  eapply indbarred_inductively_barred ; [ | assumption].
+  now apply ABDownmonot_monotone.
+Qed.
+
+Lemma inductively_barred_indbarred_Down_dual : BIProp12Down_rev.
+Proof.
+  intros P u Hmon Hered.
+  apply inductively_barred_indbarred ; unfold TtoP, PtoT_dual, ABDownmonotonisation, ord.
+  induction Hered as [ u Hu | u k IHk] ; [ | now econstructor 2 ].
+  econstructor ; intros v Hincl w Heq ; subst.
+  apply ord_incl' in Hincl ; rewrite - ord_take in Hincl ; apply ord_inj in Hincl.
+  now erewrite <- (cat_take_drop (size u)), <- Hincl ; apply Hmon.
+Qed.
+
+
+(*The next two Lemmas are Proposition 13 in Brede-Herbelin's paper.*)
+Lemma NBbarred_barred : BIProp13. 
+Proof.
+  intros T Hmon HTbar alpha.
+  specialize (HTbar alpha) as [u Hu].
+  exists [seq (alpha i) | i <- iota 0 (List.list_max u).+1].
+  split ; [ unfold prefix ; now rewrite -> size_map, size_iota |].
+  unfold TtoP, ord.
+  erewrite ord_map_aux, ord_iota_aux, <- map_comp.
+  unshelve erewrite (eq_map (g:= fun i => (i, alpha i))) ; [ | intros ? ; reflexivity].
+  eapply Hmon ; [ | eassumption].
+  intros [n b] Hin.
+  eapply map_incl ; [ | eassumption ].
+  now eapply incl_iota_max.
+Qed.
+
+
+Lemma barred_NBbarred : BIProp13_rev.
+Proof.
+  intros T Hbar alpha.
+  specialize (Hbar alpha) as [u [Hpref Hu]].
+  unfold TtoP in Hu.
+  exists (map fst (ord u)).
+  suff: ord u = [seq (i, alpha i) | i <- [seq i.1 | i <- ord u]]
+    by (intro Heq; rewrite - Heq ; exact Hu).
+  clear Hu.
+  erewrite <- map_comp.
+  unfold prefix, ord in * ; revert Hpref ; generalize 0.
+  induction u ; cbn ;  intros ; [reflexivity |].
+  inversion Hpref as [H0] ; subst ; f_equal.
+  now erewrite <- H, <- IHu ; [ | assumption].
+Qed.
+
+
+Lemma Proposition13_dual : BIProp13Down.
+Proof.
+  intros P HTbar alpha.
+  specialize (HTbar alpha) as [u Hu].
+  exists [seq (alpha i) | i <- iota 0 (List.list_max u).+1].
+  split ; [ unfold prefix ; now rewrite -> size_map, size_iota |].
+  unfold TtoP, ord.
+  unfold ABDownmonotonisation, PtoT_dual in *.
+  eapply Hu.
+  2:{ reflexivity. }
+  unfold ord.
+  erewrite ord_map_aux, ord_iota_aux, <- map_comp.
+  unshelve erewrite (eq_map (f:= fun i => (i, alpha i))).
+  exact ((fun i : nat * nat => (i.1, alpha i.2)) \o (fun i : nat => (i, i))).
+  2:{ intros ? ; reflexivity. }
+  eapply map_incl. 
+  now eapply incl_iota_max.
+Qed.
+
+Lemma Proposition13_dual_rev : BIProp13Down_rev.
+Proof.
+  intros P Hmon Hbar alpha ; unfold ABDownmonotonisation, PtoT_dual.
+  specialize (Hbar alpha) as [u [Hpref Hu]].
+  exists (map fst (ord u)).
+  suff: ord u = [seq (i, alpha i) | i <- [seq i.1 | i <- ord u]].
+  { intro Heq; rewrite - Heq ; intros v Hincl w Heqvw ; subst.
+    apply ord_incl' in Hincl.
+    rewrite - ord_take in Hincl ; apply ord_inj in Hincl.
+    erewrite <- (cat_take_drop (size u)) ; apply Hmon.
+    now rewrite - Hincl.
+  }
+  unfold prefix, ord in * ; rewrite Hpref ord_map_aux ord_iota_aux.
+  repeat erewrite <- map_comp.
+  now eapply eq_map.
+Qed.  
+  
+
+Lemma arbor_is_tree P : is_tree (Downarborification P).
 Proof.
   intros u n Hu.
-  unfold arborification in * ; intros m.
+  unfold Downarborification in * ; intros m.
   case: (leqP n m) ; intros Hinf.
   { erewrite take_taker ; [ | assumption].
     now apply Hu.
@@ -2180,7 +2304,7 @@ Proof.
   eapply List.incl_tran ; eassumption.
 Qed.
 
-Lemma UpABarbor_is_tree T : ABis_tree (UpABarborification T).
+Lemma UpABarbor_is_tree T : ABis_tree (ABUparborification T).
 Proof.
   intros u n Hu HT.
   induction HT.
@@ -2188,22 +2312,16 @@ Proof.
   now eapply List.incl_tran ; eassumption.
 Qed.
 
-Lemma Prop11 P u :
-  P u -> 
-  TtoP (UpABarborification (PtoT P)) u.
+Lemma Prop11 : DCProp11.
 Proof.
-  intros HP ; unfold TtoP.
+  intros P HP ; unfold TtoP.
   econstructor ; [econstructor ; eassumption |].
   now apply List.incl_refl.
 Qed.
 
-
-Lemma Prop11_rev P u :
-  is_tree P ->
-  TtoP (UpABarborification (PtoT P)) u ->
-  P u.
+Lemma Prop11_rev : DCProp11_rev.
 Proof.
-  intros Htree HP ; unfold TtoP in *.
+  intros P u Htree HP ; unfold TtoP in *.
   inversion HP ; subst.
   inversion X ; subst.
   apply ord_incl' in H.
@@ -2211,12 +2329,21 @@ Proof.
   unfold is_tree in * ; now apply Htree.
 Qed.
 
-Print pruning.
-  
-
-Lemma Prop12 T u : ABis_tree T -> ABapprox T (ord u) -> pruning (TtoP T) u.
+Lemma Prop11_rev_Down P u :
+  TtoP (DownABarborification (PtoT P)) u ->
+  P u.
 Proof.
-  intros Htree.
+  intros HP ; unfold TtoP, DownABarborification in *.
+  specialize (HP (ord u) (List.incl_refl _)).
+  inversion HP ; subst.
+  apply ord_inj in H0 ; subst.
+  assumption.
+Qed.
+
+
+Lemma Prop12 : DCProp12.
+Proof.
+  intros T u Htree.
   generalize (@erefl _ (ord u)).
   generalize (ord u) at 2 3 ; intros l Heq Happ. revert l Happ u Heq.
   refine (cofix aux l Happ := match Happ as H in ABapprox _ u0 return
@@ -2233,19 +2360,20 @@ Proof.
   unfold ord ; now rewrite -> ord_rcons, <- plus_n_O.
 Qed.
 
-Axiom todo : False.
-Require Import paco.
 
-Lemma Prop12_rev T u v :
-  ABis_tree T ->
-  pruning (TtoP T) u ->
-  List.incl v (ord u) ->
-  ABapprox T v.
+Lemma Prop12_rev : DCProp12_rev.
 Proof.
-  intros Htree Hprun Hincl.
+  suff: forall T u v,
+      ABis_tree T ->
+      pruning (TtoP T) u ->
+      List.incl v (ord u) ->
+      ABapprox T v.
+  { intros Hyp T u Htree Hprun.
+    eapply Hyp ; [eassumption | eassumption | now apply List.incl_refl].
+  }
+  intros T u v Htree Hprun Hincl.
   unfold TtoP in Hprun ; revert Hprun v Hincl.
   revert u.
-  
   refine (cofix aux u Hprun := match Hprun as H0 in pruning _ v0
                                      return forall w, List.incl w (ord v0) -> ABapprox T w
                              with
@@ -2272,9 +2400,7 @@ Proof.
   { clear - aux ; intros n u c v Hu Hprun Hincl Heq.
     destruct u as [ | u b IHu] using last_ind ; [now inversion Heq |] ; clear IHu.
     exists (nth b (rcons u b) n).
-    Guarded.
     eapply aux ; [ exact Hprun |].
-    Guarded.
     rewrite - cats1.
     apply List.incl_app.
     { unfold ord ; rewrite ord_rcons - cats1 ; now apply List.incl_appl. }
@@ -2312,26 +2438,19 @@ Proof.
   reflexivity.
   all: try assumption.
   reflexivity.
-Qed.
-suff: (List.incl w (rcons w b)).
-    2:{ rewrite - cats1 ; now apply List.incl_appl, List.incl_refl. }
-    intros Hincl.
-    rewrite <- (ord_map_snd 0 w) in Hincl at 1 ; rewrite <- (ord_map_snd 0 (rcons w b)) in Hincl.
-    eapply map_incl in Hincl.
-    
-    intros (k, b') Hin.
-    apply ord_in in Hin.
-    
-  
-  { destruct Hprun. econstructor.
-  { destruct Hprun.
-  { intros w Hprun' ; subst.
-    intros x Hincl'.
-    unshelve eapply aux ; [ | eassumption | eassumption].
-  }
-
-    
 Admitted.
+
+Lemma Prop12_sym : DCProp12_sym.
+Proof.
+  intros P u Hprun.
+  apply Prop12_rev ; [now apply UpABarbor_is_tree |].
+  revert u Hprun.
+  cofix aux.
+  intros _ [b u Hu Hprun].
+  econstructor ; [now eapply Prop11 |].
+  apply aux.
+  eassumption.
+Qed.
 
 Lemma pruning_ext P Q l :
   (forall u, P u = Q u) ->
@@ -2347,29 +2466,64 @@ Proof.
 Qed.  
 
 Lemma choicefun_arbor P :
-  choicefun (arborification P) ->
+  choicefun (Downarborification P) ->
   choicefun P.
 Proof.
   intros [alpha Halpha] ; exists alpha.
-  unfold arborification in Halpha.
+  unfold Downarborification in Halpha.
   intros n ; specialize (Halpha n n).
   now rewrite <- map_take, take_iota, minnn in Halpha.
 Qed.
 
-Lemma pruning_arbor P l :
-  pruning P l ->
-  (forall n, P (take n l)) ->
-  pruning (arborification P) l.
+Lemma choicefun_arbor_rev P :
+  choicefun P ->
+  choicefun (Downarborification P).
 Proof.
-  revert l.
-  refine (cofix aux l Hprun := match Hprun as H in pruning _ l0
-                                        return (forall n, P (take n l0)) -> pruning _ l0 with
-                            | prune b u Hu Hyp => _
-                               end).
+  intros [alpha Halpha] ; exists alpha ; unfold Downarborification in *.
+  intros n m ; rewrite <- map_take, take_iota.
+  now apply Halpha.
+Qed.
+
+Lemma barred_Upmon_barred (P : list B -> Type) :
+  barred (Upmonotonisation P) ->
+  barred P.
+Proof.
+  unfold barred.
+  intros Hyp alpha.
+  specialize (Hyp alpha) as [u [Hpref Halpha]].
+  destruct Halpha as [u v Hu].
+  exists u ; split ; [ | assumption].
+  unfold prefix in *.
+  eapply (f_equal (take (size u))) in Hpref.
+  rewrite take_size_cat in Hpref ; [ | reflexivity].
+  rewrite -> Hpref at 1.
+  rewrite <- map_take, take_iota, size_cat.
+  suff: forall n m, minn n (n + m) = n.
+  { intros Hmin ; now erewrite Hmin. }
+  clear ; intros n ; induction n ; intros m ; cbn ; [now rewrite min0n |].
+  now erewrite minnSS, IHn.
+Qed.  
+  
+  
+
+Lemma pruning_arbor P l :
+  (P l -> forall n, P (take n l)) ->
+  pruning P l ->
+  pruning (Downarborification P) l.
+Proof.
+  intros HP Hprun ; revert l Hprun HP.
+  refine (cofix aux l Hprun :=
+            match Hprun as H in pruning _ l0
+                  return (P l0 -> forall n, P (take n l0)) -> pruning _ l0 with
+            | prune b u Hu Hyp => _
+            end).
   intros Htake.
-  econstructor ; [exact Htake |].
+  econstructor.
+  { intros n.
+    now apply Htake.
+  }
   apply aux ; [eassumption |].
-  intros n.
+  intros Hu' n.
   case: (leqP n (size u)) ; intros Hinf.
   { erewrite <- cats1, takel_cat ; [now apply Htake | assumption]. }
   erewrite <- cats1, take_cat.
@@ -2377,15 +2531,33 @@ Proof.
   apply ltnW, leq_gtF in Hinf ; rewrite Hinf ; cbn ; rewrite cats1.
   now destruct Hyp.
 Qed.
-  
-  
-  
-Lemma prop13 T :
-  ABis_tree T ->
-  ABchoicefun T ->
-  choicefun (TtoP T).
+
+Lemma test (P : list B -> Type) l :
+  (forall n, P (take n l) -> P l) ->
+  hereditary_closure (Upmonotonisation P) l ->
+  hereditary_closure P l.
 Proof.
-  intros Htree [alpha Halpha] ; exists alpha ; intros n.
+  intros HP Hered.
+  induction Hered as [u Hu | u k IHk].
+  { destruct Hu.
+    econstructor ; apply (HP (size l)).
+    now rewrite take_size_cat.
+  }
+  econstructor 2 ; intros a ; apply IHk.
+  intros n.
+  case: (leqP n (size u)) ; intros Hinf.
+  2:{ erewrite <- cats1, take_cat.
+      erewrite <- (subnSK Hinf).
+      now apply ltnW, leq_gtF in Hinf ; rewrite Hinf ; cbn ; rewrite cats1.
+  }
+  clear k
+  erewrite <- cats1 , takel_cat ; [ | assumption].
+    apply HP in Hn.
+  
+  
+Lemma prop13 : DCProp13.
+Proof.
+  intros T [alpha Halpha] ; exists alpha ; intros n.
   unfold TtoP.
   specialize (Halpha (iota 0 n)).
   unfold ord ; rewrite ord_map_aux ord_iota_aux - map_comp.
@@ -2393,12 +2565,9 @@ Proof.
   now intros k.
 Qed.
 
-Lemma prop13_rev T :
-  ABis_tree T ->
-  choicefun (TtoP T) -> 
-  ABchoicefun T.
+Lemma prop13_rev : DCProp13_rev.
 Proof.
-  intros Htree [alpha Halpha] ; exists alpha ; intros u.
+  intros T Htree [alpha Halpha] ; exists alpha ; intros u.
   specialize (Halpha (List.list_max u).+1) ; unfold TtoP in Halpha.
   eapply Htree ; [ | eassumption].
   unfold ord ; rewrite ord_map_aux ord_iota_aux - map_comp.
@@ -2406,12 +2575,9 @@ Proof.
   now eapply map_incl, incl_iota_max.
 Qed.
 
-Lemma prop13dual P :
-  is_tree P ->
-  ABchoicefun (UpABarborification (PtoT P)) ->
-  choicefun P.
+Lemma prop13dual : DCProp13_Up. 
 Proof.
-  intros Htree [alpha Halpha] ; exists alpha ; intros n.
+  intros p Htree [alpha Halpha] ; exists alpha ; intros n.
   specialize (Halpha (iota 0 n)). 
   inversion Halpha as [l1 l2 Hl Hincl Heq].
   subst.
@@ -2423,6 +2589,129 @@ Proof.
   apply ord_inj in Hincl ; rewrite Hincl.
   now apply Htree.
 Qed.
+
+  
+(*GBI_monot is used in the proof of Theorem 5 in Brede-Herbelin's paper.*)
+Lemma GBI_monot :
+  (forall T : list (nat * B) -> Type, ABmonotone T -> GBI T) ->
+  forall (T : list (nat * B) -> Type), GBI T.
+Proof.
+  intros HBI T Hbar.
+  suff: forall l,
+      indbarred (ABUpmonotonisation T) l ->
+      indbarred T l. 
+  { intros Hyp.
+    apply Hyp.
+    apply HBI ; [now apply ABUpmonot_monotone |].
+    apply ABmonot_barred, Hbar.
+  }
+  clear HBI ; intros l Hl.
+  induction Hl.
+  { inversion t as [l l' Hl Heq].
+    subst.
+    econstructor ; [eassumption |].
+    now eapply List.incl_tran ; eassumption.
+  }
+  econstructor 2. eassumption.
+  eassumption.
+Qed.
+
+Lemma BI_GBI : 
+  (forall P : list B -> Type, BI_ind P) ->
+  forall (T : list (nat * B) -> Type), GBI T.
+Proof.
+  intros HBI.
+  apply GBI_monot ; intros T Hmon HTbar.
+  change (@nil (nat * B)) with (ord (@nil B)).
+  apply inductively_barred_indbarred.
+  apply HBI.
+  apply NBbarred_barred ; assumption.
+Qed.
+
+Lemma hered_dec (P : list B -> Type) (l : list B) :
+  (forall u, (P u) + (P u -> False)) ->
+  hereditary_closure (Upmonotonisation P) l ->
+  (forall n, P (take n l) -> False) ->
+  hereditary_closure P l.
+Proof.
+  intros Hdec Hyp ; induction Hyp as [_ [u u' Hu] | u k IHk] ; intros Hnot.
+  { exfalso.
+    apply (Hnot (size u)).
+    now erewrite take_size_cat.
+  }
+  econstructor 2 ; intros b.
+  destruct (Hdec (rcons u b)) ; [now econstructor |].
+  apply IHk.
+  intros n.
+  erewrite <- cats1, take_cat.
+  case: (leqP (size u) n) ; intros Hinf ; [ | now apply Hnot].
+  case : (n - (size u)) ; cbn ; [rewrite cats0 - (take_size u) ; now apply Hnot |].
+  intros _ ; now rewrite cats1.
+Qed.
+  
+  
+    
+Lemma BI_monot_dec (P : list B -> Type) :
+  (forall u, (P u) + (P u -> False)) ->
+  (forall P : list B -> Type, monotone P -> BI_ind P) ->
+  BI_ind P.
+Proof.
+  intros Hdec HBI Hbar ; unfold BI_ind, inductively_barred in *.
+  destruct (Hdec nil) ; [now econstructor |].
+  apply hered_dec ; [assumption | | trivial].
+  apply HBI ; [now apply Upmonot_monotone |].
+  now apply monot_barred.
+Qed.
+  
+  
+  
+Lemma GBI_BI_mon :
+  (forall (T : list (nat * B) -> Type), GBI T) ->
+  forall T' : list B -> Type, monotone T' -> BI_ind T'.
+Proof.
+  intros HGBI T' Hmon BarT'.
+  unfold GBI, inductively_barred in *.
+  apply indbarred_inductively_barred_dual ; [assumption |].
+  apply HGBI.
+  suff: ABbarred (PtoT T').
+  { intros HTbar alpha ; specialize (HTbar alpha) as [u Hu].
+    exists u.
+    econstructor ; [eassumption | now apply List.incl_refl].
+  }
+  eapply barred_NBbarred.
+  intros alpha ; specialize (BarT' alpha) as [u [prefu Hu]].
+  exists u ; split ; [assumption |].
+  now eapply TtoP_PtoT_ret.
+Qed.
+
+Lemma GDC_tree T :
+  (forall T, ABis_tree T -> ABapprox T nil -> ABchoicefun T) ->
+  ABapprox T nil ->
+  ABchoicefun T.
+Proof.
+  intros HGDC Happ.
+  suff: ABchoicefun (DownABarborification T).
+  { intros [alpha Hyp].
+    exists alpha.
+    intros u ; specialize (Hyp u).
+    unfold DownABarborification in *.
+    now specialize (Hyp _ (List.incl_refl _)).
+  }
+  apply HGDC ; [now apply DownABarbor_is_tree |].
+  clear HGDC.
+  revert Happ ; generalize (@nil (nat * B)).
+  cofix H ; intros u Happ.
+  destruct Happ.
+  econstructor.
+  { intros v Hincl w Hincl'.
+    apply d ; eapply List.incl_tran ; eassumption.
+  }
+  intros n Hnotin.
+  specialize (s n Hnotin) as [b Happ].
+  exists b.
+  now apply H.
+Qed.  
+  
 
 Lemma Theorem5: DC -> forall T, ABis_tree T -> ABapprox T nil -> ABchoicefun T.
 Proof.
@@ -2438,18 +2727,101 @@ Proof.
   apply choicefun_arbor.
   apply prop13dual; [apply arbor_is_tree |].
   unfold GDC in Hyp ; apply Hyp.
-  unshelve eapply Prop12_rev ; [exact nil | now apply UpABarbor_is_tree | | eapply List.incl_refl ].
-  eapply pruning_arbor in Hprun.
-  2:{ intros n ; cbn ; now destruct Hprun. }
-  revert Hprun ; generalize (@nil B).
-  refine (cofix aux l Hprun := match Hprun as H in pruning _ l return
-                                   pruning _ l with
-                             | prune b u Hu Hyp => _
-                             end).
-  econstructor ; [now eapply Prop11 |].
-  apply aux ; eassumption.
-Qed.  
+  change (@nil (nat * B)) with (ord (@nil B)).
+  apply Prop12_sym.
+  eapply pruning_arbor ; [assumption |]. 
+  intros n ; cbn ; now destruct Hprun.
+Qed.
+
+
+Lemma GBI_BI :
+  (forall (T : list (nat * B) -> Type), GBI T) ->
+  forall T' : list B -> Type,  BI_ind T'.
+Proof.
+  intros HGBI P BarP.
+  pose (Hyp1 := choicefun_arbor).
+  pose (Hyp1dual := monot_barred (C := B)).
+  pose (Hyp2 := prop13dual) ; unfold DCProp13_Up in *.
+  pose (Hyp2dual := Proposition13_dual_rev) ; unfold BIProp13Down_rev in *. 
+  pose (Hyp3 := arbor_is_tree).
+  pose (Hyp3dual := @Upmonot_monotone B).
+  pose (Hyp4:= Prop12_sym) ; unfold DCProp12_sym, DCProp13_Up in *.
+  pose (Hyp4dual := indbarred_inductively_barred_Down_dual) ; unfold BIProp12Down in *.
+  pose (Hyp5:= pruning_arbor).
   
+  pose 
+  unfold GBI in HGBI.
+  unfold inductively_barred.
+  suff: BIProp12Down ; unfold BIProp12Down.
+  Print Theorem5rev.
+  Print choicefun_arbor.
+  { intros H12.
+    apply H12.
+    apply HGBI.
+    suff: BIProp13Down_rev ; unfold BIProp13Down_rev.
+    { intros H13rev.
+      apply H13rev ; [ | assumption].
+    suff: forall l : seq B,
+        hereditary_closure (TtoP (ABDownmonotonisation (PtoT_dual (Upmonotonisation P)))) l ->
+        hereditary_closure (Upmonotonisation P) l.
+    { intros Hyp.
+      unfold BIProp12Down in *.
+      suff: hereditary_closure (Upmonotonisation P) nil ->
+            hereditary_closure P nil.
+      { intros Hypnaze.
+        apply Hypnaze.
+        apply Hyp.
+        apply grz.
+        apply HGBI.
+        apply H13rev.
+        { unfold TtoP. admit. }
+        intros alpha.
+        specialize (BarP alpha) as [u [Hpref Hu]].
+        exists u ; split ; [assumption |].
+        unfold TtoP, ABDownmonotonisation, PtoT_dual.
+        intros v Hincl w Heq ; subst.
+        apply ord_incl' in Hincl ; erewrite <- ord_take in Hincl.
+        eapply ord_inj in Hincl.
+        erewrite <- (cat_take_drop (size u)) ; econstructor.
+        now rewrite - Hincl.
+      }
+        rewrite Hincl in Hl.
+        Print Upmonotonisation.
+      
+    specialize (H13rev (Upmonotonisation P) (@Upmonot_monotone _ _) (monot_barred BarP)).
+
+    
+  forall l : seq B,
+  pruning (Downarborification P) l ->
+  pruning (TtoP (ABUparborification (PtoT (Downarborification P)))) l    apply HGBI in H13rev.
+    apply grz.
+    clear grz HGBI.
+    cbn.
+    induction H13rev as [u v Hv Hincl | u k IHk].
+    2:{ econstructor 2 ; eassumption. }
+    unfold ABDownmonotonisation, PtoT_dual in *.
+    specialize (Hv u Hincl).
+    econstructor.
+    Print Upmonotonisation.
+    intros w Hincl' x Heq ; subst.
+    specialize (Hv x
+
+    
+    [ | econstructor 2].
+    
+  suff: BIProp13.
+  apply HGBI.
+  unfold ABDownmonotonisation, PtoT_dual, ABbarred.
+  cbn.
+  intros alpha.
+  specialize (BarT' alpha) as [u [Hpref Hu]].
+  exists (iota 0 (size u)).
+  intros v Hincl w Heq.
+  subst.
+  unfold prefix in *.
+  
+  apply barred_NBbarred.
+  apply NBbarred_barred ; [now apply ABDownmonot_monotone |].
   
   apply prop13_rev.
       2:{
