@@ -578,7 +578,6 @@ Definition BIProp13Down_rev :=
   forall P, monotone P -> barred P -> ABbarred (⇓⁺ [ P ]ₑ).
 
 
-
 (*The next four Lemmas are Proposition 11 in Brede-Herbelin's Paper*)
 
 
@@ -1177,4 +1176,73 @@ Qed.
  of the underlying predicates.*)
 
 
-Section DC_GDC_BI_GBI.
+End DC_GDC_BI_GBI.
+
+
+Section Additional_Lemmas.
+
+Variable B : Type.
+  
+(*These lemmas with Upmonotonisation are true, even though they do not appear
+  in the proof of equivalence between GBI and BI.*)
+Definition BIProp11Up :=
+  forall (P : list B -> Type) l, P l -> TtoP (ABUpmonotonisation (PtoT P)) l.
+
+Definition BIProp11Up_rev :=
+  forall (P : list B -> Type) l, monotone P -> TtoP (ABUpmonotonisation (PtoT P)) l -> P l.
+
+Definition BIProp12Up :=
+  forall (P : list B -> Type) u,
+    monotone P -> indbarred (ABUpmonotonisation (PtoT P)) (ord u) ->
+    hereditary_closure P u.
+
+Definition BIProp12Up_rev :=
+  forall (P : list B -> Type) u, hereditary_closure P u ->
+              indbarred (ABUpmonotonisation (PtoT P)) (ord u).
+
+
+Lemma P_ABUp_PtoTB : BIProp11Up.
+Proof.
+  intros P l Hl.
+  unfold TtoP.
+  econstructor ; [econstructor ; eassumption |].
+  now apply List.incl_refl.
+Qed.
+
+Lemma monotone_ABUp_PtoT_P : BIProp11Up_rev. 
+Proof.
+  intros P l HP Hl.
+  unfold TtoP in *.
+  inversion Hl as [u v Hu Hincl Heq] ; subst.
+  inversion Hu as [w Hw] ; unfold ord in * ; subst.
+  apply ord_incl' in Hincl ; rewrite - ord_take in Hincl ; apply ord_inj in Hincl.
+  erewrite <- (cat_take_drop (size w)) ; apply HP.
+  now rewrite - Hincl.
+Qed.
+
+
+Lemma indbarred_inductively_barred_dual : BIProp12Up.
+Proof.
+  intros P u Hmon Hbar.
+  suff: hereditary_closure (TtoP (ABUpmonotonisation (PtoT P))) u.
+  { clear Hbar.
+    intros Hbar.
+    induction Hbar as [u Hyp | u k IHk] ;
+      [econstructor ; now eapply monotone_ABUp_PtoT_P |].
+    econstructor 2 ; assumption.
+  }
+  eapply indbarred_inductively_barred ; [ | assumption].
+  now apply ABUpmonot_monotone.
+Qed.
+
+
+Lemma inductively_barred_indbarred_dual :  BIProp12Up_rev.
+Proof.
+  intros P u Hered.
+  eapply inductively_barred_indbarred ; unfold TtoP.
+  induction Hered as [u Hu | u k IHk ] ; [ | now econstructor 2].
+  do 2 econstructor ; [now econstructor ; eassumption |].
+  now apply List.incl_refl.
+Qed.
+
+End Additional_Lemmas.
