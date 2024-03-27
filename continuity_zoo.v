@@ -2553,7 +2553,7 @@ Proof.
   clear k
   erewrite <- cats1 , takel_cat ; [ | assumption].
     apply HP in Hn.
-  
+Abort.
   
 Lemma prop13 : DCProp13.
 Proof.
