@@ -746,7 +746,7 @@ Proof.
   }
   apply ABapprox_pruning_TtoP ; [ | assumption].
   now apply UpABarbor_is_tree.
-Qed.  
+Qed.
 
 
 (*Let us now tackle the dual Lemmas, focused on indbarred and hereditary_closure.*)

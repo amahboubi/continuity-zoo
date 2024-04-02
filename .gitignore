@@ -412,3 +412,6 @@ TSWLatexianTemp*
 # End of https://www.toptal.com/developers/gitignore/api/coq,emacs,latex
 
 note/note.pdf
+
+Makefile.coq
+Makefile.coq.conf

@@ -1,0 +1,15 @@
+-Q theories ""
+
+-arg -w -arg -notation-overridden 
+COQDOCFLAGS = "--charset utf-8 --parse-comments -s --with-header ../website/resources/header.html --with-footer ../website/resources/footer.html --index indexpage"
+
+theories/extra_principles.v
+theories/continuity_zoo_Prop.v
+theories/Brouwer_ext.v
+theories/BI.v
+theories/fujiwara_kawai_alt.v
+
+# theories/brede_herbelin.v
+# theories/continuity_zoo.v
+# theories/fujiwara_kawai.v
+theories/minimal_example.v
