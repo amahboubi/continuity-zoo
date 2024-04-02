@@ -127,6 +127,27 @@ Lemma Beval_ext_tree_constant (tau : Bext_tree) (f : I -> O) n a l i :
     Beval_ext_tree_aux tau f n l i = Some a.
 Proof. by elim: n l i => [| n ihn] l i //= ->. Qed.
 
+Lemma Beval_ext_tree_output_unique tau f l n1 n2 o1 o2 i :
+  Beval_ext_tree_aux tau f n1 l i = Some o1 ->
+  Beval_ext_tree_aux tau f n2 l i = Some o2 ->
+  o1 = o2.
+Proof.
+elim: n1 n2 l i => [| n1 ihn1] [ | n2] l i /=.
+1, 2: by move=> -> [].
+1, 2: case: (tau l) => [ o -> [] // | q //].
+intros H. eapply ihn1 ; eassumption.
+Qed.
+
+Lemma Beval_ext_tree_monotone (tau : Bext_tree ) f n k a l i :
+  Beval_ext_tree_aux tau f n l i = Some a ->
+  Beval_ext_tree_aux tau f (n + k) l i = Some a.
+Proof.
+  revert l i ; induction n as [ | n IHn] ; cbn in * ; intros l i H.
+  1: now eapply Beval_ext_tree_constant.
+  destruct (tau l) ; [ assumption |].
+  now eapply IHn.
+Qed.
+
 Lemma eval_ext_tree_from_pref (tau : @ext_tree I O A) f n l o :
   eval_ext_tree_aux tau f n (map f l) =
     eval_ext_tree_aux tau (from_pref o (map f (iota 0 (S (List.list_max (l ++ (eval_ext_tree_trace_aux tau f n (map f l)))))))) n (map f l).

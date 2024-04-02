@@ -389,7 +389,48 @@ Proof.
     now erewrite Beval_ext_tree_map_aux in HF.
   }
   eapply BI in Help.
-  eapply Sigma1_choice in HF as [HF].
+  eapply Sigma1_choice in HF as [HF] ; [ | admit].
+  revert Help HF ; unfold inductively_barred, Beval_ext_tree.
+  generalize (@nil O) ; intros l Help HF.
+  unfold dialogue_cont_Brouwer.
+  suff: { b : Btree | forall (alpha : I -> O),
+    exists n : I, Beval_ext_tree_aux tau alpha n l 0 = Some (beval b alpha) }.
+  { intros [b Hb].
+    exists b ; intros alpha; specialize (Hb alpha) as [n Heqn].
+    specialize (HF alpha) as [m Heqm].
+    unfold Beval_ext_tree in *.
+    eapply Beval_ext_tree_output_unique ; eassumption.
+  }
+  clear HF.
+  pattern l.
+  eapply hereditary_closure_rect in Help.
+  - exact Help.
+  - unfold T ; intros u ; destruct (tau u) ; [left ; now exists a | right].
+    intros [a Hyp] ; now inversion Hyp.
+  - clear l Help.
+    intros u Hu ; cbn.
+    remember (tau u) as r ; destruct r.
+    + exists (spit a) ; intros alpha ; exists 0 ; now cbn.
+    + exfalso ; destruct Hu as [a Ha] ; rewrite Ha in Heqr.
+      now inversion Heqr.
+  - intros u k IHk ; cbn in *.
+    unshelve eexists.
+    + apply bite ; intros o.
+      exact (proj1_sig (IHk o)).
+    + cbn.
+      intros alpha.
+      destruct (IHk (alpha 0)) as [b IHb].
+      destruct (IHb (alpha \o succn)) as [n Hn] ; cbn in *.
+      exists (S n) ; cbn ; rewrite <- Hn.
+      clear -Hvalid.
+      remember (tau u) as r ; destruct r.
+      * destruct n ; cbn ; [symmetry ; now apply Hvalid |].
+        suff: tau (rcons u (alpha 0)) = Some a by (intros Hyp ; now rewrite Hyp).
+        now apply Hvalid.
+      * generalize 0 ; clear Heqr ; revert alpha u.
+        induction n ; [ reflexivity | cbn ; intros alpha u i].
+        destruct (tau (rcons u (alpha i))) ; [reflexivity |].
+        now eapply IHn.
 Admitted.
 
 Lemma Bseq_cont_valid_to_dialogue F :
