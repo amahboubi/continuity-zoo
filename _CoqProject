@@ -7,7 +7,6 @@ theories/extra_principles.v
 theories/continuity_zoo_Prop.v
 theories/Brouwer_ext.v
 theories/BI.v
-theories/fujiwara_kawai_alt.v
 
 # theories/brede_herbelin.v
 # theories/continuity_zoo.v

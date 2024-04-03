@@ -17,4 +17,7 @@ install: all
 Makefile.coq: _CoqProject
 	coq_makefile -f _CoqProject -o Makefile.coq
 
+%.vo: Makefile.coq force
+	@+$(MAKE) -f Makefile.coq $@
+
 .PHONY: all html clean force  

@@ -1,10 +1,14 @@
 From mathcomp Require Import all_ssreflect.
-Require Import Program.
+Require Import Program Lia.
+From mathcomp Require Import zify.
 From Equations Require Import Equations.
 Require Import extra_principles.
 Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
+
+Set Bullet Behavior "Strict Subproofs".
+Set Default Goal Selector "!".
 
 Lemma Sigma1_choice {X} (R : X -> nat -> Prop) :
   (forall x n, {R x n} + {~ R x n}) -> 
@@ -179,6 +183,9 @@ Definition modulus A' (F : (I -> O) -> A') (M : (I -> O) -> list I) :=
 Definition comp_modulus_cont A' (F : (I -> O) -> A') :=
   exists M, modulus F M.
 
+Definition continuous_modulus_cont A' (F : (I -> O) -> A') :=
+  exists M, modulus F M /\ ex_modulus_cont M.
+
 Definition self_modulus_cont A' (F : (I -> O) -> A') :=
   exists M,   modulus F M /\ modulus M M.
 
@@ -186,6 +193,31 @@ Definition uni_cont (F : (I -> O) -> A) :=
   exists l : list I, forall f : I -> O, modulus_at F f l.
 
 End continuity_principles.
+
+Section special_cases.
+
+Notation Q := nat.
+Variable A O : Type.
+
+(* n first values of α *)
+Definition pref (α : Q -> A) n :=
+  map α (iota 0 n.+1).
+
+Definition modulus_at_nat {O} (Y : (Q -> A) -> O) α n :=
+  forall β, pref α n = pref β n -> Y α = Y β.
+
+Definition ex_modulus_cont_nat {O} (Y : (Q -> A) -> O) :=
+  forall α, exists n, modulus_at_nat Y α n.
+
+(* N is a modulus for Y *)
+Definition modulus_nat {O} (Y : (nat -> A) -> O) N :=
+  forall α β, pref α (N α) = pref β (N α) -> Y α = Y β. 
+
+(* Y has a continuous modulus *)
+Definition continuous_modulus_cont_nat (Y : (Q -> A) -> O) :=
+  exists N, ex_modulus_cont_nat N /\ modulus_nat Y N.
+
+End special_cases.
 
 Section Intensional_Dialogue.
 
@@ -270,8 +302,8 @@ Qed.
 Lemma Btree_to_dialogueP_aux b alpha n :
   beval b (n_comp alpha n) = deval (Btree_to_dialogue_aux b n) alpha.
 Proof.
-  revert n ; induction b ; [reflexivity |].
-  intros. cbn.
+  revert n ; induction b as [|k H] ; [reflexivity |].
+  intros n. cbn.
   erewrite (H _ (S n)).
   erewrite n_comp_n_plus.
   now erewrite <- plus_n_O.
@@ -497,7 +529,7 @@ Lemma eval_ext_tree_trace_monotone (tau : ext_tree) f n k a l :
   eval_ext_tree_trace_aux tau f n l = eval_ext_tree_trace_aux tau f (n + k) l.
 Proof.
   revert l ; induction n as [ | n IHn] ; cbn in * ; intros l H.
-  destruct k ; cbn ; [reflexivity | now rewrite H].
+  1: destruct k ; cbn ; [reflexivity | now rewrite H].
   destruct (tau l) ; [ | reflexivity].
   f_equal.
   now eapply IHn.
@@ -630,7 +662,7 @@ Proof.
   - cbn in *.
     destruct  (e l).
     + eapply IHn.
-      reflexivity.
+    + reflexivity.
 Qed.
 
 Fixpoint int_tree_to_ext_tree (i : Itree) (l : list O) : @result I A :=
@@ -654,8 +686,8 @@ Proof.
   - reflexivity.
   - cbn.
     destruct (int_tree_to_ext_tree (k (f q)) l).
-    apply IHn.
-    reflexivity.
+    + apply IHn.
+    + reflexivity.
 Qed.
 
 Lemma seq_cont_interaction_to_seq_cont (F : (I -> O) -> A) :
@@ -777,7 +809,7 @@ Section Modulus.
 
 Variable I O A : Type.
 
-(** *** Sequential continuity implies self-modulating continuity  *)
+(** *** Sequential continuity implies computable modulus continuity  *)
 
 (*The trace of evaluation of an extensional tree is a modulus of continuity
  for the evaluation of that extensional tree.*)
@@ -802,18 +834,56 @@ Qed.
 Variable A_eq_dec : forall a1 a2 : A, {a1 = a2} + {a1 <> a2}.
 
 (*Continuity via extensional trees implies continuity via moduli*)
-Lemma continuous_ext_tree_to_modulus (F : (I -> O) -> A) : seq_cont F -> comp_modulus_cont F.
+Lemma seq_cont_to_self_modulus_cont (F : (I -> O) -> A) : seq_cont F -> self_modulus_cont F.
 Proof.
   move=> [] tau. intros [F_eq_eval] % Sigma1_choice.
-  2:{ intros x n. destruct eval_ext_tree. right. 1: congruence.
-      edestruct A_eq_dec. left. f_equal. apply e. right. congruence. }
+  2:{ intros x n. destruct eval_ext_tree. 1: right. 1: congruence.
+      edestruct A_eq_dec. 1:{ left. f_equal. apply e. } right. congruence. }
   exists (fun alpha => eval_ext_tree_trace_aux tau alpha (projT1 (F_eq_eval alpha)) nil).
-intros alpha beta H.
-  eapply (eval_ext_tree_output_unique (I := I)).
-  + rewrite - (projT2 (F_eq_eval alpha)) ; unfold eval_ext_tree.
-    now rewrite (@eval_ext_tree_continuous tau (projT1 (F_eq_eval alpha)) nil alpha beta H).
-  + now eapply (projT2 (F_eq_eval beta)).
+  split.
+  - intros alpha beta H.
+    eapply (eval_ext_tree_output_unique (I := I)).
+    + rewrite - (projT2 (F_eq_eval alpha)) ; unfold eval_ext_tree.
+      now rewrite (@eval_ext_tree_continuous tau (projT1 (F_eq_eval alpha)) nil alpha beta H).
+    + now eapply (projT2 (F_eq_eval beta)).
+  - intros f g.
+    destruct F_eq_eval as [n Hn], F_eq_eval as [m Hm]; cbn in *.
+    revert m g Hm Hn.
+    unfold eval_ext_tree.
+    generalize (@nil O).
+    clear. induction n; cbn; intros.
+    + destruct m; cbn. 1: reflexivity. rewrite Hn. reflexivity.
+    + destruct m; cbn in *.
+      * destruct tau eqn:E. 1: exfalso; congruence.
+        reflexivity.
+      * destruct tau eqn:E. 2: reflexivity. cbn in H.
+        inversion H. rewrite H1 in Hn, H2 |- *.
+        f_equal. eapply IHn; eauto.
 Qed.
+
+(** *** Special case: If Q = nat then moduli can be nat *)
+
+Lemma modulus_at_to_modulus_at_nat (F : (nat -> O) -> A) f l :
+  modulus_at F f l -> modulus_at_nat F f (\max_(i <- l) i).
+Proof.
+  intros H g Hg. eapply H.
+  rewrite <- eq_in_map.
+  intros x Hx.
+  eapply eq_in_map in Hg. eapply Hg.
+  rewrite mem_iota ltnS leq_bigmax_seq => //.
+Qed.
+
+Lemma modulus_at_nat_to_modulus_at (F : (nat -> O) -> A) f n :
+  modulus_at_nat F f n -> modulus_at F f (iota 0 n.+1).
+Proof.
+  intros H g Hg. eapply H.
+  unfold pref.
+  rewrite <- eq_in_map.
+  intros x Hx.
+  eapply eq_in_map in Hg. now eapply Hg.
+Qed.
+
+(** *** Self-modulating continuity implies sequential continuity for Q = nat *)
 
 (* In this section, we assume queries are nat, and prove that self-modulating moduli
 of standard continuity imply sequential continuity.*)
@@ -832,16 +902,16 @@ Definition modulus_to_ext_tree (a_dflt : O) F (M : (nat -> O) -> seq nat) (l : s
     else ask (size l).
 
 Lemma eval_modulus_to_ext a F M f m :  modulus M M ->
-  eval_ext_tree_trace (modulus_to_ext_tree a F M) f m = iota 0 (minn m (\max_(i <- M f) i).+1).
+                                       eval_ext_tree_trace (modulus_to_ext_tree a F M) f m = iota 0 (minn m (\max_(i <- M f) i).+1).
 Proof.
   move=> MmodM; rewrite /eval_ext_tree_trace.
   suff aux : forall i,
       i <= (\max_(j <- M f) j).+1 ->
       iota 0 i ++ eval_ext_tree_trace_aux (modulus_to_ext_tree a F M) f m (map f (iota 0 i)) =
         iota 0 (minn (i + m) (\max_(j <- M f) j).+1).
-  by apply:  (aux 0).
+  1: by apply:  (aux 0).
   elim: m=> [|m ihm] i /= hi1.
-  by rewrite cats0 addn0; move/minn_idPl: hi1 => ->.
+  1: by rewrite cats0 addn0; move/minn_idPl: hi1 => ->.
   rewrite /modulus_to_ext_tree size_map size_iota.
   case: ifP=> hi2.
   - have eM : M (from_pref a [seq f i | i <- iota 0 i]) = M f.
@@ -851,20 +921,20 @@ Proof.
       by rewrite /from_pref (nth_map 0)  ?size_iota // nth_iota // add0n.
     }
     suff -> : i = (\max_(j <- M f) j).+1.
-    have /minn_idPr-> : (\max_(j <- M f) j).+1 <= (\max_(j <- M f) j).+1 + m.+1 by rewrite leq_addr.
-    by rewrite cats0.
-    by move: hi1; rewrite -eM leq_eqVlt ltnNge hi2 orbF; move/eqP.
+    + have /minn_idPr-> : (\max_(j <- M f) j).+1 <= (\max_(j <- M f) j).+1 + m.+1 by rewrite leq_addr.
+      by rewrite cats0.
+    + by move: hi1; rewrite -eM leq_eqVlt ltnNge hi2 orbF; move/eqP.
   - rewrite -/(modulus_to_ext_tree a F M) -cat_rcons.
     have -> : rcons (iota 0 i) i = iota 0 i.+1 by rewrite -cats1 -addn1 iotaD.
     have -> : rcons [seq f i | i <- iota 0 i] (f i) = [seq f i | i <- iota 0 i.+1].
-    by rewrite -cats1 -addn1 iotaD map_cat.
-    rewrite addnS -addSn; apply: ihm.
-    move: hi1; rewrite leq_eqVlt; case/orP=> // /eqP ei.
-    suff : \max_(i <- M (from_pref a [seq f i | i <- iota 0 i])) i < i by rewrite hi2.
-    suff <- : M f = M (from_pref a [seq f i0 | i0 <- iota 0 i]) by rewrite ei.
-    apply: MmodM; apply/eq_in_map=> x hx.
-    have hi : x < i by rewrite ei ltnS; apply: leq_bigmax_seq.
-    rewrite /from_pref (nth_map 0)  ?size_iota // nth_iota // add0n.
+    + by rewrite -cats1 -addn1 iotaD map_cat.
+    + rewrite addnS -addSn; apply: ihm.
+      move: hi1; rewrite leq_eqVlt; case/orP=> // /eqP ei.
+      suff : \max_(i <- M (from_pref a [seq f i | i <- iota 0 i])) i < i by rewrite hi2.
+      suff <- : M f = M (from_pref a [seq f i0 | i0 <- iota 0 i]) by rewrite ei.
+      apply: MmodM; apply/eq_in_map=> x hx.
+      have hi : x < i by rewrite ei ltnS; apply: leq_bigmax_seq.
+      rewrite /from_pref (nth_map 0)  ?size_iota // nth_iota // add0n.
 Qed.
 
 Lemma self_modulus_seq_cont F (a : O) : 
@@ -878,20 +948,170 @@ Proof.
   have -> := eval_modulus_to_ext a F f m.+1 MmodM.
   rewrite /modulus_to_ext_tree size_map size_iota.
   have eqM : M f = M (from_pref a [seq f i | i <- iota 0 m.+1]).
-    apply: MmodM.
+  { apply: MmodM.
     set l := M _.
     apply/eq_in_map=> x hx.
     have {hx} hx : x < m.+1 by rewrite ltnS /m; apply: leq_bigmax_seq.
-    by rewrite /from_pref (nth_map 0) ?size_iota // nth_iota.
+    by rewrite /from_pref (nth_map 0) ?size_iota // nth_iota. }
   rewrite minnn -eqM leqnn; congr output; apply: MmodF.
   apply/eq_in_map=> x hx.
   have {hx} hx : x < m.+1 by rewrite ltnS /m eqM; apply: leq_bigmax_seq.
   by rewrite /from_pref; rewrite (nth_map 0) ?size_iota // nth_iota // size_iota.
 Qed.
 
-(* TODO: cleanup and integrate fujiwara kawaii results *)
-(* TODO: first, we need equivalent presentation of modulus for nat *)
 End Modulus.
+
+(** ** Sequential continuity is equivalent to self-modulating continuity when Q = nat *)
+
+(* Analogues of eqseq_cons for non eqTypes *)
+Lemma eq_cat {T : Type} (s1 s2 s3 s4 : seq T) :
+  size s1 = size s2 -> (s1 ++ s3 = s2 ++ s4) -> (s1 = s2) /\ (s3 = s4).
+Proof.
+  elim: s1 s2 => [|x1 s1 IHs] [|x2 s2] //= [sz12].
+  by case=> -> /(IHs _ sz12) [-> ->].
+Qed.
+
+Lemma eq_catl {T : Type} (s1 s2 s3 s4 : seq T) :
+  size s1 = size s2 -> (s1 ++ s3 = s2 ++ s4) -> s1 = s2.
+Proof. by move=> eqs12 /eq_cat; move/(_ eqs12) => []. Qed.
+
+Lemma eq_catr {T : Type} (s1 s2 s3 s4 : seq T) :
+  size s1 = size s2 -> (s1 ++ s3 = s2 ++ s4) -> s3 = s4.
+Proof. by move=> eqs12 /eq_cat; move/(_ eqs12) => []. Qed.
+
+Section sec.
+
+Variables A O : Type.
+(*Variable a : A.*)
+Notation Q := nat.
+
+Implicit Type Y : (Q -> A) -> O.
+Implicit Types α β : Q -> A.
+Implicit Types n : nat.
+Implicit Types γ : list A -> bool.
+Implicit Types s : list A.
+
+Lemma pref_le_eq n m α β :
+  n <= m ->
+  pref α m = pref β m ->
+  pref α n = pref β n.
+
+Proof.
+  rewrite /pref => lenm.
+  have -> : m.+1 = n.+1 + (m.+1 - n.+1) by lia.
+  rewrite iotaD !map_cat.
+  apply: eq_catl.
+  by rewrite !size_map size_iota.
+Qed.
+
+Definition padded_seq (s : seq A) (a : A) :=
+  nth a s.
+
+(* n first values of α, then deflt value a. Importantly defined in terms of
+   pref, so as to avoid extensionality issues later on under a modulus *)
+Definition padded_prefix α n :=
+  padded_seq (pref α n) (α 0).
+
+(* pref and the prefix of a padded prefix coincide*)
+Lemma pref_padded_prefix α n k :
+  k <= n -> pref (padded_prefix α n) k = pref α k.
+Proof.
+  move=> lekn.
+  apply: (@eq_from_nth _ (α 0)); rewrite /pref !size_map !size_iota // /padded_prefix.
+  move=> i ltin.
+  congr (nth _ _ i).
+  apply/eq_in_map=> j; rewrite mem_iota add0n /padded_seq => /andP[_ hj].
+  rewrite (nth_map 0) ?nth_iota ?add0n ?size_iota //; lia.
+Qed.
+
+(* Name from Yannick + Fujiwara - Kawai *)
+Lemma T14 Y :
+  continuous_modulus_cont_nat Y -> exists N, modulus_nat Y N /\ modulus_nat N N.
+Proof.
+(* In a classical setting we would take 
+M α := min {k | forall β, pref α k = pref β k -> Y α = Y β}
+The following constructive proof replaces this minimum by an
+observable variant:
+M α := min {N (padded_prefix α n) | N (padded_prefix α n) < n}
+or, rather the simpler
+M α := min {n | N (padded_prefix α n) < n}
+ *)
+case=> N [ContN ModYN].
+pose good_pref α n :=  N (padded_prefix α n) <= n.
+(* This is the crux of the proof *)
+have ex_good_pref α : exists n, good_pref α n.
+{  case: (ContN α) => [n Hn].
+  exists (N α + n.+1). 
+  rewrite /good_pref -Hn; first by lia. 
+  rewrite pref_padded_prefix //; lia. }
+have Ygood_pref α n : good_pref α n -> Y (padded_prefix α n) = Y α.
+{ move=> gpn.
+  apply: ModYN.
+  exact: pref_padded_prefix. }
+have good_prefP α n : good_pref α n -> forall β, pref α n = pref β n -> Y α = Y β.
+{ move=> gpn β eqpref.
+  rewrite -(Ygood_pref _ _ gpn).
+  apply: ModYN.
+  rewrite pref_padded_prefix //. 
+  exact: (pref_le_eq _ eqpref). }
+(* The definition of M uses the constructive epsilon *)
+pose M α : nat := ex_minn (ex_good_pref α).
+have good_prefM α : good_pref α (M α) by rewrite /M; case: ex_minnP=> *.
+have minM α n : good_pref α n -> (M α) <= n.
+{ rewrite /M; case: ex_minnP=> m _ h; exact: h. }
+have ModYM : modulus_nat Y M.
+{ by move=> α β; apply: good_prefP. }
+suff ModMM : modulus_nat M M by exists M; split.
+move=> α β eq_pref.
+(* Here is where extensionality matters *)                               
+have eq_padded k : k <= M α -> padded_prefix α k = padded_prefix β k.
+{ move=> lekMα.
+  suff e : pref α k = pref β k.
+  { rewrite /padded_prefix e.
+    assert (α 0 = β 0) as Heq by (cbn in * ; now inversion e).
+    now rewrite Heq. }
+  exact: (pref_le_eq lekMα). }
+have leMβα : M β <= M α.
+{ apply: minM.
+  rewrite /good_pref -eq_padded //; exact: good_prefM. }
+suff leMαβ : M α <= M β by apply/eqP; rewrite eqn_leq leMαβ.
+apply: minM.
+rewrite /good_pref eq_padded //. 
+exact: good_prefM.
+Qed.
+
+Lemma T41 Y :
+  (exists N, modulus_nat Y N /\ modulus_nat N N) -> continuous_modulus_cont_nat Y.
+Proof.
+  case=> N [HN HNY]; exists N; split=> // α.
+  exists (N α) => *; exact: HNY.
+Qed.
+
+Theorem seq_cont_equiv_self_modulus_cont (a0 : A) (F : (Q -> A) -> O) :
+  inhabited ( forall a1 a2 : O, {a1 = a2} + {a1 <> a2}) ->
+  seq_cont F <-> continuous_modulus_cont F.
+Proof.
+  intros [D].
+  split.
+  - intros contF. eapply seq_cont_to_self_modulus_cont in contF as (N & HF & HN). 2: assumption.
+    eexists; split; eauto.
+    intros f. exists (N f). red in HN. refine (HN f).
+  - intros (N' & HF' & HN'). eapply self_modulus_seq_cont. 1: assumption.
+    edestruct T14 as (N & HF & HN).
+    + eexists. split.
+      2:{ intros f. eapply modulus_at_to_modulus_at_nat. exact (HF' f). }
+      intros f. destruct (HN' f) as [l Hl].
+      exists ( \max_(i <- l) i).
+      eapply modulus_at_to_modulus_at_nat.
+      intros g. specialize (Hl g). intros H.
+      rewrite Hl => //.
+    + eexists. split.
+      * intros f. eapply modulus_at_nat_to_modulus_at. exact (HF f).
+      * intros f g H. specialize (HN f g).
+        rewrite HN => //.
+Qed.
+
+End sec.
 
 (** ** Continuity for Cantor space  *)
 
@@ -1021,14 +1241,14 @@ Proof.
     do 2 erewrite map_cat in Hfgl.
     apply (f_equal (take (size [seq f i | i <- dialogue_to_list (k true)]))) in Hfgl.
     do 2 erewrite take_size_cat in Hfgl ; try reflexivity.
-    exact Hfgl.
+    1: exact Hfgl.
     now do 2 erewrite size_map.
   }
   { apply ke.
     do 2 erewrite map_cat in Hfgl.
     apply (f_equal (drop (size [seq f i | i <- dialogue_to_list (k true)]))) in Hfgl.
     do 2 erewrite drop_size_cat in Hfgl ; try reflexivity.
-    exact Hfgl.
+    1: exact Hfgl.
     now do 2 erewrite size_map.
   }
 Qed.
