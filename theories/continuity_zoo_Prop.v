@@ -20,25 +20,24 @@ Admitted.
 
 Section continuity_principles.
 
-(* I is for oracle's input, O is for oracle's output, A is for return type *)
-(* TODO : change for Q, A, (questions/answers from oracle) and T *)
-Context {I O A : Type}.
+(* Q is for oracle questions, A is for oracle answers, R is for return type *)
+Context {Q A R : Type}.
 
 (** ** Dialogue continuity  *)
 
-Implicit Type (F : (I -> O) -> A).
+Implicit Type (F : (Q -> A) -> R).
 
 (* Dialogue trees are from von Oosten, but the inductive type presentation is
    probably from Escardó, TODO let's ask him.
    Inductive dialogue trees. See, e.g., Escardó
    https://www.cs.bham.ac.uk//~mhe/dialogue/dialogue-to-brouwer.agda *)
 Inductive dialogue :=
-  | eta : A -> dialogue
-  | beta : I -> (O -> dialogue) -> dialogue.
+  | eta : R -> dialogue
+  | beta : Q -> (A -> dialogue) -> dialogue.
 
 Implicit Type (d : dialogue).
 
-Fixpoint deval d (f : I -> O) : A :=
+Fixpoint deval d (f : Q -> A) : R :=
   match d with
   | eta o => o
   | beta q k => deval (k (f q)) f
@@ -50,9 +49,9 @@ Definition dialogue_cont F := exists d : dialogue, F =1 deval d.
 (** ** Intensional dialogue continuity  *)
 
 (* Intensional dialogue continuity.*)
-Inductive is_dialogue : ((I -> O) -> A) -> Type :=
+Inductive is_dialogue : ((Q -> A) -> R) -> Type :=
   | teta o : is_dialogue (fun _ => o)
-  | tbeta (q : I) (k : O -> (I -> O) -> A) (H : forall a, is_dialogue (k a))
+  | tbeta (q : Q) (k : A -> (Q -> A) -> R) (H : forall a, is_dialogue (k a))
       : is_dialogue (fun f => k (f q) f).
 
 Definition int_dialogue_cont F := inhabited (is_dialogue F).
@@ -64,12 +63,12 @@ TODO: have a look at CPP24 paper by Eremondi. See also may be Coq files by F. Po
 Jon Sterling's Brouwer trees, i.e. Escardó's dialogue normalized by giving
 queries in order. *)
 Inductive Btree : Type :=
-  | spit : A -> Btree
-  | bite : (O -> Btree) -> Btree.
+  | spit : R -> Btree
+  | bite : (A -> Btree) -> Btree.
 
 Implicit Type (b : Btree).
 
-Fixpoint beval b (f : nat -> O) : A :=
+Fixpoint beval b (f : nat -> A) : R :=
   match b with
   |spit o => o
   |bite k => beval (k (f 0)) (f \o S)
@@ -99,13 +98,13 @@ https://www.cs.bham.ac.uk//~mhe/dialogue/dialogue-to-brouwer.agda *)
 (* Van Oosten: https://projecteuclid.org/journals/notre-dame-journal-of-formal-logic/volume-52/issue-4/Partial-Combinatory-Algebras-of-Functions/10.1215/00294527-1499381.full *)
 
 Inductive result : Type :=
-|ask : I -> result
-|output : A -> result.
+|ask : Q -> result
+|output : R -> result.
 
 (* Forster et al's extensional trees. *)
-Definition ext_tree := list O -> result.
+Definition ext_tree := list A -> result.
 
-Fixpoint eval_ext_tree_aux (tau : ext_tree) (f : I -> O) (n : nat) (l : list O) : result :=
+Fixpoint eval_ext_tree_aux (tau : ext_tree) (f : Q -> A) (n : nat) (l : list A) : result :=
   match n, tau l with
   |S k, ask q => eval_ext_tree_aux tau f k (rcons l (f q))
   |_, _ => tau l
@@ -115,10 +114,10 @@ Definition eval_ext_tree tau f n := eval_ext_tree_aux tau f n [::].
 
 (* TODO: as this is the one seq_cont we care about, may be change its name *)
 Definition seq_cont F :=
-  exists τ : ext_tree, forall f : I -> O, exists n : nat, eval_ext_tree τ f n = output (F f).
+  exists τ : ext_tree, forall f : Q -> A, exists n : nat, eval_ext_tree τ f n = output (F f).
 
 Definition wf_ext_tree (tau : ext_tree) :=
-  forall f : nat -> O,  exists n o, tau (map f (iota 0 n)) = output o.
+  forall f : nat -> A,  exists n o, tau (map f (iota 0 n)) = output o.
 
 (* Conjectures: TODO: move
 - seq_contW F tau -> well_founded tau when I = nat ? have a section about Baire spaces
@@ -129,14 +128,14 @@ the latter conjecture might play a role, otherwise, probably not.
 (** *** Sequential continuity via interrogations  *)
 
 (* Interrogations (van Oosten) *)
-Inductive interrogation (f : I -> O) : seq (I * O) -> (seq O -> result) -> Prop :=
+Inductive interrogation (f : Q -> A) : seq A -> (seq A -> result) -> Prop :=
   NoQuestions τ : interrogation f [::] τ
 | Ask l τ q a : f q = a ->
                 interrogation f l τ ->
-                τ (map snd l) = ask q -> interrogation f (rcons l (q, a)) τ.
+                τ l = ask q -> interrogation f (rcons l a) τ.
 
-Definition seq_cont_interrogations F :=
-  exists τ, forall f, exists qs_and_ans, interrogation f qs_and_ans τ /\ τ (map snd qs_and_ans) = output (F f).
+Definition seq_cont_via_interrogations F :=
+  exists τ, forall f, exists ans, interrogation f ans τ /\ τ ans = output (F f).
 
 (** *** Sequential continuity via interaction trees  *)
 
@@ -150,11 +149,11 @@ CoInductive itree (E: Type -> Type) (R: Type) : Type :=
 
 (*We first define a Coinductive without Tau transitions*)
 CoInductive Itree :=
-| ret : A -> Itree
-| vis : I -> (O -> Itree) -> Itree.
+| ret : R -> Itree
+| vis : Q -> (A -> Itree) -> Itree.
 
 (*Then we define the step-indexed evaluation of such a tree.*)
-Fixpoint ieval (i : Itree) (f : I -> O) (n : nat) : result :=
+Fixpoint ieval (i : Itree) (f : Q -> A) (n : nat) : result :=
   match n with
   | 0 => match i with
          | ret o => output o
@@ -167,65 +166,65 @@ Fixpoint ieval (i : Itree) (f : I -> O) (n : nat) : result :=
   end.
 
 Definition seq_cont_interaction F :=
-  exists τ : Itree, forall f : I -> O, exists n : nat, ieval τ f n = output (F f).
+  exists τ : Itree, forall f : Q -> A, exists n : nat, ieval τ f n = output (F f).
 
 (** ** Modulus continuity  *)
 
-Definition modulus_at A' (F : (I -> O) -> A') (f : I -> O) (l : seq I) :=
-  forall g : I -> O, map f l = map g l -> F f = F g.
+Definition modulus_at {R'} (F : (Q -> A) -> R') (f : Q -> A) (l : seq Q) :=
+  forall g : Q -> A, map f l = map g l -> F f = F g.
 
-Definition ex_modulus_cont A' (F : (I -> O) -> A') :=
+Definition ex_modulus_cont {R'} (F : (Q -> A) -> R') :=
   forall f, exists L, modulus_at F f L.
 
-Definition modulus A' (F : (I -> O) -> A') (M : (I -> O) -> list I) :=
+Definition modulus {R'} (F : (Q -> A) -> R') (M : (Q -> A) -> list Q) :=
    forall f g,  map f (M f) = map g (M f) ->  F f = F g.
 
-Definition comp_modulus_cont A' (F : (I -> O) -> A') :=
+Definition comp_modulus_cont (F : (Q -> A) -> R) :=
   exists M, modulus F M.
 
-Definition continuous_modulus_cont A' (F : (I -> O) -> A') :=
+Definition continuous_modulus_cont  (F : (Q -> A) -> R) :=
   exists M, modulus F M /\ ex_modulus_cont M.
 
-Definition self_modulus_cont A' (F : (I -> O) -> A') :=
+Definition self_modulus_cont (F : (Q -> A) -> R) :=
   exists M,   modulus F M /\ modulus M M.
 
-Definition uni_cont (F : (I -> O) -> A) :=
-  exists l : list I, forall f : I -> O, modulus_at F f l.
+Definition uni_cont (F : (Q -> A) -> R) :=
+  exists l : list Q, forall f : Q -> A, modulus_at F f l.
 
 End continuity_principles.
 
 Section special_cases.
 
 Notation Q := nat.
-Variable A O : Type.
+Variable A R : Type.
 
 (* n first values of α *)
 Definition pref (α : Q -> A) n :=
   map α (iota 0 n.+1).
 
-Definition modulus_at_nat {O} (Y : (Q -> A) -> O) α n :=
-  forall β, pref α n = pref β n -> Y α = Y β.
+Definition modulus_at_nat {R} (F : (Q -> A) -> R) α n :=
+  forall β, pref α n = pref β n -> F α = F β.
 
-Definition ex_modulus_cont_nat {O} (Y : (Q -> A) -> O) :=
-  forall α, exists n, modulus_at_nat Y α n.
+Definition ex_modulus_cont_nat {R} (F : (Q -> A) -> R) :=
+  forall α, exists n, modulus_at_nat F α n.
 
-(* N is a modulus for Y *)
-Definition modulus_nat {O} (Y : (nat -> A) -> O) N :=
-  forall α β, pref α (N α) = pref β (N α) -> Y α = Y β. 
+(* M is a modulus for F *)
+Definition modulus_nat {R} (F : (nat -> A) -> R) M :=
+  forall α β, pref α (M α) = pref β (M α) -> F α = F β. 
 
-(* Y has a continuous modulus *)
-Definition continuous_modulus_cont_nat (Y : (Q -> A) -> O) :=
-  exists N, ex_modulus_cont_nat N /\ modulus_nat Y N.
+(* F has a continuous modulus *)
+Definition continuous_modulus_cont_nat (F : (Q -> A) -> R) :=
+  exists M, ex_modulus_cont_nat M /\ modulus_nat F M.
 
 End special_cases.
 
 Section Intensional_Dialogue.
 
-Variable I O A : Type.
+Variable Q A R : Type.
 
-Implicit Type (F : (I -> O) -> A).
+Implicit Type (F : (Q -> A) -> R).
 
-Lemma dialogue_is_dialogue (d : @dialogue I O A) : is_dialogue (deval d).
+Lemma dialogue_is_dialogue (d : @dialogue Q A R) : is_dialogue (deval d).
 Proof.
   induction d as [ | i k ke] ; cbn.
   - now econstructor.
@@ -233,7 +232,7 @@ Proof.
 Qed.
 
 Lemma is_dialogue_to_dialogue_ext F :
-  is_dialogue F -> {d : @dialogue I O A & F =1 deval d}.
+  is_dialogue F -> {d : @dialogue Q A R & F =1 deval d}.
 Proof.
 elim=> [o |q k ih1 ih2].
 - by exists (eta o).
@@ -248,10 +247,10 @@ Proof.
   exists d. assumption.
 Qed.
 
-Variable funext : forall A B (f g : A -> B), f =1 g -> f = g.
+Variable funext : forall R B (f g : R -> B), f =1 g -> f = g.
 
 Lemma is_dialogue_to_dialogue F : int_dialogue_cont F ->
-                                  exists d : @dialogue I O A, F = deval d.
+                                  exists d : @dialogue Q A R, F = deval d.
 Proof.
   intros [[d H] % is_dialogue_to_dialogue_ext].
   exists d. apply funext, H.
@@ -271,9 +270,11 @@ End Intensional_Dialogue.
 
 Section Brouwer.
 
-Variable O A : Type.
-Local Notation Brouwer := (@Btree O A).
-Local Notation dialogue := (@dialogue nat O A).
+Notation Q := nat.
+Variable A R : Type.
+Local Notation Brouwer := (@Btree A R).
+
+Local Notation dialogue := (@dialogue nat A R).
 
 (*Going from Brouwer trees to dialogue trees*)
 
@@ -285,7 +286,7 @@ Fixpoint Btree_to_dialogue_aux  (b : Brouwer) (n : nat) : dialogue :=
 
 Definition Btree_to_dialogue b := Btree_to_dialogue_aux b 0.
 
-Fixpoint n_comp (f : nat -> O) (n : nat) : nat -> O :=
+Fixpoint n_comp (f : nat -> A) (n : nat) : nat -> A :=
   match n with
   | 0 => f
   | S k => (n_comp f k) \o S
@@ -315,7 +316,7 @@ Proof.
   exact (Btree_to_dialogueP_aux b alpha 0).
 Qed.
 
-Lemma dialogue_cont_Brouwer_to_dialogue_cont (F : (nat -> O) -> A) :
+Lemma dialogue_cont_Brouwer_to_dialogue_cont (F : (nat -> A) -> R) :
   dialogue_cont_Brouwer F -> dialogue_cont F.
 Proof.
   intros [b Hb].
@@ -331,11 +332,11 @@ http://jonsterling.github.io/agda-effectful-forcing/Dialogue.Normalize.html*)
 
 
 (*norm1 and norm2 specify when a dialogue tree is normalizable into a Brouwerian one*)
-Inductive norm1 : list O -> dialogue -> Type :=
+Inductive norm1 : list A -> dialogue -> Type :=
 | normret : forall l a, norm1 l (eta a)
 | normask : forall l i k, norm2 l i k l -> norm1 l (beta i k)
 with
-  norm2 : list O -> nat -> (O -> dialogue) -> list O -> Type :=
+  norm2 : list A -> nat -> (A -> dialogue) -> list A -> Type :=
 | normzerocons : forall l k l' j,  norm1 l (k j) -> norm2 l 0 k (cons j l')
 | normsucccons : forall l i k l' j, norm2 l i k l' -> norm2 l (S i) k (cons j l')
 | normzeronil : forall l k,
@@ -367,8 +368,8 @@ Defined.
 
 (*Then Sterling shows that any dialogue tree is normalizable.
 Unfortunately the following code is not accepted by Coq.*)
-(* TODO see whether we can patch this *)
-Fail Equations reflect (l : list O) (d : dialogue) : norm1 l d:=
+(* TANSDANS see whether we can patch this *)
+Fail Equations reflect (l : list ANS) (d : dialogue) : norm1 l d:=
   reflect l (eta a) := @normret l a ;
   reflect l (beta n q) := normask (@reflect2 l n q l)
 where reflect2 l1 i k l2 : norm2 l1 i k l2 :=
@@ -381,7 +382,7 @@ Section reflect.
 
   Variable (reflect2 : forall l1 i k l2, norm2 l1 i k l2).
 
-  Equations reflect  (l : list O) (d : dialogue) : norm1 l d:=
+  Equations reflect  (l : list A) (d : dialogue) : norm1 l d:=
     reflect l (eta a) := @normret l a ;
     reflect l (beta n q) := normask (@reflect2 l n q l).
 
@@ -389,18 +390,18 @@ End reflect.
 
 Derive Subterm for list.
 
-Fail Equations reflect2 (l1 : list O) (i : nat) (k : O -> dialogue) (l2 : list O) : norm2 l1 i k l2 by wf (length l2, k) (lexprod (lt, lt)) :=
+Fail Equations reflect2 (l1 : list ANS) (i : nat) (k : ANS -> dialogue) (l2 : list ANS) : norm2 l1 i k l2 by wf (length l2, k) (lexprod (lt, lt)) :=
   reflect2 l1 0 k nil := normzeronil (fun o => reflect reflect2 (cons o l1) (k o)) ;
   reflect2 l1 (S j) k nil := normsuccnil (fun o => reflect2 (cons o l1) j k nil) ;
   reflect2 l1 0 k (cons o l2) := normzerocons l2 (reflect reflect2 l1 (k o)) ;
   reflect2 l1 (S j) k (cons o l2) := normsucccons o (reflect2 l1 j k l2) .
 
-(* This is the proof by Escardó and Oliva:
+(* This is the proof by Escardó and ANSliva:
   https://www.cs.bham.ac.uk//~mhe/dialogue/dialogue-to-brouwer.agda *)
 
 (* (follow n b) is the immediate subtree of b selected when alpha 0 = n,
    for any alpha *)
-Definition follow (o : O) (b : Brouwer) : Brouwer :=
+Definition follow (o : A) (b : Brouwer) : Brouwer :=
   match b with
   |spit a => b (* reached answer *)
   |bite k => k o (* select the nth child tree *)
@@ -408,19 +409,19 @@ Definition follow (o : O) (b : Brouwer) : Brouwer :=
 
 (* Resulting spec wrt to beval. Note the composition with successor, so
 as to query alpha on n at depth n. *)
-Lemma followP (alpha : nat -> O) (b : Brouwer) :
+Lemma followP (alpha : nat -> A) (b : Brouwer) :
   beval b alpha = beval (follow (alpha 0) b) (alpha \o S).
 Proof. by case: b. Qed.
 
 (* (Bbeta k n) is an equivalent subtree to (k (alpha n)), constructed
    as a bite branching according to the value of (alpha n), for any alpha *)
-Fixpoint Bbeta (k : O -> Brouwer) (n : nat) : Brouwer :=
+Fixpoint Bbeta (k : A -> Brouwer) (n : nat) : Brouwer :=
   match n with
   |0 => bite (fun m => ((follow m) \o k) m)
   |n.+1 => bite (fun m => Bbeta ((follow m) \o k) n)
 end.
 
-Lemma BbetaP (alpha : nat -> O) n k :
+Lemma BbetaP (alpha : nat -> A) n k :
   beval (k (alpha n)) alpha = beval (Bbeta k n) alpha.
 Proof.
 elim: n k alpha => [| n ihn] k alpha /=.
@@ -442,7 +443,7 @@ Proof.
   rewrite -BbetaP; exact: ihd.
 Qed.
 
-Lemma dialogue_to_btree_cont (F : (nat -> O) -> A) :
+Lemma dialogue_to_btree_cont (F : (nat -> A) -> R) :
   dialogue_cont F -> dialogue_cont_Brouwer F.
 Proof.
   intros [d Hd].
@@ -454,9 +455,9 @@ End Brouwer.
 
 Section Sequential.
 
-Context {I O A : Type}.
+Context {Q A R : Type}.
 
-Implicit Type tau : @ext_tree I O A.
+Implicit Type tau : @ext_tree Q A R.
 
 Lemma eval_ext_tree_ext tau1 tau2 f n :
    tau1 =1 tau2 -> eval_ext_tree tau1 f n = eval_ext_tree tau2 f n.
@@ -465,7 +466,7 @@ Proof.
   case: (tau2 l) => // q; exact: ihn.
 Qed.
 
-Lemma eval_ext_tree_constant tau (f : I -> O) :
+Lemma eval_ext_tree_constant tau (f : Q -> A) :
   forall n a l, tau l = output a -> eval_ext_tree_aux tau f n l = output a.
 Proof.
   intros n a.
@@ -487,7 +488,7 @@ Qed.
 
 (* Sequence of questions asked while step-index evaluating tau via f at depth n *)
 
-Fixpoint eval_ext_tree_trace_aux tau (f : I -> O) (n : nat) (l : list O) : list I :=
+Fixpoint eval_ext_tree_trace_aux tau (f : Q -> A) (n : nat) (l : list A) : list Q :=
   match n, (tau l) with
   | S k, ask q => q :: (eval_ext_tree_trace_aux tau f k (rcons l (f q)))
   | _ , _ => [::]
@@ -546,7 +547,7 @@ Proof.
 Qed.
 
 Definition ext_tree_for F tau :=
- forall f : I -> O, exists n : nat, eval_ext_tree tau f n = output (F f).
+ forall f : Q -> A, exists n : nat, eval_ext_tree tau f n = output (F f).
 
 (* May be require more than wf, but also possibly non_empty and/or valid *)
 Definition seq_cont_wf F :=
@@ -555,7 +556,7 @@ Definition seq_cont_wf F :=
 Definition valid_ext_tree tau :=
   forall l o,  tau l = output o -> forall a, tau (rcons l a) = output o.
   
-Definition seq_cont_valid (F : (I -> O) -> A) :=
+Definition seq_cont_valid (F : (Q -> A) -> R) :=
   exists tau, ext_tree_for F tau /\ valid_ext_tree tau.
 
 Lemma seq_cont_wf_to_seq_cont F :
@@ -577,7 +578,7 @@ Qed.
 (** *** Dialogue continuity implies sequential continuity  *)
 
 (** From dialogue to extensional trees **)
-Fixpoint dialogue_to_ext_tree (d : @dialogue I O A) (l : seq O) : @result I A :=
+Fixpoint dialogue_to_ext_tree (d : @dialogue Q A R) (l : seq A) : @result Q R :=
  match l, d with
   | _ , eta o => output o
   | [::], beta q _ => ask q
@@ -614,7 +615,7 @@ Proof.
     cbn.
     revert Hn.
     unfold eval_ext_tree.
-    generalize (@nil O) as l.
+    generalize (@nil A) as l.
     induction n as [ | n IHn] ; intros * Heq.
     + cbn in *.
       assumption.
@@ -625,7 +626,7 @@ Proof.
       assumption.
 Qed.
 
-Theorem dialogue_to_seq_cont  (F : (I -> O) -> A) :
+Theorem dialogue_to_seq_cont  (F : (Q -> A) -> R) :
   dialogue_cont F -> seq_cont F.
 Proof.
   intros [d Hd]. exists (dialogue_to_ext_tree d).
@@ -639,13 +640,13 @@ Qed.
 
 (** *** Sequential continuity is equivalent to interaction tree continuity  *)
 
-CoFixpoint ext_tree_to_int_tree (e : @ext_tree I O A) (l : list O) : Itree :=
+CoFixpoint ext_tree_to_int_tree (e : @ext_tree Q A R) (l : list A) : Itree :=
   match e l with
   | ask q => vis q (fun a => ext_tree_to_int_tree e (rcons l a))
   | output o => ret o
   end.
 
-Lemma seq_cont_to_seq_cont_interaction (F : (I -> O) -> A) :
+Lemma seq_cont_to_seq_cont_interaction (F : (Q -> A) -> R) :
   seq_cont F -> seq_cont_interaction F.
 Proof.
   intros [e He].
@@ -655,7 +656,7 @@ Proof.
   rewrite <- Heq ; clear Heq.
   revert e.
   unfold eval_ext_tree.
-  generalize (@nil O).
+  generalize (@nil A).
   induction n as [ | n IHn] ; intros l e.
   - cbn in *.
     destruct (e l) ; reflexivity.
@@ -665,7 +666,7 @@ Proof.
     + reflexivity.
 Qed.
 
-Fixpoint int_tree_to_ext_tree (i : Itree) (l : list O) : @result I A :=
+Fixpoint int_tree_to_ext_tree (i : Itree) (l : list A) : @result Q R :=
   match l with
   | nil => match i with
            | vis q k => ask q
@@ -690,7 +691,7 @@ Proof.
     + reflexivity.
 Qed.
 
-Lemma seq_cont_interaction_to_seq_cont (F : (I -> O) -> A) :
+Lemma seq_cont_interaction_to_seq_cont (F : (Q -> A) -> R) :
   seq_cont_interaction F -> seq_cont F.
 Proof.
   intros [i Hi].
@@ -707,7 +708,7 @@ Proof.
     now apply IHn.
 Qed.
 
-Theorem seq_cont_iff_seq_cont_interaction (F : (I -> O) -> A) :
+Theorem seq_cont_iff_seq_cont_interaction (F : (Q -> A) -> R) :
   seq_cont F <-> seq_cont_interaction F.
 Proof.
   split.
@@ -718,14 +719,14 @@ Qed.
 (** Results about wf and valid trees  *)
 
 Fixpoint ext_tree_valid_aux
-  (tau : @ext_tree I O A) (l l' : list O) : @result I A := 
+  (tau : _) (l l' : list A) : @result Q R := 
   match l, tau l' with
   |cons a u, ask q => ext_tree_valid_aux tau u (rcons l' a)
   |_, _ => tau l'
   end.
 
 Definition ext_tree_valid
-  (tau : @ext_tree I O A) (l : list O) : @result I A :=
+  (tau : _) (l : list A) : @result Q R :=
   ext_tree_valid_aux tau l nil.
 
 Lemma ext_tree_valid_valid tau l l' l'' a:
@@ -739,7 +740,7 @@ Proof.
 Qed.  
 
 Lemma ext_tree_valid_eqtau_ask
-  (tau : @ext_tree I O A) (l l' : list O) i o :
+  (tau : _) (l l' : list A) i o :
   ext_tree_valid_aux tau l l' = ask i ->
   ext_tree_valid_aux tau (rcons l o) l' = tau (rcons (l' ++ l) o).
 Proof.
@@ -757,7 +758,7 @@ Proof.
 Qed.
   
 Lemma eval_ext_tree_valid_eqtau
-  (tau : @ext_tree I O A) (n : nat) (f : I -> O) a :
+  (tau : _) (n : nat) (f : Q -> A) a :
   eval_ext_tree_aux tau f n nil = output a ->
   eval_ext_tree_aux (ext_tree_valid tau) f n nil = output a.
 Proof.
@@ -765,7 +766,7 @@ Proof.
              ext_tree_valid tau (take j nil) = tau (take j nil)) as Hyp.
   { induction j ; cbn ; now reflexivity. }
   revert Hyp.
-  generalize (@nil O).
+  generalize (@nil A).
   induction n ; cbn ; intros ; erewrite <- (take_size l) ; erewrite Hyp.
   { now rewrite take_size. }
   rewrite (take_size l).
@@ -807,13 +808,13 @@ End Sequential.
 
 Section Modulus.
 
-Variable I O A : Type.
+Variable Q A R : Type.
 
 (** *** Sequential continuity implies computable modulus continuity  *)
 
 (*The trace of evaluation of an extensional tree is a modulus of continuity
  for the evaluation of that extensional tree.*)
-Lemma eval_ext_tree_continuous (tau : @ext_tree I O A) n l :
+Lemma eval_ext_tree_continuous (tau : @ext_tree Q A R) n l :
   modulus (fun alpha => eval_ext_tree_aux tau alpha n l)
     (fun alpha => eval_ext_tree_trace_aux tau alpha n l).
 Proof.
@@ -822,7 +823,7 @@ Proof.
   exact: ihn.
 Qed.
 
-Lemma eval_ext_tree_trace_continuous (tau : @ext_tree I O A) n l :
+Lemma eval_ext_tree_trace_continuous (tau : @ext_tree Q A R) n l :
   modulus (fun alpha => eval_ext_tree_trace_aux tau alpha n l)
     (fun alpha => eval_ext_tree_trace_aux tau alpha n l).
 Proof.
@@ -831,18 +832,18 @@ Proof.
   exact: ihn.
 Qed.
 
-Variable A_eq_dec : forall a1 a2 : A, {a1 = a2} + {a1 <> a2}.
+Variable R_eq_dec : forall a1 a2 : R, {a1 = a2} + {a1 <> a2}.
 
 (*Continuity via extensional trees implies continuity via moduli*)
-Lemma seq_cont_to_self_modulus_cont (F : (I -> O) -> A) : seq_cont F -> self_modulus_cont F.
+Lemma seq_cont_to_self_modulus_cont (F : (Q -> A) -> R) : seq_cont F -> self_modulus_cont F.
 Proof.
   move=> [] tau. intros [F_eq_eval] % Sigma1_choice.
   2:{ intros x n. destruct eval_ext_tree. 1: right. 1: congruence.
-      edestruct A_eq_dec. 1:{ left. f_equal. apply e. } right. congruence. }
+      edestruct R_eq_dec. 1:{ left. f_equal. apply e. } right. congruence. }
   exists (fun alpha => eval_ext_tree_trace_aux tau alpha (projT1 (F_eq_eval alpha)) nil).
   split.
   - intros alpha beta H.
-    eapply (eval_ext_tree_output_unique (I := I)).
+    eapply (eval_ext_tree_output_unique (Q := Q)).
     + rewrite - (projT2 (F_eq_eval alpha)) ; unfold eval_ext_tree.
       now rewrite (@eval_ext_tree_continuous tau (projT1 (F_eq_eval alpha)) nil alpha beta H).
     + now eapply (projT2 (F_eq_eval beta)).
@@ -850,7 +851,7 @@ Proof.
     destruct F_eq_eval as [n Hn], F_eq_eval as [m Hm]; cbn in *.
     revert m g Hm Hn.
     unfold eval_ext_tree.
-    generalize (@nil O).
+    generalize (@nil A).
     clear. induction n; cbn; intros.
     + destruct m; cbn. 1: reflexivity. rewrite Hn. reflexivity.
     + destruct m; cbn in *.
@@ -863,7 +864,7 @@ Qed.
 
 (** *** Special case: If Q = nat then moduli can be nat *)
 
-Lemma modulus_at_to_modulus_at_nat (F : (nat -> O) -> A) f l :
+Lemma modulus_at_to_modulus_at_nat (F : (nat -> A) -> R) f l :
   modulus_at F f l -> modulus_at_nat F f (\max_(i <- l) i).
 Proof.
   intros H g Hg. eapply H.
@@ -873,7 +874,7 @@ Proof.
   rewrite mem_iota ltnS leq_bigmax_seq => //.
 Qed.
 
-Lemma modulus_at_nat_to_modulus_at (F : (nat -> O) -> A) f n :
+Lemma modulus_at_nat_to_modulus_at (F : (nat -> A) -> R) f n :
   modulus_at_nat F f n -> modulus_at F f (iota 0 n.+1).
 Proof.
   intros H g Hg. eapply H.
@@ -888,14 +889,14 @@ Qed.
 (* In this section, we assume queries are nat, and prove that self-modulating moduli
 of standard continuity imply sequential continuity.*)
 
-Implicit Type (F : (nat -> O) -> A).
-Implicit Types (tau : @ext_tree nat O A).
+Implicit Type (F : (nat -> A) -> R).
+Implicit Types (tau : @ext_tree nat A R).
 
-Definition from_pref (a_dflt : O) (l : seq O) : nat -> O := nth a_dflt l.
+Definition from_pref (a_dflt : A) (l : seq A) : nat -> A := nth a_dflt l.
 
 (*The function that goes from a modulus to an extensional tree.*)
 
-Definition modulus_to_ext_tree (a_dflt : O) F (M : (nat -> O) -> seq nat) (l : seq O) : @result nat A :=
+Definition modulus_to_ext_tree (a_dflt : A) F (M : (nat -> A) -> seq nat) (l : seq A) : @result nat R :=
   let g := from_pref a_dflt l in
     if \max_(i <- M g) i < size l
     then output (F g)
@@ -937,7 +938,7 @@ Proof.
       rewrite /from_pref (nth_map 0)  ?size_iota // nth_iota // add0n.
 Qed.
 
-Lemma self_modulus_seq_cont F (a : O) : 
+Lemma self_modulus_seq_cont F (a : A) : 
   self_modulus_cont F -> seq_cont F.
 Proof.
   intros (M & MmodF & MmodM).
@@ -981,11 +982,10 @@ Proof. by move=> eqs12 /eq_cat; move/(_ eqs12) => []. Qed.
 
 Section sec.
 
-Variables A O : Type.
-(*Variable a : A.*)
 Notation Q := nat.
+Variables A R : Type.
 
-Implicit Type Y : (Q -> A) -> O.
+Implicit Type Y : (Q -> A) -> R.
 Implicit Types α β : Q -> A.
 Implicit Types n : nat.
 Implicit Types γ : list A -> bool.
@@ -1087,8 +1087,8 @@ Proof.
   exists (N α) => *; exact: HNY.
 Qed.
 
-Theorem seq_cont_equiv_self_modulus_cont (a0 : A) (F : (Q -> A) -> O) :
-  inhabited ( forall a1 a2 : O, {a1 = a2} + {a1 <> a2}) ->
+Theorem seq_cont_equiv_self_modulus_cont (a0 : A) (F : (Q -> A) -> R) :
+  inhabited ( forall a1 a2 : R, {a1 = a2} + {a1 <> a2}) ->
   seq_cont F <-> continuous_modulus_cont F.
 Proof.
   intros [D].
@@ -1117,9 +1117,9 @@ End sec.
 
 Section Cantor.
 
-Variable A : Type.
-Implicit Type (F : (nat -> bool) -> A).
-Implicit Type (d : @dialogue nat bool A).
+Variable R : Type.
+Implicit Type (F : (nat -> bool) -> R).
+Implicit Type (d : @dialogue nat bool R).
 (*From a proof of uniform continuity, we build a dialogue tree*)
 
 (*A way to interpret lists of pairs as functions*)
