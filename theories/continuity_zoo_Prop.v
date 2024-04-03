@@ -636,7 +636,104 @@ Qed.
 
 (** *** Sequential continuity is equivalent to sequential continuity with interrogations *)
 
-(* TODO *)
+Implicit Type f : Q -> A.
+Implicit Type τ : @ext_tree Q A R.
+
+Lemma interrogation_plus τ f n l  :
+  interrogation f l τ ->
+  eval_ext_tree (fun l' => τ (l ++ l')) f n = eval_ext_tree τ f (size l + n).
+Proof.
+  unfold eval_ext_tree. generalize (@nil A).      
+  intros a H. induction H in a, n |- *.
+  - reflexivity.
+  -
+Admitted.
+
+Lemma interrogation_cons q1 a1 a2 τ (f : Q -> A) :
+  τ nil = ask q1 ->
+  f q1 = a1 ->
+  interrogation f a2 (fun l => τ (a1 :: l)) ->
+  interrogation f (a1 :: a2) τ.
+Proof.
+  intros H1 H2.
+  induction a2 in a1, H1, H2 |- * using List.rev_ind.
+  - inversion 1; subst.
+    + eapply Ask with (l := nil); eauto. constructor.
+    + destruct l; cbn in *; congruence.
+  - inversion 1.
+    + destruct a2; cbn in *; congruence.
+    + subst. setoid_rewrite (cats1 a2 x) in H0.
+      eapply rcons_inj in H0. inversion H0. subst.
+      eapply Ask with (l := f q1 :: a2); eauto.
+Qed.
+
+Lemma interrogation_ext τ τ' a f :
+  (forall l, τ l = τ' l) ->
+  interrogation f a τ <-> interrogation f a τ'.
+Proof.
+  intros. split; induction 1; econstructor; eauto; congruence.
+Qed.
+
+Lemma interrogation_app a1 a2 τ f :
+  interrogation f a1 τ ->
+  interrogation f a2 (fun l => τ (a1 ++ l)) ->
+  interrogation f (a1 ++ a2) τ.
+Proof.
+  induction 1 in a2 |- *; cbn.
+  - eauto.
+  - intros. rewrite cat_rcons.
+    eapply IHinterrogation.
+    eapply interrogation_cons.
+    + rewrite cats0. eassumption.
+    + eauto.
+    + eapply interrogation_ext; eauto. cbn. intros. now rewrite cat_rcons.
+Qed.
+
+Lemma eval_ext_tree_to_interrogation τ f n o :
+  eval_ext_tree τ f n = output o ->
+  exists ans, size ans <= n /\ interrogation f ans τ /\ τ ans = output o.
+Proof.
+  unfold eval_ext_tree.
+  change ( eval_ext_tree_aux τ f n [::] = output o ->
+           exists ans : seq A, size ans <= n /\ interrogation f ans (fun l => τ ([::] ++ l)) /\ τ ([::] ++ ans) = output o).
+  generalize (@nil A). intros l H. 
+  induction n in l, H |- *.
+  - exists nil. repeat split. 1: econstructor. now rewrite cats0.
+  - cbn in H. destruct τ eqn:E; try congruence.
+    + eapply IHn in H as (ans & H3 & H1 & H2).
+      exists (f q :: ans). repeat split.
+      * simpl. lia.
+      * eapply interrogation_cons; eauto.
+        1: now rewrite cats0.
+        eapply interrogation_ext. 2: eassumption.
+        intros. cbn. now rewrite cat_rcons.
+      * now rewrite <- H2, cat_rcons.
+    + inversion H. subst.
+      edestruct IHn with (l := l).
+      1: eapply eval_ext_tree_constant; eauto.
+      firstorder.
+Qed.
+
+Lemma interrogation_equiv_eval_ext_tree τ f o :
+    (exists (ans : list A), interrogation f ans τ /\ τ ans = output o) <-> (exists n : nat, eval_ext_tree τ f n = output o).
+Proof.
+  split.
+  + intros (ans & Hi & Hout).
+    exists (length ans + 1).  rewrite <- interrogation_plus; eauto.
+    cbn. rewrite cats0 Hout. reflexivity.
+  + intros [n H]. eapply eval_ext_tree_to_interrogation in H as (? & ? & ? & ?); eauto.
+Qed.
+
+Lemma continuous_via_interrogations_iff (F : (Q -> A) -> R) :
+  seq_cont F <-> seq_cont_via_interrogations F.
+Proof.
+  split.
+  - intros [τ H]. exists τ. intros f.
+    eapply interrogation_equiv_eval_ext_tree. eapply H.
+  - intros [τ H]. exists τ. intros f.
+    eapply interrogation_equiv_eval_ext_tree. eapply H.
+Qed.
+Print Assumptions continuous_via_interrogations_iff.
 
 (** *** Sequential continuity is equivalent to interaction tree continuity  *)
 
