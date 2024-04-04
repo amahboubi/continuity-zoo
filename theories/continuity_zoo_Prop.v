@@ -1370,11 +1370,13 @@ Qed.
 
 End Cantor.
 
-(** Kawaii's "Principles of bar induction and continuity on Baire space" has the notions of neighborhood function and Brouwer operation
+(** Kawaii's "Principles of bar induction and continuity on Baire space" has the notions of neighborhood function and Brouwer operation, and derived continuity notions based on them. Brouwer operations are an inductive _predicate_ on neighborhood functions.
 
+conjecture 1: a neighborhood function is just an extensional tree,
+thus neigh_cont is equivalent to Bseq_cont
 
-easy (?) conjecture: a neighborhood function is just an extensional tree,
-a Brouwer operation can be turned into the existence of a Brouwer tree (through the Acc trick used in extra_principles.v)
+conjecture 2: a Brouwer operation can be turned into the existence of a Brouwer tree (through the Acc trick used in extra_principles.v). Thus, Bneigh_cont is equivalent to dialogue_cont_Brouwer.
+The underlying insight is: The existence of a Brouwer tree is equivalent to the existence of an extensional tree that is inductively barred. This equivalence only works in the Brouwer / Baire case, not in general.
 
 *)
 
@@ -1425,3 +1427,24 @@ Proof.
   intros (γ & H1 % K0K & H2).
   firstorder.
 Qed.
+
+(* Lemma Bneigh_cont_equiv_dialogue_cont_Brouwer F : *)
+(*   Bneigh_cont F <-> dialogue_cont_Brouwer F. *)
+(* Proof. *)
+(*   split. *)
+(*   - admit. *)
+(*   - intros [b Hb]. *)
+(*     unshelve eexists. *)
+(*     + clear Hb. induction b. *)
+(*       * exact (fun _ => Some r). *)
+(*       * intros []. *)
+(*         -- exact None. *)
+(*         -- eapply (H n l). *)
+(*     + induction b in F, Hb |- *; cbn in *. *)
+(*       * split. 1: econstructor. *)
+(*         intros α. *)
+(*         exists 0. split; auto. lia. *)
+(*       * split. *)
+(*         -- econstructor => //. *)
+(*            intros. eapply H.  *)
+(*         -- intros α. *)
