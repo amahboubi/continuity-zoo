@@ -367,6 +367,16 @@ Proof.
   now rewrite aux.
 Qed.
 
+Lemma Beval_ext_tree_output_unique (tau : Brouwer_ext.Bext_tree O A) f l m n1 n2 o1 o2 :
+  Beval_ext_tree_aux tau f n1 l m = Some o1 ->
+  Beval_ext_tree_aux tau f n2 l m = Some o2 ->
+  o1 = o2.
+Proof.
+  elim: n1 n2 m l => [| n1 ihn1] [ | n2] m l /=.
+  all: try by move=> -> [].
+  all: case: (tau l) => //; try congruence.
+  eapply ihn1.
+Qed.
 
 Lemma Bseq_cont_valid2_to_dialogue F :
   (exists tau : Bext_tree,
@@ -389,7 +399,13 @@ Proof.
     now erewrite Beval_ext_tree_map_aux in HF.
   }
   eapply BI in Help.
-  eapply Sigma1_choice in HF as [HF] ; [ | admit].
+  eapply Sigma1_choice in HF as [HF].
+  2:{
+    intros α n. destruct Beval_ext_tree eqn:E.
+    - left. destruct (HF α) as [m].
+      f_equal. eapply Beval_ext_tree_output_unique; eauto.
+    - firstorder congruence.
+  }
   revert Help HF ; unfold inductively_barred, Beval_ext_tree.
   generalize (@nil O) ; intros l Help HF.
   unfold dialogue_cont_Brouwer.
@@ -431,7 +447,7 @@ Proof.
         induction n ; [ reflexivity | cbn ; intros alpha u i].
         destruct (tau (rcons u (alpha i))) ; [reflexivity |].
         now eapply IHn.
-Admitted.
+Qed.
 
 Lemma Bseq_cont_valid_to_dialogue F :
   (exists tau : Bext_tree,
