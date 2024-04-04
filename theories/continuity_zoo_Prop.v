@@ -946,14 +946,14 @@ Proof.
   exact: ihn.
 Qed.
 
-Variable R_eq_dec : forall a1 a2 : R, {a1 = a2} + {a1 <> a2}.
-
 (*Continuity via extensional trees implies continuity via moduli*)
 Lemma seq_cont_to_self_modulus_cont (F : (Q -> A) -> R) : seq_cont F -> self_modulus_cont F.
 Proof.
   move=> [] tau. intros [F_eq_eval] % Delta0_choice.
-  2:{ intros x n. destruct eval_ext_tree. 1: right. 1: congruence.
-      edestruct R_eq_dec. 1:{ left. f_equal. apply e. } right. congruence. }
+  2:{ intros f n. destruct eval_ext_tree eqn:E. 1: right. 1: congruence.
+      left. destruct (p f).
+      f_equal. eapply eval_ext_tree_output_unique; eauto.
+  }
   exists (fun alpha => eval_ext_tree_trace_aux tau alpha (projT1 (F_eq_eval alpha)) nil).
   split.
   - intros alpha beta H.
@@ -1202,12 +1202,10 @@ Proof.
 Qed.
 
 Theorem seq_cont_equiv_self_modulus_cont (a0 : A) (F : (Q -> A) -> R) :
-  inhabited ( forall a1 a2 : R, {a1 = a2} + {a1 <> a2}) ->
   seq_cont F <-> continuous_modulus_cont F.
 Proof.
-  intros [D].
   split.
-  - intros contF. eapply seq_cont_to_self_modulus_cont in contF as (N & HF & HN). 2: assumption.
+  - intros contF. eapply seq_cont_to_self_modulus_cont in contF as (N & HF & HN). 
     eexists; split; eauto.
     intros f. exists (N f). red in HN. refine (HN f).
   - intros (N' & HF' & HN'). eapply self_modulus_seq_cont. 1: assumption.

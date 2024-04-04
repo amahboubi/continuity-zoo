@@ -181,6 +181,7 @@ Proof.
     (*Making use of Hwf and Hb, we can extract a uniform n : nat that constitutes
      the maximum number of questions the evaluation of (pred_to_ext_tree P) is
      going to take. We can then conclude by induction on this n.*)
+    rename r into a.
     assert ({n : nat & forall alpha,
                    eval_ext_tree_aux (pred_to_ext_tree P) alpha n l = output a})
       as [n Hyp].
@@ -399,7 +400,7 @@ Proof.
     now erewrite Beval_ext_tree_map_aux in HF.
   }
   eapply BI in Help.
-  eapply Sigma1_choice in HF as [HF].
+  eapply Delta0_choice in HF as [HF].
   2:{
     intros α n. destruct Beval_ext_tree eqn:E.
     - left. destruct (HF α) as [m].
