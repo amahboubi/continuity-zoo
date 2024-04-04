@@ -1,5 +1,5 @@
 From mathcomp Require Import all_ssreflect.
-Require Import Program Lia.
+Require Import Program Lia ConstructiveEpsilon.
 From mathcomp Require Import zify.
 From Equations Require Import Equations.
 Require Import extra_principles.
@@ -10,11 +10,15 @@ Unset Printing Implicit Defensive.
 Set Bullet Behavior "Strict Subproofs".
 Set Default Goal Selector "!".
 
-Lemma Sigma1_choice {X} (R : X -> nat -> Prop) :
+Lemma Delta0_choice {X} (R : X -> nat -> Prop) :
   (forall x n, {R x n} + {~ R x n}) -> 
   (forall x, exists n, R x n) ->
   inhabited (forall x, {n | R x n}).
-Admitted.
+Proof.
+  econstructor.
+  intros x.
+  eapply constructive_indefinite_ground_description_nat; eauto.
+Qed.
 
 (** * Definitions  *)
 
@@ -639,15 +643,25 @@ Qed.
 Implicit Type f : Q -> A.
 Implicit Type τ : @ext_tree Q A R.
 
-Lemma interrogation_plus τ f n l  :
-  interrogation f l τ ->
-  eval_ext_tree (fun l' => τ (l ++ l')) f n = eval_ext_tree τ f (size l + n).
+Lemma interrogation_plus τ f n ans a :
+  interrogation f ans (fun l => τ (a ++ l)) ->
+  eval_ext_tree_aux τ f (size ans + n) a =
+    eval_ext_tree_aux τ f n (a ++ ans).
 Proof.
-  unfold eval_ext_tree. generalize (@nil A).      
-  intros a H. induction H in a, n |- *.
-  - reflexivity.
-  -
-Admitted.
+  intros Hi.
+  remember (fun l => τ (a ++ l)) as τ'.
+  revert τ Heqτ' n.
+  revert a.
+  induction Hi; simpl; intros.
+  + rewrite ?cats0 => //.
+  + subst.
+    rewrite size_rcons.
+    replace ((size l).+1 + n) with (size l + S n) by lia.
+    rewrite IHHi.
+    * cbn. rewrite H0.
+      now rewrite rcons_cat.
+    * reflexivity.
+Qed.
 
 Lemma interrogation_cons q1 a1 a2 τ (f : Q -> A) :
   τ nil = ask q1 ->
@@ -718,10 +732,13 @@ Lemma interrogation_equiv_eval_ext_tree τ f o :
     (exists (ans : list A), interrogation f ans τ /\ τ ans = output o) <-> (exists n : nat, eval_ext_tree τ f n = output o).
 Proof.
   split.
-  + intros (ans & Hi & Hout).
-    exists (length ans + 1).  rewrite <- interrogation_plus; eauto.
-    cbn. rewrite cats0 Hout. reflexivity.
-  + intros [n H]. eapply eval_ext_tree_to_interrogation in H as (? & ? & ? & ?); eauto.
+  - intros (ans & Hi & Hout).
+    exists (length ans + 1).
+    unfold eval_ext_tree.
+    rewrite interrogation_plus => //.
+    simpl.
+    now rewrite Hout.
+  - intros [n H]. eapply eval_ext_tree_to_interrogation in H as (? & ? & ? & ?); eauto.
 Qed.
 
 Lemma continuous_via_interrogations_iff (F : (Q -> A) -> R) :
@@ -934,7 +951,7 @@ Variable R_eq_dec : forall a1 a2 : R, {a1 = a2} + {a1 <> a2}.
 (*Continuity via extensional trees implies continuity via moduli*)
 Lemma seq_cont_to_self_modulus_cont (F : (Q -> A) -> R) : seq_cont F -> self_modulus_cont F.
 Proof.
-  move=> [] tau. intros [F_eq_eval] % Sigma1_choice.
+  move=> [] tau. intros [F_eq_eval] % Delta0_choice.
   2:{ intros x n. destruct eval_ext_tree. 1: right. 1: congruence.
       edestruct R_eq_dec. 1:{ left. f_equal. apply e. } right. congruence. }
   exists (fun alpha => eval_ext_tree_trace_aux tau alpha (projT1 (F_eq_eval alpha)) nil).
