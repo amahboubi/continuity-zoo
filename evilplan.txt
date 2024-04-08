@@ -1,5 +1,5 @@
 Current insights: 
-- Continuity Axiom stating CA: forall (Q A R : Type), forall (F : (Q -> A) -> R), dialogue_continuous F is inconsistent, even if dialogue_continuous is squashed in Prop. Reason: CA implies classical logic (see Martin's PhD), and classical logic implies that GBI for Q := nat -> bool and A := nat is inconsistent. Finally, CA implies GBI.
+- Continuity Axiom stating CA: forall (Q A R : Type), forall (F : (Q -> A) -> R), dialogue_continuous F is inconsistent, even if dialogue_continuous is squashed in Prop. Reason: CA implies classical logic (see Martin's PhD), and classical logic implies that GBI for Q := nat -> Prop and A := nat is inconsistent. Finally, CA implies GBI.
 - Continuity Axiom stating CA: forall (Q A R : retractions_of_nat), forall (F : (Q -> A) -> R), dialogue_continuous F implies Markov's principle. Funny, knowing that almost the same model that allows to prove continuity of all functions (nat -> nat) -> nat also provides negation of Markov's principle (see Coquand-Manaa 2017)
 - Bar Induction implies that sequential continuity <-> dialogue continuity when the question type Q is nat. However, for more complex types, we may end up with three distinct notions, each stronger than the previous one :
 	• sequential continuity
