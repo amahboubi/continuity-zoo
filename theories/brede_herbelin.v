@@ -311,76 +311,40 @@ Qed.
 
 End Technical.
 
-Section DC_GDC_BI_GBI.
+Section GDC_GBI_Definition.
   Variables A B : Type.
-Implicit Type (T : seq (nat * B) -> Type).
+  Implicit Type (T : seq (A * B) -> Prop).
 
-Definition is_tree (P : list B -> Type) :=
-  forall u n, P u -> P (take n u).
-
-Definition Downarborification (P : list B -> Type) (u : list B) : Type :=
-  forall n, P (take n u).
-
-Notation " ↓⁻ T " := (Downarborification T) (at level 80).
-
-
-CoInductive pruning (P : list B -> Type) : list B -> Type :=
-  prune a u : P u -> pruning P (rcons u a) -> pruning P u.
-
-Definition choicefun (P : list B -> Type) :=
-  {alpha : nat -> B & forall n : nat, P [seq (alpha i) | i <- iota 0 n] }.
-
-Definition DC := forall (P : list B -> Type), pruning P nil -> choicefun P.
-
-Definition ABis_tree T :=
-  forall u v, List.incl v u -> T u -> T v.
-
-Inductive ABUparborification T : list (nat * B) -> Type :=
+Inductive ABUparborification T : list (A * B) -> Prop :=
 | Tarbor l l' : T l -> List.incl l' l -> ABUparborification T l'.
 
-Definition ABDownarborification T u : Type :=
+Definition ABDownarborification T u : Prop :=
   forall v, List.incl v u -> T v.
 
 Notation " ⇑⁻ T " := (ABUparborification T) (at level 80).
 
 Notation " ⇓⁻ T " := (ABDownarborification T) (at level 80).
-
-
+  
 Definition ABchoicefun T :=
-  {alpha : nat -> B & forall u : list nat, T [seq (i, alpha i) | i <- u]}.
+  exists alpha : A -> B, forall u : list A, T [seq (i, alpha i) | i <- u].
 
-CoInductive ABapprox T : list (prod nat B) -> Type :=
+CoInductive ABapprox T : list (prod A B) -> Prop :=
   approx u : (⇓⁻ T) u ->
-             (forall n : nat, ~ List.In n (map fst u) ->
-                              {b : B & ABapprox T (rcons u (n, b))}) ->
+             (forall a : A, ~ List.In a (map fst u) ->
+                              exists b : B, ABapprox T (rcons u (a, b))) ->
              ABapprox T u.
 
 Definition GDC := forall T,  ABapprox T nil -> ABchoicefun T.
 
-Definition monotone {C} (P : list C -> Type) :=
-  forall l l', P l -> P (l ++ l').
-
-Inductive Upmonotonisation {C} (T : list C -> Type) : list C -> Type :=
-| mon l l' : T l -> Upmonotonisation T (l ++ l').
-
-Definition Downmonotonisation {C} (T : list C -> Type) : list C -> Type :=
-  fun u => forall v, T (u ++ v).
-
-Notation " ↑⁺ T " := (Upmonotonisation T) (at level 80).
-
-Notation " ↓⁺ T " := (Downmonotonisation T) (at level 80).
-
-
-(* A more handy version for concrete formal proofs *)
 Definition ABbarred T :=
-  forall α : nat -> B, {u : list nat & T [seq (i, α i) | i <- u]}.
+  forall α : A -> B, exists u : list A, T [seq (i, α i) | i <- u].
 
-Inductive indbarred T : list (nat * B) -> Type :=
+Inductive indbarred T : list (A * B) -> Prop :=
   | ieta u' u : T u -> List.incl u u' -> indbarred T u'
   | ibeta a v : ~ List.In a (map fst v) ->
               (forall b, indbarred T (v ++ [:: (a,b)])) -> indbarred T v.
 
-Inductive indbarred_spec T :  list (nat * B) -> Type := 
+Inductive indbarred_spec T :  list (A * B) -> Prop := 
  |Eta : forall u l, T (l ++ u) -> indbarred_spec T l
  |Beta : forall u' u a b, T u' -> indbarred_spec T (rcons (u' ++ u) (a, b)).
 
@@ -390,13 +354,59 @@ Arguments Eta {T} u l.
 Definition GBI T := ABbarred T -> indbarred T [::].
 
 
-Definition ABmonotone {C} (P : list C -> Type) :=
+End GDC_GBI_Definition.
+
+Section DC_GDC_BI_GBI.
+  Variables B : Type.
+  Implicit Type (T : seq (nat * B) -> Prop).
+
+  Notation " ⇑⁻ T " := (ABUparborification T) (at level 80).
+
+Notation " ⇓⁻ T " := (ABDownarborification T) (at level 80).
+
+Definition is_tree (P : list B -> Prop) :=
+  forall u n, P u -> P (take n u).
+
+Definition Downarborification (P : list B -> Prop) (u : list B) : Prop :=
+  forall n, P (take n u).
+
+Notation " ↓⁻ T " := (Downarborification T) (at level 80).
+
+
+CoInductive pruning (P : list B -> Prop) : list B -> Prop :=
+  prune a u : P u -> pruning P (rcons u a) -> pruning P u.
+
+Definition choicefun (P : list B -> Prop) :=
+  exists alpha : nat -> B,  forall n : nat, P [seq (alpha i) | i <- iota 0 n].
+
+Definition DC := forall (P : list B -> Prop), pruning P nil -> choicefun P.
+
+Definition ABis_tree T :=
+  forall u v, List.incl v u -> T u -> T v.
+
+
+
+Definition monotone {C} (P : list C -> Prop) :=
+  forall l l', P l -> P (l ++ l').
+
+Inductive Upmonotonisation {C} (T : list C -> Prop) : list C -> Prop :=
+| mon l l' : T l -> Upmonotonisation T (l ++ l').
+
+Definition Downmonotonisation {C} (T : list C -> Prop) : list C -> Prop :=
+  fun u => forall v, T (u ++ v).
+
+Notation " ↑⁺ T " := (Upmonotonisation T) (at level 80).
+
+Notation " ↓⁺ T " := (Downmonotonisation T) (at level 80).
+
+
+Definition ABmonotone {C} (P : list C -> Prop) :=
   forall l l', List.incl l l' -> P l -> P l'.
 
-Inductive ABUpmonotonisation {C} (T : list C -> Type) : list C -> Type :=
+Inductive ABUpmonotonisation {C} (T : list C -> Prop) : list C -> Prop :=
 | Tmon l l' : T l -> List.incl l l' -> ABUpmonotonisation T l'.
 
-Definition ABDownmonotonisation {C} (T : list C -> Type) : list C -> Type :=
+Definition ABDownmonotonisation {C} (T : list C -> Prop) : list C -> Prop :=
   fun u => forall v, List.incl u v -> T v.
 
 Notation " ⇑⁺ T " := (ABUpmonotonisation T) (at level 80).
@@ -412,7 +422,7 @@ Proof.
 Qed.
 
 
-Lemma monot_barred {C} (P : list C -> Type) : barred P -> barred (Upmonotonisation P).
+Lemma monot_barred {C} (P : list C -> Prop) : barred P -> barred (Upmonotonisation P).
 Proof.
   intros H alpha ; specialize (H alpha).
   destruct H as [l [Hpref HP]].
@@ -476,39 +486,39 @@ Proof.
 Qed.
 
 
-Definition TtoP (T : list (nat * B) -> Type) (l : list B) : Type :=
+Definition TtoP (T : list (nat * B) -> Prop) (l : list B) : Prop :=
   T (ord l).
 
 Notation " [| T |] " := (TtoP T) (at level 8).
 
-Inductive PtoT (P : list B -> Type) : list (nat * B) -> Type :=
+Inductive PtoT (P : list B -> Prop) : list (nat * B) -> Prop :=
 | ptot : forall l, P l -> PtoT P (ord l).
 
-Definition PtoT_dual (P : list B -> Type) : list (nat * B) -> Type :=
+Definition PtoT_dual (P : list B -> Prop) : list (nat * B) -> Prop :=
   fun u => forall v, u = ord v -> P v.
 
 Notation " [ P ]ₐ " := (PtoT P) (at level 8).
 Notation " [ P ]ₑ " := (PtoT_dual P) (at level 8).
 
-Definition TtoP_PtoT_ret P : forall l, P l -> [| [ P ]ₐ |] l :=
+Definition TtoP_PtoT_ret (P : list B -> Prop) : forall l, P l -> [| [ P ]ₐ |] l :=
   fun l Hl => ptot Hl.
 
-Lemma TtoP_PtoT_inv P : forall l, [| [ P ]ₐ |] l -> P l.
+Lemma TtoP_PtoT_inv (P : list B -> Prop) : forall l, [| [ P ]ₐ |] l -> P l.
 Proof.
   intros u H.
   inversion H.
-  now eapply ord_inj in H1 ; subst.
+  now eapply ord_inj in H0 ; subst.
 Qed.  
 
 
-Lemma PtoT_TtoP_inv (T : list (nat * B) -> Type) l :
+Lemma PtoT_TtoP_inv (T : list (nat * B) -> Prop) l :
   [ [| T |] ]ₐ l -> T l. 
 Proof.
   unfold TtoP ; intros H.
   inversion H ; now subst.
 Qed.
 
-Lemma PtoT_TtoP_ret (T : list (nat * B) -> Type) u :
+Lemma PtoT_TtoP_ret (T : list (nat * B) -> Prop) u :
   T (ord u) -> [ [| T |] ]ₐ (ord u). 
 Proof.
   intro H ; econstructor.
@@ -516,10 +526,10 @@ Proof.
 Qed.
 
 Definition DCProp11 :=
-  forall (P : list B -> Type) u, P u ->  [| ⇑⁻ [ P ]ₐ |] u.
+  forall (P : list B -> Prop) u, P u ->  [| ⇑⁻ [ P ]ₐ |] u.
 
 Definition BIProp11Down :=
-  forall (P : list B -> Type) u, monotone P -> P u -> [| ⇓⁺ [ P ]ₑ |] u.
+  forall (P : list B -> Prop) u, monotone P -> P u -> [| ⇓⁺ [ P ]ₑ |] u.
 
 Definition DCProp11_rev :=
   forall P u, is_tree P -> [| ⇑⁻ [ P ]ₐ |] u -> P u.
@@ -593,9 +603,9 @@ Lemma Uparbor_PtoT_P : DCProp11_rev.
 Proof.
   intros P u Htree HP ; unfold TtoP in *.
   inversion HP ; subst.
-  inversion X ; subst.
-  apply ord_incl' in H.
-  rewrite - ord_take in H ; apply ord_inj in H ; rewrite H.
+  inversion H ; subst.
+  apply ord_incl' in H0.
+  rewrite - ord_take in H0 ; apply ord_inj in H0 ; rewrite H0.
   unfold is_tree in * ; now apply Htree.
 Qed.
 
@@ -673,7 +683,7 @@ Proof.
                     T (ord u) ->
                     pruning (fun l : seq B => T (ord l)) (rcons u c) ->
                     List.incl w (ord u) -> n.+1 - size u = m0 ->
-                    {b : B & ABapprox T (rcons w (n, b))}
+                    exists b : B, ABapprox T (rcons w (n, b))
             with
               | 0 => _
             | S m => _
@@ -958,7 +968,7 @@ Proof.
   now rewrite <- map_take, take_iota, minnn in Halpha.
 Qed.
 
-Lemma pruning_pruning_Downarbor P l :
+Lemma pruning_pruning_Downarbor (P : list B -> Prop) l :
   (P l -> forall n, P (take n l)) ->
   pruning P l ->
   pruning (Downarborification P) l.
@@ -985,7 +995,7 @@ Proof.
 Qed.
 
 (*For the first direction, we prove that GDC is equivalent to its restriction to
- predicates T : list (nat * B) -> Type that are trees.*)
+ predicates T : list (nat * B) -> Prop that are trees.*)
 
 
 Lemma GDC_tree T :
@@ -1033,7 +1043,7 @@ and pruning_pruning_Downarbor to only deal with arborifications of the predicate
 at hand.*)
 
 
-Lemma Theorem5rev : GDC -> DC.
+Lemma Theorem5rev : (@GDC nat B) -> DC.
 Proof.
   intros Hyp P Hprun.
   apply choicefun_Downarbor_choicefun.
@@ -1051,7 +1061,7 @@ Qed.
 
 (*The first one, dual of choicefun_Downarbor_choicefun, goes though.*)
 
-Lemma barred_barred_Upmon (P : list B -> Type) :
+Lemma barred_barred_Upmon (P : list B -> Prop) :
   barred P ->
   barred (Upmonotonisation P).
 Proof.
@@ -1066,7 +1076,7 @@ Qed.
 (*Unfortunately, the second one, dual of pruning_pruning_Downarbor, does not seem
  provable. *)
 
-Lemma hered_Upmon_hered (P : list B -> Type) l :
+Lemma hered_Upmon_hered (P : list B -> Prop) l :
   (forall n, P (take n l) -> P l) ->
   hereditary_closure (Upmonotonisation P) l ->
   hereditary_closure P l.
@@ -1091,7 +1101,7 @@ Abort.
 
 (*A weaker version is true, assuming that the predicate P is decidable.*)
 
-Lemma hered_Upmon_hered_dec (P : list B -> Type) (l : list B) :
+Lemma hered_Upmon_hered_dec (P : list B -> Prop) (l : list B) :
   (forall u, (P u) + (P u -> False)) ->
   hereditary_closure (Upmonotonisation P) l ->
   (forall n, P (take n l) -> False) ->
@@ -1117,8 +1127,8 @@ Qed.
  restriction to monotone predicates.*)
   
 Lemma GBI_monot :
-  (forall T : list (nat * B) -> Type, ABmonotone T -> GBI T) ->
-  forall (T : list (nat * B) -> Type), GBI T.
+  (forall T : list (nat * B) -> Prop, ABmonotone T -> GBI T) ->
+  forall (T : list (nat * B) -> Prop), GBI T.
 Proof.
   intros HBI T Hbar.
   suff: forall l,
@@ -1131,7 +1141,7 @@ Proof.
   }
   clear HBI ; intros l Hl.
   induction Hl.
-  { inversion t as [l l' Hl Heq].
+  { inversion H as [l l' Hl Heq].
     subst.
     econstructor ; [eassumption | ].
     now eapply List.incl_tran ; eassumption.
@@ -1144,8 +1154,8 @@ Qed.
 
 
 Lemma BI_GBI : 
-  (forall P : list B -> Type, BI_ind P) ->
-  forall (T : list (nat * B) -> Type), GBI T.
+  (forall P : list B -> Prop, BI_ind P) ->
+  forall (T : list (nat * B) -> Prop), GBI T.
 Proof.
   intros HBI.
   apply GBI_monot ; intros T Hmon HTbar.
@@ -1159,8 +1169,8 @@ Qed.
  barred_Upmon_barred and hered_Upmon_hered_dec. *)
 
 Lemma GBI_BI_mon :
-  (forall (T : list (nat * B) -> Type), GBI T) ->
-  forall P : list B -> Type, (forall u, (P u) + (P u -> False)) -> BI_ind P.
+  (forall (T : list (nat * B) -> Prop), GBI T) ->
+  forall P : list B -> Prop, (forall u, (P u) + (P u -> False)) -> BI_ind P.
 Proof.
   intros HGBI P Hdec Hbar.
   destruct (Hdec nil) as [Hnil | Hnotnil] ; [now econstructor | ].
@@ -1181,23 +1191,23 @@ End DC_GDC_BI_GBI.
 
 Section Additional_Lemmas.
 
-Variable B : Type.
+Variable B : Prop.
   
 (*These lemmas with Upmonotonisation are true, even though they do not appear
   in the proof of equivalence between GBI and BI.*)
 Definition BIProp11Up :=
-  forall (P : list B -> Type) l, P l -> TtoP (ABUpmonotonisation (PtoT P)) l.
+  forall (P : list B -> Prop) l, P l -> TtoP (ABUpmonotonisation (PtoT P)) l.
 
 Definition BIProp11Up_rev :=
-  forall (P : list B -> Type) l, monotone P -> TtoP (ABUpmonotonisation (PtoT P)) l -> P l.
+  forall (P : list B -> Prop) l, monotone P -> TtoP (ABUpmonotonisation (PtoT P)) l -> P l.
 
 Definition BIProp12Up :=
-  forall (P : list B -> Type) u,
+  forall (P : list B -> Prop) u,
     monotone P -> indbarred (ABUpmonotonisation (PtoT P)) (ord u) ->
     hereditary_closure P u.
 
 Definition BIProp12Up_rev :=
-  forall (P : list B -> Type) u, hereditary_closure P u ->
+  forall (P : list B -> Prop) u, hereditary_closure P u ->
               indbarred (ABUpmonotonisation (PtoT P)) (ord u).
 
 
@@ -1246,3 +1256,102 @@ Proof.
 Qed.
 
 End Additional_Lemmas.
+
+
+Section GDC_gen.
+
+  Print GDC.
+
+  Proposition GDC_inconsistent :
+    @GDC (nat -> Prop) nat -> False.
+  Proof.
+    unfold GDC ; intros Hyp.
+    pose (T := fun (u : seq ((nat -> Prop) * nat)) =>
+                 forall f f' n n', List.In (f, n) u ->
+                                   List.In (f', n') u ->
+                                   n = n' ->
+                                   f = f').
+    have H1 : forall u, T u ->
+                        (forall f n, List.In (f,n) u -> n < size u) ->
+                        ABapprox T u.
+    { cofix aux.
+      intros u Hu Hinf ; econstructor.
+      { unfold ABDownarborification.
+        intros v Hincl f f' n n' Hin Hin' Heqn.
+        eapply Hu ; [ apply Hincl | apply Hincl |] ; eassumption.
+      }
+      intros f Hnotin.
+      exists (size u).
+      apply aux.
+      { intros g g' n n' Hin Hin' Heqn.
+        rewrite <- cats1 in Hin, Hin'.
+        apply List.in_app_or in Hin, Hin'.
+        destruct Hin.
+        { destruct Hin' ; [eapply Hu ; eassumption | ] ; cbn in *.
+          destruct H0 ; [ | now exfalso].
+          inversion H0 ; subst.
+          apply Hinf in H ; rewrite -> subSnn in H ; now inversion H.
+        }
+        destruct H ; [ | now exfalso] ; inversion H ; subst ; clear H.
+        destruct Hin' as [H | H] ; cbn in *.
+        2:{ destruct H ; [ | now exfalso] ; now inversion H. }
+        apply Hinf in H ; rewrite -> subSnn in H ; now inversion H.
+      }
+      intros g m Hinm ; rewrite size_rcons.
+      rewrite <- cats1 in Hinm ; apply List.in_app_or in Hinm.
+      destruct Hinm as [H | H].
+      2:{ destruct H ; [ | now exfalso] ; inversion H ; subst.
+           now apply ltnSn.
+      }
+      apply Hinf in H.
+      now apply leqW.
+    }
+    have H2 : ABapprox T nil.
+    { apply H1 ; [intros f f' n n' Hinf Hinf' | intros f n Hinf] ; now inversion Hinf. }
+    apply Hyp in H2.
+    destruct H2 as [alpha Halpha].
+    have H3 : forall f f', alpha f = alpha f' -> f = f'.
+    { intros f f' Heqf.
+      eapply (Halpha (f :: f' :: nil)) ; [left | right ; left | ] ; now trivial.
+    }
+  Abort.
+  Print GBI.
+
+  Proposition GBI_inconsistent :
+    (forall T, @GBI (nat -> Prop) nat T) -> False.
+  Proof.
+    unfold GBI ; intros HGBI.
+    pose (T:= fun (u : seq ((nat -> Prop) * nat)) =>
+                ~ ~ (exists f f' n, ~ (f = f') /\ List.In (f, n) u /\ List.In (f', n) u)).
+    have H1: ABbarred T.
+    { intros alpha.
+      unfold T.
+      admit.
+    }
+    pose (T' := fun (u : seq ((nat -> Prop) * nat)) =>
+                 forall f f' n, List.In (f, n) u ->
+                                   List.In (f', n) u ->
+                                   f = f').
+    apply (HGBI _) in H1.
+    suff: forall u, T' u -> indbarred T u -> False.
+    { intros Hyp.
+      apply (Hyp nil) ; [ | assumption].
+      unfold T' ; cbn ; intros f f' n Hinf Hinf' ; now inversion Hinf.
+    }
+    clear H1 ; unfold T, T' ;clear T T'.
+    intros u Hu Hind.
+    revert Hu ; induction Hind ; intros Hu.
+    { apply H.
+      intros [f [f' [n [Hnoteq [Hinf Hinf']]]]].
+      apply Hnoteq ; eapply Hu ; apply H0 ; eassumption.
+    }
+    
+    
+    unshelve eapply H1.
+    
+      
+    induction H1.
+      
+    
+
+End GDC_gen.
