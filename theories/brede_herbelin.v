@@ -1345,13 +1345,8 @@ Section GDC_gen.
       intros [f [f' [n [Hnoteq [Hinf Hinf']]]]].
       apply Hnoteq ; eapply Hu ; apply H0 ; eassumption.
     }
+  Abort.
     
-    
-    unshelve eapply H1.
-    
-      
-    induction H1.
-      
     
 
 End GDC_gen.
