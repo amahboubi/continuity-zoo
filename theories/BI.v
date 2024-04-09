@@ -9,6 +9,7 @@ Unset Printing Implicit Defensive.
 Set Bullet Behavior "Strict Subproofs".
 
 Require Import continuity_zoo_Prop.
+Require Import Brouwer_ext.
 
 Arguments ext_tree {_ _ _}, _ _ _.
 Arguments Btree {_ _}, _ _.
@@ -257,7 +258,6 @@ Qed.
 
 End ContinuousInduction.
 
-Require Import Brouwer_ext.
 
 Section BarInduction.
 
@@ -317,10 +317,10 @@ Proof.
     now erewrite IHl.
 Qed.
 
-Lemma Bext_tree_to_valid_valid tau f :
-  Bvalid_ext_tree (fun l => Bextree_to_valid tau l nil) f.
+Lemma Bext_tree_to_valid_valid tau :
+  Bvalid_ext_tree (fun l => Bextree_to_valid tau l nil).
 Proof.
-  intros k a H.
+  intros f k a H.
   erewrite <- iota_rcons ; cbn.
   erewrite <- cats1.
   erewrite map_cat.
@@ -334,7 +334,7 @@ Lemma Bseq_cont_to_Bseq_cont_valid F :
    ) ->
   exists tau : Bext_tree,
            (forall alpha, exists n : nat, Beval_ext_tree tau alpha n = Some (F alpha)) /\
-             (forall alpha, Bvalid_ext_tree tau alpha).
+             (Bvalid_ext_tree tau).
 Proof.
   intros [tau Htau].
   exists (fun l => Bextree_to_valid tau l nil).
@@ -353,7 +353,7 @@ Definition Bvalid_ext_tree2 (tau : Bext_tree) :=
   forall l a,  tau l = Some a -> forall o, tau (rcons l o) = Some a.
 
 Lemma Bvalid_Bvalid2 (tau : Bext_tree) :
-  (forall alpha, Bvalid_ext_tree tau alpha) -> Bvalid_ext_tree2 tau.
+  Bvalid_ext_tree tau -> Bvalid_ext_tree2 tau.
 Proof.
   intros H l a Heq o.
   unfold Bvalid_ext_tree in H.
@@ -453,7 +453,7 @@ Qed.
 Lemma Bseq_cont_valid_to_dialogue F :
   (exists tau : Bext_tree,
            (forall alpha, exists n : nat, Beval_ext_tree tau alpha n = Some (F alpha)) /\
-             (forall alpha, Bvalid_ext_tree tau alpha) ) ->
+             Bvalid_ext_tree tau) ->
   dialogue_cont_Brouwer F.
 Proof.
   intros [tau [HF Hvalid]].

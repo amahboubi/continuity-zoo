@@ -90,16 +90,20 @@ Definition Bseq_cont F :=
 
 (*The following is a bunch of lemmas that mimick lemmas about extensional trees,
  albeit for Brouwer extensional trees this time. *)
-Definition Bvalid_ext_tree (tau : Bext_tree) (f : I -> O) :=
-  forall (k : I) (a : A), tau (map f (iota 0 k)) = Some a ->
+
+Definition wf_Bext_tree (tau : Bext_tree) :=
+  forall f : I -> O,  exists n o, tau (map f (iota 0 n)) = Some o.
+
+Definition Bvalid_ext_tree (tau : Bext_tree) :=
+  forall (f : I -> O) (k : I) (a : A), tau (map f (iota 0 k)) = Some a ->
                           tau (map f (iota 0 k.+1)) = Some a.
 
-Lemma Bvalid_plus (tau : Bext_tree) f :
-  Bvalid_ext_tree tau f -> forall k j a,
+Lemma Bvalid_plus (tau : Bext_tree) :
+  Bvalid_ext_tree tau -> forall f k j a,
       tau (map f (iota 0 k)) = Some a ->
       tau (map f (iota 0 (k + j))) = Some a.
 Proof.
-move=> H k j; elim: j k => [| j ihj] k a e; first by rewrite addn0.
+move=> H f k j; elim: j k => [| j ihj] k a e; first by rewrite addn0.
 rewrite addnS; apply: (ihj k.+1).
 exact: H.
 Qed.
@@ -287,10 +291,10 @@ Proof.
 Qed.
 
 
-Lemma ext_tree_to_Bext_tree_valid tau o f:
-  Bvalid_ext_tree (extree_to_Bextree tau o) f.
+Lemma ext_tree_to_Bext_tree_valid tau o:
+  Bvalid_ext_tree (extree_to_Bextree tau o).
 Proof.
-  intros k a.
+  intros f k a.
   unfold extree_to_Bextree in *.
   unfold extree_to_extree in *.
   repeat erewrite size_map.
