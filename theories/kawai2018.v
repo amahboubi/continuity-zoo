@@ -58,29 +58,101 @@ Proof.
       * erewrite map_nth_iota0 ; [now rewrite <- Heq, take_size |].
         rewrite Heq ; now apply ltnSn.
       * erewrite map_nth_iota0 ; [ | rewrite Heq ; now apply leqnSn].
-        destruct (Monoid_isLaw__to__SemiGroup_isLaw nat) as [opA].
-        erewrite opA, take_size_cat ; [ | reflexivity].
-        symmetry ; assumption.
+        rewrite catA take_size_cat => //.
 Qed.
 
-      
 Inductive Brouwer_operation : (list nat -> option nat) -> Prop :=
-| Bconst n : Brouwer_operation (fun a => Some n)
+| Bconst γ n : (forall a, γ a = Some n) -> Brouwer_operation γ
 | Bsup γ : γ nil = None ->
            (forall n, Brouwer_operation (fun a => γ (n :: a))) ->
            Brouwer_operation γ.
 
+Inductive wf (P : nat -> bool) n :=
+| wf_ok : P n = true -> wf P n
+| wf_step : P n = false -> wf P (S n) -> wf P n.
 
-Lemma Brouwer_operation_Acc tau u :
-  Brouwer_operation tau -> Acc (fun v u => tau u = None /\ exists n, v = n :: u) u.
+Inductive wf' (P : nat -> bool) n :=
+| wf_one : (P n = false -> wf' P (S n)) -> wf' P n.
+
+Inductive Brouwer_operation_at : (list nat -> option nat) -> list nat -> Prop :=
+| Bconst_at l γ n : (forall a, γ (l ++ a) = Some n) -> Brouwer_operation_at γ l
+| Bsup_at l γ : γ l = None ->
+           (forall n, Brouwer_operation_at γ (rcons l n)) ->
+           Brouwer_operation_at γ l.
+
+Inductive Brouwer_operation_at' (γ : list nat -> option nat) (l : list nat) : Prop :=
+| Bsup_at' : (γ l = None \/ ~ (exists n, forall a, γ (l ++ a) = Some n) ->
+                (forall n, Brouwer_operation_at' γ (rcons l n))) ->
+                Brouwer_operation_at' γ l.
+
+Inductive Brouwer_operation_at_Type (γ : list nat -> option nat) (l : list nat) : Type :=
+| Bsup_at_Type : (γ l = None ->
+              (forall n, Brouwer_operation_at_Type γ (rcons l n))) ->
+             Brouwer_operation_at_Type γ l.
+
+Lemma Brouwer_operation_at'_spec1 γ l :
+  Brouwer_operation_at γ l -> Brouwer_operation_at' γ l.
 Proof.
-  intros Hyp ; revert u ; induction Hyp as [ | tau Heq k IHk] ; intros u.
-  - econstructor.
-    intros v [H1 H2].
-    now inversion H1.
-  - econstructor ; intros v [H1 [n Hequv]].
-    subst.
-Abort.
+  (* split. *)
+  - induction 1.
+    + econstructor. intros. enough (None = Some n) by congruence.
+      rewrite <- H0. erewrite <- H.
+      erewrite cats0 => //.
+    + econstructor. intros. eauto.
+  (* - induction 1. *)
+(*     destruct (γ l) eqn:E. *)
+(*     + econstructor 1. *)
+(*       admit. *)
+(*     + econstructor 2; eauto. *)
+(* Admitted. *)
+Qed.
+
+Lemma Brouwer_operation_at_Type_spec γ l :
+  Brouwer_operation_at' γ l -> Brouwer_operation_at_Type γ l.
+Proof.
+  (* split. *)
+  - induction 1.
+    econstructor. auto.
+    (* + econstructor. intros. enough (None = Some n) by congruence. *)
+    (*   rewrite <- H0. erewrite <- H. *)
+    (*   erewrite cats0 => //. *)
+    (* + econstructor. intros. eauto. *)
+      (* - induction 1. *)
+      (*     destruct (γ l) eqn:E. *)
+      (*     + econstructor 1. *)
+      (*       admit. *)
+      (*     + econstructor 2; eauto. *)
+      (* Admitted. *)
+Qed.
+
+Require Import FunctionalExtensionality.
+
+Lemma Brouwer_operation_at_spec l γ :
+  Brouwer_operation (fun a => γ (l ++ a)) <->
+  Brouwer_operation_at γ l.
+Proof.
+  split.
+  - intros H.
+    remember (fun a : seq nat => γ (l ++ a)) as γ_l.
+    revert l Heqγ_l.
+    induction H.
+    + intros l ->.
+      econstructor. eassumption.
+    + intros l ->.
+      rewrite cats0 in H.
+      eapply Bsup_at => //.
+      intros. eapply H1.
+      eapply functional_extensionality_dep_good.
+      intros. now rewrite cat_rcons.
+  - induction 1.
+    + eapply Bconst => //.
+    + eapply Bsup.
+      1: rewrite cats0 => //.
+      intros.
+      erewrite functional_extensionality_dep_good.
+      1: eapply H1.
+      intros. cbn. rewrite cat_rcons => //.
+Qed.
 
 Lemma K0K γ :
   Brouwer_operation γ -> neighborhoodfunction γ.
@@ -88,7 +160,7 @@ Proof.
   induction 1.
   - split.
     + intros. exists 0. congruence.
-    + intros. reflexivity.
+    + congruence.
   - split. 
     + intros α. destruct (H1 (α 0)) as [H1' H2'].
       * destruct (H1' (fun n => α (S n))) as [n].
@@ -122,23 +194,47 @@ Proof.
   firstorder.
 Qed.
 
-(* Lemma Bneigh_cont_equiv_dialogue_cont_Brouwer F : *)
-(*   Bneigh_cont F <-> dialogue_cont_Brouwer F. *)
-(* Proof. *)
-(*   split. *)
-(*   - admit. *)
-(*   - intros [b Hb]. *)
-(*     unshelve eexists. *)
-(*     + clear Hb. induction b. *)
-(*       * exact (fun _ => Some r). *)
-(*       * intros []. *)
-(*         -- exact None. *)
-(*         -- eapply (H n l). *)
-(*     + induction b in F, Hb |- *; cbn in *. *)
-(*       * split. 1: econstructor. *)
-(*         intros α. *)
-(*         exists 0. split; auto. lia. *)
-(*       * split. *)
-(*         -- econstructor => //. *)
-(*            intros. eapply H.  *)
-(*         -- intros α. *)
+Lemma Bneigh_cont_equiv_dialogue_cont_Brouwer F :
+  Bneigh_cont F <-> dialogue_cont_Brouwer F.
+Proof.
+  split.
+  - intros (γ & H1 & H2).
+    eapply Brouwer_operation_at_spec with (l := nil) in H1.
+    revert H1. generalize (@nil nat) as l. intros l H1.
+    eapply Brouwer_operation_at'_spec1 in H1.
+    eapply Brouwer_operation_at_Type_spec in H1.
+    unshelve eexists.
+    + induction H1.
+      destruct (γ l) eqn:E.
+      -- eapply spit. exact n.
+      -- eapply bite. intros n.
+         eapply (X ltac:(reflexivity) n).
+    + cbn.
+      set (Brouwer_operation_at_Type_rect _) as f.
+      cbn in *.
+      intros α.
+      destruct (H2 α) as (? & ? & ?).
+      enuogh (Some (beval (f l H1) α) = (γ [seq α i | i <- iota 0 x])).
+      { rewrite H in H3. now inversion H3. }
+      symmetry. clear H. 
+      induction H1. cbn.
+      destruct (γ l) eqn:E.
+      -- simpl in *.
+         admit.
+      -- admit.
+  - intros [b Hb].
+    unshelve eexists.
+    + clear Hb. induction b.
+      * exact (fun _ => Some r).
+      * intros [].
+        -- exact None.
+        -- eapply (H n l).
+    + induction b in F, Hb |- *; cbn in *.
+      * split. 1: econstructor.
+        (* intros α. *)
+      (*   exists 0. split; auto. lia. *)
+      (* * split. *)
+      (*   -- econstructor => //. *)
+      (*      intros. eapply H. *)
+      (*   -- intros α. *)
+Admitted.
