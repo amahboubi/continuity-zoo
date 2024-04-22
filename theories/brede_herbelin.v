@@ -1,5 +1,6 @@
 From mathcomp Require Import all_ssreflect.
 Require Import extra_principles.
+Require Import cantor.
 Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
@@ -36,6 +37,7 @@ Proof.
   f_equal.
   eapply IHu ; eassumption.
 Qed.
+
 
 Lemma ord_cat {C} n (u u' : list C) : ord_aux (u ++ u') n = ord_aux u n ++ (ord_aux u' (size u + n)).
 Proof.
@@ -253,6 +255,37 @@ Proof.
   now eapply IHj.
 Qed.
 
+Lemma ord_dec (u : seq (nat * B)) : {v & { n & u = ord_aux v n} } +
+                                      { forall v n, u = ord_aux v n -> False}.
+Proof.
+  induction u as [ | u b IHu] using last_ind.
+  { left ; exists nil ; exists 0 ; reflexivity. }
+  destruct IHu as [[v [n Heqvn]] | Hfalse] ; [ | right].
+  2:{ intros v n Heq ; subst.
+      destruct v as [ | v c _] using last_ind ; [ destruct u ; cbn in * ; inversion Heq | ].
+      rewrite ord_rcons in Heq.
+      assert (aux := f_equal (last b) Heq) ;  do 2 rewrite last_rcons in aux ; subst.
+      eapply rcons_injl in Heq ; subst.
+      now apply (Hfalse v n).
+  }
+  destruct b as [m b] ; subst.
+  destruct v as [ | b' v] ; cbn in * ; [left |].
+  { exists [:: b], m ; reflexivity. }
+  case: (PeanoNat.Nat.eq_dec m ((size v) + n.+1)) ;
+    [intros Heq ; subst ; left | intros Hnoteq ; right].
+  { exists ((b' :: rcons v b)), n ; subst; cbn ; now rewrite ord_rcons. }
+  intros w k Heq ; subst.
+  destruct w as [ | b'' w] ; cbn in * ; [now inversion Heq | ].
+  inversion Heq as [[H1 H2 Heq']] ; subst ; clear Heq.
+  destruct w as [ | w c _] using last_ind ; [ destruct v ; cbn in * ; inversion Heq' | ].
+  rewrite ord_rcons in Heq'.
+  assert (aux := f_equal (last (m, b)) Heq') ; do 2 rewrite last_rcons in aux.
+  inversion aux ; subst.
+  eapply rcons_injl, ord_inj in Heq' ; subst. 
+  now apply Hnoteq.
+Qed.
+
+      
 End Ord.
 
 Section Technical.
@@ -352,6 +385,7 @@ Arguments Eta {T} u l.
 
 (* Generalized Bar Induction, phrased using the Herbelin-Brede way *)
 Definition GBI T := ABbarred T -> indbarred T [::].
+
 
 
 End GDC_GBI_Definition.
@@ -1102,7 +1136,7 @@ Abort.
 (*A weaker version is true, assuming that the predicate P is decidable.*)
 
 Lemma hered_Upmon_hered_dec (P : list B -> Prop) (l : list B) :
-  (forall u, (P u) + (P u -> False)) ->
+  (forall u, {P u} + {~ P u}) ->
   hereditary_closure (Upmonotonisation P) l ->
   (forall n, P (take n l) -> False) ->
   hereditary_closure P l.
@@ -1113,7 +1147,7 @@ Proof.
     now erewrite take_size_cat.
   }
   econstructor 2 ; intros b.
-  destruct (Hdec (rcons u b)) ; [now econstructor | ].
+  destruct (Hdec (rcons u b)) as [ | Hypnot] ; [now econstructor | ].
   apply IHk.
   intros n.
   erewrite <- cats1, take_cat.
@@ -1165,57 +1199,54 @@ Proof.
   apply ABbarred_barred_TtoP ; assumption.
 Qed.
 
-(*GBI for all predicates also implies BI for decidable predicates, making use of 
- barred_Upmon_barred and hered_Upmon_hered_dec. *)
-
-Lemma GBI_BI_mon :
-  (forall (T : list (nat * B) -> Prop), GBI T) ->
-  forall P : list B -> Prop, (forall u, (P u) + (P u -> False)) -> BI_ind P.
-Proof.
-  intros HGBI P Hdec Hbar.
-  destruct (Hdec nil) as [Hnil | Hnotnil] ; [now econstructor | ].
-  apply hered_Upmon_hered_dec ; [assumption | | intros n ; cbn ; eassumption ].
-  apply indbarred_inductively_barred_Down_dual.
-  apply HGBI.
-  apply barred_ABbarred_PtoT ; [now apply Upmonot_monotone | ].
-  now apply barred_barred_Upmon.
-Qed.
-
-(*We can probably strengthen the previous Lemma and prove that GBI for decidable predicates
- implies BI for decidable predicates. Indeed, all constructions seem to preserve decidability
- of the underlying predicates.*)
-
 
 End DC_GDC_BI_GBI.
 
 
 Section Additional_Lemmas.
 
-Variable B : Prop.
+  Variable B : Type.
+
+  Notation " ⇑⁺ T " := (ABUpmonotonisation T) (at level 80).
+
+  Notation " ⇓⁺ T " := (ABDownmonotonisation T) (at level 80).
+  
+  Notation " ↑⁺ T " := (Upmonotonisation T) (at level 80).
+  
+  Notation " ↓⁺ T " := (Downmonotonisation T) (at level 80).
+  
+  Notation " [| T |] " := (TtoP T) (at level 8).
+  
+  Notation " [ P ]ₐ " := (PtoT P) (at level 8).
+  
+  Notation " [ P ]ₑ " := (PtoT_dual P) (at level 8).
   
 (*These lemmas with Upmonotonisation are true, even though they do not appear
-  in the proof of equivalence between GBI and BI.*)
+  in the proof of equivalence between GBI and BI in Brede-Herbelin's paper.*)
 Definition BIProp11Up :=
-  forall (P : list B -> Prop) l, P l -> TtoP (ABUpmonotonisation (PtoT P)) l.
+  forall (P : list B -> Prop) l, P l -> [| ⇑⁺  [ P ]ₐ |] l.
 
 Definition BIProp11Up_rev :=
-  forall (P : list B -> Prop) l, monotone P -> TtoP (ABUpmonotonisation (PtoT P)) l -> P l.
+  forall (P : list B -> Prop) l, monotone P -> [| ⇑⁺  [ P ]ₐ |] l -> P l.
 
 Definition BIProp12Up :=
   forall (P : list B -> Prop) u,
-    monotone P -> indbarred (ABUpmonotonisation (PtoT P)) (ord u) ->
+    monotone P -> indbarred (⇑⁺ [ P ]ₐ) (ord u) ->
     hereditary_closure P u.
 
 Definition BIProp12Up_rev :=
   forall (P : list B -> Prop) u, hereditary_closure P u ->
-              indbarred (ABUpmonotonisation (PtoT P)) (ord u).
+                                 indbarred (⇑⁺  [ P ]ₐ) (ord u).
+
+Definition BIProp13Up_rev :=
+  forall (P : seq B -> Prop), monotone P -> barred P -> ABbarred (⇑⁺ [ P ]ₐ).
 
 
 Lemma P_ABUp_PtoTB : BIProp11Up.
 Proof.
   intros P l Hl.
   unfold TtoP.
-  econstructor ; [econstructor ; eassumption |].
+  econstructor ; [econstructor ; eassumption | ].
   now apply List.incl_refl.
 Qed.
 
@@ -1238,7 +1269,7 @@ Proof.
   { clear Hbar.
     intros Hbar.
     induction Hbar as [u Hyp | u k IHk] ;
-      [econstructor ; now eapply monotone_ABUp_PtoT_P |].
+      [econstructor ; now eapply monotone_ABUp_PtoT_P | ].
     econstructor 2 ; assumption.
   }
   eapply indbarred_inductively_barred ; [ | assumption].
@@ -1251,72 +1282,239 @@ Proof.
   intros P u Hered.
   eapply inductively_barred_indbarred ; unfold TtoP.
   induction Hered as [u Hu | u k IHk ] ; [ | now econstructor 2].
-  do 2 econstructor ; [now econstructor ; eassumption |].
+  do 2 econstructor ; [now econstructor ; eassumption | ].
   now apply List.incl_refl.
+Qed.
+
+Lemma barred_ABbarred_PtoT_Up : BIProp13Up_rev.
+Proof.
+  intros P Hmon Hbar alpha ; specialize (Hbar alpha) as [u [Hpref Hu]].
+  exists (iota 0 (size u)).
+  econstructor ; [ | now eapply List.incl_refl ].
+  erewrite (eq_map (g := (fun i => (i.1, alpha i.2)) \o (fun n => (n, n)))),
+    map_comp, <- ord_iota_aux, <- ord_map_aux ; [ | now intro k].
+  econstructor.
+  unfold prefix in Hpref ; rewrite - Hpref.
+  assumption.
 Qed.
 
 End Additional_Lemmas.
 
 
+Section GBI_dec.
+
+  Variables B : eqType.
+  Implicit Type (T : seq (nat * B) -> Prop).
+
+Notation " ⇑⁺ T " := (ABUpmonotonisation T) (at level 80).
+
+Notation " ⇓⁺ T " := (ABDownmonotonisation T) (at level 80).
+
+Notation " ↑⁺ T " := (Upmonotonisation T) (at level 80).
+
+Notation " ↓⁺ T " := (Downmonotonisation T) (at level 80).
+
+Notation " [| T |] " := (TtoP T) (at level 8).
+
+Notation " [ P ]ₐ " := (PtoT P) (at level 8).
+
+Notation " [ P ]ₑ " := (PtoT_dual P) (at level 8).
+
+
+
+(*We assume existence of a function that spits out a list l : seq (seq X) of all possible lists 
+ included in a given list s : seq X. *)  
+Definition MagicFunction {X : eqType} (s : seq X) : seq (seq X).
+Proof.
+Admitted.
+
+Lemma MagicFunction_incl {X : eqType} (u v : seq X) :
+  List.In u (MagicFunction v) <->
+  List.incl u v.
+Admitted.
+
+
+(*We first prove that monotonisation preserves decidability. *)
+
+Lemma Upmono_dec (P : list B -> Prop) :
+  (forall u, {P u} + {~ P u}) ->
+  (forall u, {(↑⁺ P) u} + {~ (↑⁺ P) u}).
+Proof.
+  intros Hdec u.
+  suff: { exists v, exists w, u = v ++ w /\ P v } +
+          { ~ exists v, exists w, u = v ++ w /\ P v }.
+  { intros [Htrue | Hfalse] ; [left | right].
+    { destruct Htrue as [v [w [Heq Hv]]] ; subst ; now econstructor. }
+    intros HP ; inversion HP as [l l' Hl Heq] ; subst.
+    apply Hfalse.
+    exists l ; exists l' ; split ; trivial.
+  }
+  induction u as [ | u b IHu] using last_ind.
+  { destruct (Hdec nil) as [Htrue | Hfalse] ; [left | right].
+    { exists nil ; exists nil ; split ; now trivial. }
+    intros [v [w [Heq Hv]]] ; apply Hfalse.
+    symmetry in Heq ; apply List.app_eq_nil in Heq as [Heqv Heqw] ; now subst.
+  }
+  destruct (Hdec (rcons u b)) as [Htrue | Hfalse] ; [left | ].
+  { exists (rcons u b) ; exists nil ; rewrite cats0 ; now split. }
+  destruct IHu as [Hu | Hu] ; [left | right].
+  { destruct Hu as [v [w [Heq Hv]]] ; subst ; rewrite <- cats1.
+    exists v ; exists (w ++ (cons b nil)) ; split ; [ | assumption].
+    now rewrite catA.
+  }
+  intros [v [w [Heq Hv]]].
+  destruct w as [ | w c IHw] using last_ind.
+  { apply Hfalse ; rewrite cats0 in Heq ; now subst. }
+  apply Hu ; exists v ; exists w; split ; [ | assumption].
+  rewrite <- rcons_cat in Heq.
+  assert (aux := f_equal (last b) Heq) ;  do 2 rewrite last_rcons in aux ; subst.
+  eapply rcons_injl.
+  exact Heq.
+Qed.
+
+
+(*Then, making use of MagicFunction, we show that ABUpmonotonisation also preserves
+ decidability.*)
+Lemma ABUpmono_dec (P : list (nat * B) -> Prop) :
+  (forall u,  {P u} + {~ P u}) ->
+  (forall u, { (⇑⁺ P) u } + {~ (⇑⁺ P) u }).
+Proof.
+  intros Hdec u.
+  suff: {List.Exists P (MagicFunction u) } +
+          {~ List.Exists P (MagicFunction u)}.
+  { intros [Htrue | Hfalse] ; [left | right].
+    { apply List.Exists_exists in Htrue as [x [Hin Hx]].
+      exists x ; [assumption | ].
+      now apply MagicFunction_incl.
+    }
+    intros Hyp ; inversion Hyp as [v w Hv Heq] ; subst.
+    apply Hfalse ; apply List.Exists_exists.
+    exists v ; split ; [ | assumption].
+    now apply MagicFunction_incl.
+  }
+  now apply List.Exists_dec.
+Qed.
+  
+(*Now, we prove that PtoT preserves decidability. *)  
+  
+Lemma PtoT_dec (P : list B -> Prop) :
+  (forall u, {P u} + {~ P u}) ->
+  (forall u, {[P ]ₐ u} + {~ [P ]ₐ u}).
+Proof.
+  intros Hdec u.
+  destruct u ; [destruct (Hdec nil) as [Htrue | Hfalse] ; [left | right] | ].
+  { change (@nil (nat * B)) with (ord (@nil B)) ; now econstructor. }
+  { intros Hyp ; inversion Hyp as [u Hu Heq] ; apply Hfalse.
+    change (@nil (nat * B)) with (ord (@nil B)) in Heq ; unfold ord in *.
+    now apply ord_inj in Heq ; subst.
+  }
+  case: (ord_dec (p :: u)) ; [intros [v [n Heq]] ; subst | intros Hnoteq].
+  { destruct v as [ | b v ] ; cbn in * ; inversion Heq ; subst.
+    destruct n ; [ | right].
+    2:{ intros Hyp ; inversion Hyp ; unfold ord in *.
+        destruct l ; cbn in * ; now inversion H. }
+    clear Heq.
+    change ((0, b) :: ord_aux v 1) with (ord (b :: v)). 
+    destruct (Hdec (b :: v)) as [Htrue | Hfalse] ; [left ; now econstructor | right].
+    intros Hyp ; inversion Hyp as [u Hu Heq] ; unfold ord in *.
+    apply ord_inj in Heq ; subst ; now apply Hfalse.
+  }
+  right ; intros Hyp ; inversion Hyp as [v Hv Heq].
+  apply (Hnoteq v 0) ; symmetry ; exact Heq.
+Qed.
+
+
+(*Finally, we conclude that GBI for decidable predicates implies
+ BI for decidable predicates.*)
+
+Lemma GBI_BI_dec :
+  (forall (T : list (nat * B) -> Prop), (forall u, {T u} + {~ T u}) -> GBI T) ->
+  forall P : list B -> Prop, (forall u, {P u} + {~ P u}) -> BI_ind P.
+Proof.
+  intros HGBI P Hdec Hbar.
+  destruct (Hdec nil) as [Hnil | Hnotnil] ; [now econstructor | ].
+  apply hered_Upmon_hered_dec ; [assumption | | intros n ; cbn ; eassumption ].
+  apply indbarred_inductively_barred_dual ; [now apply Upmonot_monotone | ].
+  apply HGBI.
+  2:{ apply  barred_ABbarred_PtoT_Up ; [now apply Upmonot_monotone | ].
+      now apply monot_barred.
+  }
+  clear - Hdec.
+  apply ABUpmono_dec, PtoT_dec, Upmono_dec ; assumption.
+Qed.
+  
+End GBI_dec.
+
+
 Section GDC_gen.
 
-  Print GDC.
+  (*The goal of this Section is to prove inconsistency of some forms of GDC and GBI.*)
 
+
+  (*We start by proving that GDC on (nat -> Prop) and nat is inconsistent.
+   The goal is to derive an injection from (nat -> Prop) to nat, which is 
+   inconsistent by the Cantor Theorem for Prop, proven in cantor.v*)  
   Proposition GDC_inconsistent :
     @GDC (nat -> Prop) nat -> False.
   Proof.
-    unfold GDC ; intros Hyp.
+    unfold GDC ; intros HypGDC.
     pose (T := fun (u : seq ((nat -> Prop) * nat)) =>
                  forall f f' n n', List.In (f, n) u ->
                                    List.In (f', n') u ->
                                    n = n' ->
                                    f = f').
-    have H1 : forall u, T u ->
+    (*If T has a choice function F then F is an injection from (nat -> Prop) to nat,
+     which is inconsistent.*)
+    suff: ABchoicefun T.
+    { intros [F HF].
+      have Heq : forall alpha beta, F alpha = F beta -> alpha = beta.
+      { intros alpha beta Heq.
+        eapply (HF (alpha :: beta :: nil)) ; [left | right ; left | ] ; now trivial.
+      }
+      eapply Cantor_Prop.
+      exact Heq.
+    }
+    apply HypGDC.
+    (*We need to slightly generalize the goal.*)
+    suff Happrox : forall u, T u ->
                         (forall f n, List.In (f,n) u -> n < size u) ->
                         ABapprox T u.
-    { cofix aux.
-      intros u Hu Hinf ; econstructor.
-      { unfold ABDownarborification.
-        intros v Hincl f f' n n' Hin Hin' Heqn.
-        eapply Hu ; [ apply Hincl | apply Hincl |] ; eassumption.
-      }
-      intros f Hnotin.
-      exists (size u).
-      apply aux.
-      { intros g g' n n' Hin Hin' Heqn.
-        rewrite <- cats1 in Hin, Hin'.
-        apply List.in_app_or in Hin, Hin'.
-        destruct Hin.
-        { destruct Hin' ; [eapply Hu ; eassumption | ] ; cbn in *.
-          destruct H0 ; [ | now exfalso].
-          inversion H0 ; subst.
-          apply Hinf in H ; rewrite -> subSnn in H ; now inversion H.
-        }
-        destruct H ; [ | now exfalso] ; inversion H ; subst ; clear H.
-        destruct Hin' as [H | H] ; cbn in *.
-        2:{ destruct H ; [ | now exfalso] ; now inversion H. }
+    { apply Happrox ; [intros f f' n n' Hinf Hinf' | intros f n Hinf] ; now inversion Hinf. }
+    (*All that is left is to prove Happrox, via cofix reasoning. *)
+    cofix aux.
+    intros u Hu Hinf ; econstructor.
+    { unfold ABDownarborification.
+      intros v Hincl f f' n n' Hin Hin' Heqn.
+      eapply Hu ; [ apply Hincl | apply Hincl |] ; eassumption.
+    }
+    intros f Hnotin.
+    exists (size u).
+    apply aux.
+    { intros g g' n n' Hin Hin' Heqn.
+      rewrite <- cats1 in Hin, Hin'.
+      apply List.in_app_or in Hin, Hin'.
+      destruct Hin.
+      { destruct Hin' ; [eapply Hu ; eassumption | ] ; cbn in *.
+        destruct H0 ; [ | now exfalso].
+        inversion H0 ; subst.
         apply Hinf in H ; rewrite -> subSnn in H ; now inversion H.
       }
-      intros g m Hinm ; rewrite size_rcons.
-      rewrite <- cats1 in Hinm ; apply List.in_app_or in Hinm.
-      destruct Hinm as [H | H].
-      2:{ destruct H ; [ | now exfalso] ; inversion H ; subst.
-           now apply ltnSn.
-      }
-      apply Hinf in H.
-      now apply leqW.
+      destruct H ; [ | now exfalso] ; inversion H ; subst ; clear H.
+      destruct Hin' as [H | H] ; cbn in *.
+      2:{ destruct H ; [ | now exfalso] ; now inversion H. }
+      apply Hinf in H ; rewrite -> subSnn in H ; now inversion H.
     }
-    have H2 : ABapprox T nil.
-    { apply H1 ; [intros f f' n n' Hinf Hinf' | intros f n Hinf] ; now inversion Hinf. }
-    apply Hyp in H2.
-    destruct H2 as [alpha Halpha].
-    have H3 : forall f f', alpha f = alpha f' -> f = f'.
-    { intros f f' Heqf.
-      eapply (Halpha (f :: f' :: nil)) ; [left | right ; left | ] ; now trivial.
+    intros g m Hinm ; rewrite size_rcons.
+    rewrite <- cats1 in Hinm ; apply List.in_app_or in Hinm.
+    destruct Hinm as [H | H].
+    2:{ destruct H ; [ | now exfalso] ; inversion H ; subst.
+        now apply ltnSn.
     }
-  Abort.
-  Print GBI.
+    apply Hinf in H.
+    now apply leqW.
+  Qed.
 
+  (*For GBI we need more, probably DNE.*)
   Proposition GBI_inconsistent :
     (forall T, @GBI (nat -> Prop) nat T) -> False.
   Proof.
@@ -1326,6 +1524,7 @@ Section GDC_gen.
     have H1: ABbarred T.
     { intros alpha.
       unfold T.
+      (*This is where DNE is needed.*)
       admit.
     }
     pose (T' := fun (u : seq ((nat -> Prop) * nat)) =>
@@ -1350,3 +1549,73 @@ Section GDC_gen.
     
 
 End GDC_gen.
+
+
+Section BI_mon.
+  Variable (B : Type).
+
+    
+Inductive hered_mon (T : list B -> Prop) : list B -> Prop :=
+  | sefl_mon u u' : T u -> hered_mon T (u ++ u')
+  | sons_mon u : (forall b, hered_mon T (rcons u b)) -> hered_mon T u.
+
+Definition BI_alt P := barred P -> hered_mon P [::].
+
+
+(*In this section, we show that a monotonised version of hereditary_closure
+   is equivalent to GBI for predicates on natural numbers.*)
+  
+Lemma BI_GBI_alt : 
+  (forall P : list B -> Prop, BI_alt P) ->
+  forall (T : list (nat * B) -> Prop), GBI T.
+Proof.
+  intros HBI.
+  apply GBI_monot.
+  intros T Hmon HTbar.
+  change (@nil (nat * B)) with (ord (@nil B)).
+  suff: hered_mon (TtoP T) nil.
+  { generalize (@nil B) ; clear.
+    intros l ; induction 1 as [ u v Hyp | u k IHk].
+    { unfold TtoP in Hyp ; econstructor ; [eassumption | ].
+      unfold ord ; erewrite ord_cat.
+      apply List.incl_appl ; now eapply List.incl_refl. }
+    unshelve econstructor 2 ; [exact (size u) | | ].
+    { unfold ord ; exact (@ord_sizeu_notin _ u 0). }
+    unfold ord in * ; intros a ; specialize (IHk a).
+    erewrite ord_rcons, <- plus_n_O in IHk.
+    now rewrite cats1.
+  }
+  apply HBI ; unfold TtoP.
+  apply ABbarred_barred_TtoP ; assumption.
+Qed.
+
+(*GBI for all predicates also implies BI for decidable predicates, making use of 
+ barred_Upmon_barred and hered_Upmon_hered_dec. *)
+
+Lemma GBI_BI_alt :
+  (forall (T : list (nat * B) -> Prop), GBI T) ->
+  forall (P : list B -> Prop), BI_alt P.
+Proof.
+  intros HGBI P Hbar.
+  suff: hered_mon (Upmonotonisation P) nil.
+  { generalize (@nil B) ; induction 1 as [u v Hyp | u k IHk].
+    2: econstructor 2 ; now apply IHk.
+    destruct Hyp ; rewrite <- catA.
+    now econstructor.
+  }
+  have Hbar_alt: barred (Upmonotonisation P) ; [ | clear Hbar].
+  { intros alpha ; specialize (Hbar alpha) as [u [Hpref Hu]].
+    exists u ; split ; [assumption |].
+    now rewrite <- cats0 ; econstructor.
+  }
+  apply barred_ABbarred_PtoT in Hbar_alt ; [ | now apply Upmonot_monotone].
+  apply HGBI in Hbar_alt.
+  change (@nil (nat * B)) with (ord (@nil B)) in Hbar_alt.
+  apply indbarred_inductively_barred_Down_dual in Hbar_alt.
+  induction Hbar_alt.
+  { destruct H ; econstructor ; erewrite <- cats0 ; now  econstructor. }
+  now econstructor 2.
+Qed.  
+
+  
+End BI_mon.

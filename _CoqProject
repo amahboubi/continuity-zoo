@@ -6,9 +6,11 @@ COQDOCFLAGS = "--charset utf-8 --parse-comments -s --with-header ../website/reso
 theories/extra_principles.v
 theories/continuity_zoo_Prop.v
 theories/Brouwer_ext.v
+theories/cantor.v
+theories/brede_herbelin.v
 theories/BI.v
 
-theories/brede_herbelin.v
+
 # theories/continuity_zoo.v
 # theories/fujiwara_kawai.v
 theories/minimal_example.v
