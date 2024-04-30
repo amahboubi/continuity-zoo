@@ -7,6 +7,7 @@ Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
 Set Bullet Behavior "Strict Subproofs".
+Set Default Goal Selector "!".
 
 Require Import continuity_zoo_Prop.
 Require Import Brouwer_ext.
@@ -42,7 +43,7 @@ Lemma pred_to_ext_tree_trace_aux
       P (l ++ (map alpha (iota (size l) n))) ->
       P (l ++ (map alpha (eval_ext_tree_trace_aux (pred_to_ext_tree P) alpha n l))).
 Proof.
-  revert l ; induction n ; cbn ; intros l HP ; [assumption |].
+  revert l ; induction n as [ | ? IHn]; cbn ; intros l HP ; [assumption |].
   unfold pred_to_ext_tree.
   case_eq (P l) ; cbn ; intros HeqP ; [now rewrite cats0 |].
   rewrite <- cat_rcons ; rewrite <- cat_rcons in HP.
@@ -59,11 +60,19 @@ Proof.
 Qed.
 
 Lemma barred_pred_wf_ext_tree (P : list O -> bool) :
-  barred P -> wf_ext_tree' (pred_to_ext_tree P).
+  barred P -> inhabited (wf_ext_tree' (pred_to_ext_tree P)).
 Proof.
-  intros H alpha.
-  enough (exists n : I, exists a : A, eval_ext_tree (pred_to_ext_tree P) alpha n = output a).
-  { admit. }
+  intros H. unfold wf_ext_tree'.
+  enough (inhabited (forall alpha : I -> O, {n : I | exists a : A, eval_ext_tree (pred_to_ext_tree P) alpha n = output a})) as Hi.
+  { destruct Hi as [Hi]. econstructor.
+    intros alpha. destruct (Hi alpha) as [n Hn].
+    exists n. destruct eval_ext_tree; eauto. exfalso. now firstorder congruence.
+  }
+  eapply Delta0_choice.
+  {
+    intros. destruct eval_ext_tree; firstorder (eauto || congruence).
+  }
+  intros alpha.
   specialize (H alpha) as [l [Hpref HP]].
   exists (size l).
   exists (map alpha (eval_ext_tree_trace (pred_to_ext_tree P) alpha (size l))).
@@ -72,7 +81,7 @@ Proof.
     rewrite eval_ext_tree_map ; now rewrite H. }
   apply pred_to_ext_tree_trace.
   unfold prefix in Hpref ; now rewrite - Hpref.
-Admitted.
+Qed.
 
 Definition ext_tree_to_fun (tau : ext_tree I O A) (H : wf_ext_tree' tau) :
   (I -> O) -> A := fun alpha =>  projT1 (projT2 (H alpha)).
@@ -106,8 +115,8 @@ Qed.
 Lemma beval_beval_aux (b : Btree O A) f k :
   beval b (fun n => f (k + n)) = beval_aux b f k.
 Proof.
-  revert k f ; induction b as [ | k IHk] ; cbn ; intros ; [reflexivity |].
-  specialize (IHk (f k0) (S k0)).
+  revert k f ; induction b as [ | k IHk] ; cbn ; intros k' f; [reflexivity |].
+  specialize (IHk (f k') (S k')).
   erewrite <- IHk, <- plus_n_O.
   eapply beval_ext ; cbn.
   intros n ; now erewrite <- plus_n_Sm.
@@ -132,7 +141,7 @@ Qed.
 
 Lemma pref_o_alpha l o : forall alpha n, size l < n -> pref_o l o alpha n = alpha n.
 Proof.
-  intros ; unfold pref_o.
+  intros alpha n H ; unfold pref_o.
   rewrite ltnNge in H ; rewrite (Bool.negb_involutive_reverse (n <= size l)).
   now rewrite H.
 Qed.
@@ -142,14 +151,14 @@ Lemma pref_o_eval P l l' o : forall alpha n,
     eval_ext_tree_aux (pred_to_ext_tree P) alpha n l' =
       eval_ext_tree_aux (pred_to_ext_tree P) (pref_o l o alpha) n l'.
 Proof.
-  intros ; revert l l' o H.
-  induction n.
+  intros alpha n H ; revert l l' o H.
+  induction n as [ | ? IHn].
   { cbn ; intros ; reflexivity. }
-  intros ; cbn.
+  intros ? l' ? ?; cbn.
   unfold pred_to_ext_tree ; cbn.
   case_eq (P l') ; intros Heq ; [reflexivity |].
   erewrite pref_o_alpha ; [ | eauto].
-  eapply IHn.
+  1: eapply IHn.
   erewrite size_rcons ; now eauto.
 Qed.
 
@@ -158,18 +167,18 @@ Lemma pref_o_beval b l o n:
   forall alpha, beval_aux b (pref_o l o alpha) n =
                   beval_aux b alpha n.
 Proof.
-  revert l n ; induction b ; intros * Hinf alpha ; [reflexivity |].
+  revert l n ; induction b as [ | ? IH] ; intros * Hinf alpha ; [reflexivity |].
   cbn.
   erewrite pref_o_alpha ; [ | assumption].
-  eapply H ; now eauto.
+  eapply IH ; now eauto.
 Qed.
-
 
 Proposition CI_BI (P : list O -> bool) :
   barred P -> inductively_barred P.
 Proof.
   unfold inductively_barred ; intros HP.
-  assert (Hwf:= barred_pred_wf_ext_tree HP) ; clear HP.
+  assert (Hwf := barred_pred_wf_ext_tree HP); clear HP.
+  destruct Hwf as [Hwf].
   destruct (dialogue_to_btree_cont (CI (ext_tree_to_fun_seqW Hwf))) as [b H].
   assert (ext_tree_to_fun Hwf =1 fun f => beval_aux b f 0) as Hb.
   { intros alpha ; erewrite H ; exact (beval_beval' _ _). }
@@ -177,12 +186,11 @@ Proof.
   revert Hwf Hb.
   unfold ext_tree_to_fun, wf_ext_tree', eval_ext_tree.
   change 0 with (size (@nil O)) ; generalize (@nil O) as l.
-  induction b as [ | k IHk].
-  { cbn in * ; intros.
+  induction b as [ a | k IHk].
+  { cbn in * ; intros l Hwf Hb.
     (*Making use of Hwf and Hb, we can extract a uniform n : nat that constitutes
      the maximum number of questions the evaluation of (pred_to_ext_tree P) is
      going to take. We can then conclude by induction on this n.*)
-    rename r into a.
     assert ({n : nat & forall alpha,
                    eval_ext_tree_aux (pred_to_ext_tree P) alpha n l = output a})
       as [n Hyp].
@@ -198,7 +206,7 @@ Proof.
       now eapply eval_ext_tree_trace_size_eval.
     }
     clear Hb Hwf ; revert l Hyp.
-    induction n as [ | n IHn] ; cbn ; intros.
+    induction n as [ | n IHn] ; cbn ; intros l Hyp.
     all: case_eq (P l) ; intros Heq ; [now econstructor |].
     all: unfold pred_to_ext_tree in Hyp ; rewrite Heq in Hyp.
     all:  eapply hereditary_sons ; intros o.
@@ -285,7 +293,7 @@ Lemma Bextree_to_valid_eq (tau : Bext_tree) k n alpha:
     Beval_ext_tree_aux tau alpha n (map alpha (iota 0 k)) k.
 Proof.
   revert k ; induction n ; intros ; cbn.
-  reflexivity.
+  1: reflexivity.
   destruct (tau (map alpha (iota 0 k))) ; [reflexivity |].
   erewrite <- map_rcons.
   erewrite iota_rcons.
@@ -471,8 +479,9 @@ Proof.
   eapply dialogue_cont_Brouwer_to_dialogue_cont.
   eapply Bseq_cont_valid_to_dialogue.
   eapply seq_cont_to_Brouwer in H. destruct H as [b Hb].
-  edestruct Bseq_cont_to_Bseq_cont_valid. exists b. eassumption.
-  exists x. eassumption.
+  edestruct Bseq_cont_to_Bseq_cont_valid.
+  - exists b. eassumption.
+  - exists x. eassumption.
 Qed.
 
 End BarInduction.
