@@ -552,6 +552,17 @@ Proof.
   now eapply IHn.
 Qed.
 
+Lemma eval_ext_tree_trace_size_eval_trace (tau : ext_tree) f n a l :
+  eval_ext_tree_aux tau f n l = output a ->
+  eval_ext_tree_trace_aux tau f n l =
+    eval_ext_tree_trace_aux tau f (size (eval_ext_tree_trace_aux tau f n l)) l.
+Proof.
+  revert l ; induction n as [ | n IHn] ; cbn in * ; intros l H ; [reflexivity |].
+  case_eq (tau l) ; intros i Heq ; rewrite Heq in H ; cbn ; [rewrite Heq | reflexivity].
+  f_equal.
+  now eapply IHn.
+Qed.
+
 Definition ext_tree_for F tau :=
  forall f : Q -> A, exists n : nat, eval_ext_tree tau f n = output (F f).
 
