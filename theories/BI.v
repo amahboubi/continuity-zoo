@@ -940,8 +940,8 @@ Abort.
 
 (*
   Going from indbarred T [::] to the existence of a suitable dialogue tree is not easy.
-  We will do so through several
- intermediate steps :
+  We will do so through several intermediate steps :
+
  - We will first define a predicate 
       ext_tree_indbarred : ext_tree -> seq (I * O)) -> Type 
    such that ext_tree_indbarred tau nil implies
@@ -956,35 +956,37 @@ Abort.
       ext_tree_indbarredP tau l -> ext_tree_indbarred tau l,
    thus going from Prop to Type.
 
- - We will then define
-      indbarred_fun_list : (seq (I * O) -> Prop) -> seq (I * O) -> Prop,
-   a variant of indbarred where u : seq (I * O) is a finite approximation 
-   of a function, and prove that
-      indbarred_fun_list (fun l => exists n a,
-                                  eval_ext_tree_aux_finapp tau l n nil = output a) ->
-        ext_tree_indbarredP tau l.
+ - We will then prove that
+      indbarred (fun l => exists n a,
+                            eval_ext_tree_aux_finapp tau l n nil = output a) l ->
+      is_fun_list l ->         
+      ext_tree_indbarredP tau l
    This is the longest proof of the file.
- - Finally, we prove that for any predicate T,
-   indbarred T [::] -> indbarred_fun_list T [::].
+
+- Finally, as 
+     is_fun_list nil 
+  is trivially true, we will retrieve
+      indbarred (fun l => exists n a,
+                            eval_ext_tree_aux_finapp tau l n nil = output a) nil ->
+      ext_tree_indbarredP tau nil,
+  which completes our proof.
 *)
 
 
 (*As explained, let us start by ext_tree_indbarred. 
   It is an inductive predicate that describes a tree of computations
   using tau and l, such that on the leaves of the tree
-  eval_ext_tree_aux_finapp tau l (size l) nil = output r
+  eval_ext_tree_aux_finapp tau l n nil = output r
   for some r.
   There are three cases for this inductive :
   - ext_tree_eta is the leaf case, where the computation reaches an output r.
   - ext_tree_succ deals with the case when the computation is blocked
-    because of the lack of fuel. As we use (size l) as fuel, the way out is
-    simply to make l longer, by extending it with some values (q, a) that
-    are already present in the list. Thus l ++ [::(q, a)] is longer than l
-    but it does not contain more values from a set perspective.
+    because of the lack of fuel, and it allows us to change n with n.+1.
   - finally, ext_tree_beta deals with the case when the computation is blocked
     because l does not contain the answer to some query q. In that case, we
     branch over every possible answer a : A with l ++ [::(q, a)].
-*)
+ *)
+
 Inductive ext_tree_indbarred (tau : ext_tree) (l : seq (I * O)) (n : nat) : Type :=
 | ext_tree_eta r : is_fun_list l ->
                    eval_ext_tree_aux_finapp tau l n nil = output r ->
@@ -1001,7 +1003,7 @@ Inductive ext_tree_indbarred (tau : ext_tree) (l : seq (I * O)) (n : nat) : Type
                       ext_tree_indbarred tau l n.
 
 
-(*ext_tree_indbarred tau l indeed allows us to retrieve a dialogue tree d.
+(*ext_tree_indbarred tau l n indeed allows us to retrieve a dialogue tree d.
  We first prove an auxiliary lemma for any l.*)
 
 Lemma ext_tree_indbarred_dialogue_aux
@@ -1123,6 +1125,7 @@ Proof.
     inversion Hr ; now subst.
 Defined.
 
+(*We also provide an eliminator into Prop for the induction tactic later on.*)
 
 Lemma ext_tree_indbarredP_ind
   (tau : ext_tree)
@@ -1161,29 +1164,9 @@ Qed.
 (*We will now try to go from indbarred to ext_tree_indbarred.
  We need some technical lemmas for this.*)
 
-(*If eval_ext_tree_aux_finapp tau u n nil = output r,
- then ext_tree_indbarredP tau u.
- The idea is that we can add elements (q, a) to u as many times as we need
- until size u >= n and retrieve
- eval_ext_tree_aux_finapp tau u (size u) nil = output r
-*)
 
-Lemma eval_output_indbarredP tau u n r :
-  is_fun_list u ->
-  eval_ext_tree_aux_finapp tau u n nil = output r ->
-  ext_tree_indbarredP tau u n.
-Proof.
-  intros Hfun Hyp.
-  econstructor ; [assumption | right ; left ].
-  now exists r.
-Qed.
+(*ext_tree_indbarredP is monotone with respect to list inclusion.*)
 
-
-
-(*ext_tree_indbarredP is monotone with respect to list inclusion.
- This is an intuitive property, the technical part comes from the fact
- that we use (size u) as fuel, and List.incl u v does not imply
- size u <= size v, so some care has to be taken.*)
 Lemma ext_tree_indbarredP_monotone tau u v n
   (Hu : ext_tree_indbarredP tau u n) :
   is_fun_list v ->
@@ -1192,7 +1175,7 @@ Lemma ext_tree_indbarredP_monotone tau u v n
 Proof.
   revert v ; induction Hu as [u n a Hnodup Heqa | u n q o' Hfunu Heq Hsome _ IHk |
                                u n q Hfunu Heq Hnoneu _ IHk] ; intros v Hfunv Hincl.
-  - eapply eval_output_indbarredP ; [eassumption | ].
+  - econstructor ; [eassumption | right ; left ; exists a].
     eapply eval_ext_tree_aux_finapp_monotone_output_list ; eassumption.
   - econstructor ; [assumption | right ; right].
     exists q, o' ; split ; [ | split].
@@ -1212,6 +1195,9 @@ Proof.
          now apply List.incl_appr, List.incl_refl.
 Qed.
 
+(*The fuel n : nat is in fact irrelevant, and if 
+ we have ext_tree_indbarred tau u n then we have
+ ext_tree_indbarred tau u m for any other m.*)
 
 Lemma ext_tree_indbarredP_change_fuel tau u n m
   (Hu : ext_tree_indbarredP tau u n) :
@@ -1262,15 +1248,18 @@ Proof.
 Qed.
 
 
-(*When going from some version of indbarred to ext_tree_indbarred,
+(*When going from some version of indbarred to ext_tree_indbarredP,
  the difficult part will be dealing with the split case.
  Indeed, in indbarred splitting can be done on any query q, while
- in ext_tree_indbarred it has to be done on a query q such that
- eval_ext_tree_aux_finapp tau u (size u) = ask q.
+ in ext_tree_indbarredP it has to be done on a precise query q such that
+       eval_ext_tree_aux_finapp tau u (size u) = ask q.
+
  We thus need to reorganise splittings, or even get rid of them 
  in branches where they are not necessary.
- To do this, we use the predicate List.Add, to generalize addition
- of an element to the list u.*)
+
+ To do this, we use the predicate List.Add, which generalizez addition
+ of an element to the list u anywhere in the list, and not only at the end.
+ This is the longest and most technical proof of the file.*)
 
 Lemma Add_induction_step (tau : ext_tree) (u v : seq (I * O)) (n : nat) (i : I) (o : O) :
   eval_list u i = None ->
@@ -1422,85 +1411,54 @@ Proof.
 Qed.
 
 
-Inductive indbarred_fun_list (T : seq (I * O) -> Prop) : seq (I * O) -> Prop :=
-| ieta_fun_list : forall u' u : seq (I * O),
-    T u -> List.incl u u' -> is_fun_list u' -> indbarred_fun_list T u'
-| ibeta_NoDup : forall (a : I) (v : seq (I * O)),
-    ~ List.In a [seq i.1 | i <- v] ->
-    (forall b : O, indbarred_fun_list T (v ++ [:: (a, b)])) ->
-    indbarred_fun_list T v.
+(*Using the previous lemma, we can now go from indbarred to ext_tree_indbarredP. *)
 
 
-
-Lemma indbarred_indbarred_fun_list (T : seq (I * O) -> Prop) :
-  indbarred T nil ->
-  indbarred_fun_list T nil.
-Proof.
-  have aux: is_fun_list (@nil (I * O)).
-  { intros q r r' Hin ; now inversion Hin. }
-  revert aux ; generalize (@nil (I * O)) ; intros l Hfun Hyp ; revert Hfun.
-  induction Hyp as [u v Hv Hincl | i v Hnotin k IHk ] ; intros.
-  { econstructor ; eassumption. }
-  econstructor 2 ; [ now apply Hnotin |].
-  intros o ; apply IHk.
-  rewrite cats1 ; apply is_fun_rcons_notin_dom ; assumption.
-Qed.
-
-Lemma indbarred_fun_list_fun_list T l:
-  indbarred_fun_list T l ->
-  is_fun_list l.
-Proof.
-  induction 1 as [ | q v Hnotin k IHk] ; [ assumption | ].
-  destruct v as [ | [q' a] v];  [intros ??? Hin ; now inversion Hin | ].
-  specialize (IHk a).
-  eapply is_fun_list_incl ; [eassumption | ].
-  now apply List.incl_appl, List.incl_refl.
-Qed.
+(*We first prove an auxiliary lemma assuming that O is inhabited.*)
 
 Lemma indbarred_fun_list_ext_tree_indbarredP_aux
   (tau : ext_tree) (l : seq (I * O)) (o : O) :
-  indbarred_fun_list
+  indbarred
     (fun u => exists n a, eval_ext_tree_aux_finapp tau u n nil = output a) l ->
-  ext_tree_indbarredP tau l (size l).
+  is_fun_list l ->
+  ext_tree_indbarredP tau l 0.
 Proof.
   intros Hyp.
-  assert (Hfun := indbarred_fun_list_fun_list Hyp) ; revert Hfun.
-  induction Hyp as [u v [n [r Hr]] Hincl Hnodup | q v Hnotin _ IHk].
-  - intros Hfun ; eapply ext_tree_indbarredP_change_fuel with n ; eauto.
-    eapply eval_output_indbarredP ; eauto.
+  induction Hyp as [u v [n [r Hr]] Hincl | q v Hnotin _ IHk]; intros Hfun.
+  - eapply ext_tree_indbarredP_change_fuel with n ; eauto.
+    econstructor ; [eassumption | right ; left ; exists r].
     now eapply eval_ext_tree_aux_finapp_monotone_output_list ; eauto.
-  - intros Hfun.
-    unshelve eapply Add_induction_step with (v ++ [::(q,o)]) q o.
+  - unshelve eapply Add_induction_step with (v ++ [::(q,o)]) q o.
     + rewrite - (cat0s v) ; apply eval_list_notin_cat; auto.
     + rewrite cats1 ; now apply Add_rcons.
-    + eapply ext_tree_indbarredP_change_fuel.
-      eapply IHk.
-      rewrite cats1.
-      now apply is_fun_rcons_notin_dom.
+    + eapply ext_tree_indbarredP_change_fuel, IHk.
+      rewrite cats1 ; now apply is_fun_rcons_notin_dom.
     + intros o' w Haddw.
-      suff: List.incl (v ++ [:: (q, o')]) w.
-      { intros Hincl.
-        eapply ext_tree_indbarredP_monotone ; [ | | eassumption].
-        * eapply ext_tree_indbarredP_change_fuel, IHk.
-          rewrite cats1.
-          now apply is_fun_rcons_notin_dom.
-        * apply is_fun_list_incl with (v ++ [::(q, o')]).
-          -- rewrite cats1 ; now apply is_fun_rcons_notin_dom.
-          -- intros x Hinx ; apply (List.Add_in Haddw) in Hinx.
-             destruct Hinx as [Hinx | Hinx] ; [subst | ] ; apply List.in_or_app ; auto.
-             now right ; left.
+      have Hincl: List.incl (v ++ [:: (q, o')]) w.
+      { intros x Hx ; apply (List.Add_in Haddw).
+        apply List.in_app_or in Hx ; now destruct Hx as [|[|]] ; [ right | left | left ].
       }
-      intros x Hinx ; apply (List.Add_in Haddw).
-      apply List.in_app_or in Hinx ; destruct Hinx as [Hinx | Hinx] ; [now right | ].
-      destruct Hinx ; now left.
+      eapply ext_tree_indbarredP_monotone ; [ | | eassumption].
+      * eapply ext_tree_indbarredP_change_fuel, IHk.
+        rewrite cats1 ; now apply is_fun_rcons_notin_dom.
+      * apply is_fun_list_incl with (v ++ [::(q, o')]).
+        -- rewrite cats1 ; now apply is_fun_rcons_notin_dom.
+        -- intros x Hx ; apply (List.Add_in Haddw) in Hx.
+           destruct Hx as [Hx | Hx] ; [subst | ] ; apply List.in_or_app ; eauto.
+           now right ; left.
 Qed.
 
+
+(* We now prove the real lemma by destructing the list l to retrieve o : O.*)
+
+
 Lemma indbarred_fun_list_ext_tree_indbarredP (tau : ext_tree) (l : seq (I * O)) :
-  indbarred_fun_list
+  indbarred
     (fun u => exists n a, eval_ext_tree_aux_finapp tau u n nil = output a) l ->
-  ext_tree_indbarredP tau l (size l).
+  is_fun_list l ->
+  ext_tree_indbarredP tau l 0.
 Proof.
-  destruct l as [ | [i o] l] ; intros Hyp.
+  destruct l as [ | [i o] l] ; intros Hyp Hfun.
   2: now eapply indbarred_fun_list_ext_tree_indbarredP_aux ; eauto.
   econstructor ; [intros i j K H ; inversion H | cbn ].
   remember (tau nil) as aux ; destruct aux as [q | r] ; [ | right ; left ; now exists r].
@@ -1508,47 +1466,37 @@ Proof.
   intros o.
   eapply ext_tree_indbarredP_monotone with nil.
   - now eapply indbarred_fun_list_ext_tree_indbarredP_aux.
-  - intros i a a' Hina Hina'.
-    destruct Hina as [H | H] ; inversion H ; subst ; clear H.
-    destruct Hina' as [H | H] ; inversion H ; now subst.
+  - intros i a a' [Ha | Ha] [Ha' | Ha'] ; inversion Ha ; inversion Ha' ; now subst.
   - now apply List.incl_nil_l.
 Qed.
   
   
-
+(*We are now ready to prove our theorem.*)
   
 Theorem GBI_GCI F :
-  seq_cont_valid F ->
+  seq_cont F ->
   dialogue_cont F.
 Proof.
-  intros [tau [HF Hval]].
-  eapply Delta0_choice in HF as [HF].
-  2:{
-    intros α n. destruct eval_ext_tree eqn:E.
-    - firstorder congruence.
-    - left. destruct (HF α) as [m].
-      f_equal. 
-      eapply eval_ext_tree_output_unique; eauto. 
-  }
-  unfold GBI in HGBI.
+  intros HF ; apply seq_cont_to_seq_cont_valid in HF.
+  destruct HF as [tau [HF Hval]].
   pose (T:= fun (l : seq (I * O)) =>
               exists n a, eval_ext_tree_aux_finapp tau l n nil = output a).
   have Help : ABbarred T.
   { intros alpha.
     destruct (HF alpha) as [n Hn].
-    exists (eval_ext_tree_trace tau alpha n).
-    unfold T.
-    exists n, (F alpha).
+    exists (eval_ext_tree_trace tau alpha n), n, (F alpha).
     now eapply eval_ext_tree_finapp_trace.
   }
-  apply HGBI, indbarred_indbarred_fun_list, indbarred_fun_list_ext_tree_indbarredP
-    in Help.
+  have fun_nil : is_fun_list nil by (intros i j j' Hinj ; inversion Hinj).
+  apply HGBI, indbarred_fun_list_ext_tree_indbarredP
+    in Help ; auto.
   eapply ext_tree_indbarred_spec, (ext_tree_indbarred_dialogue Hval) in Help ; auto.
   destruct Help as [d Hd].
-  exists d ; intros alpha ; specialize (HF alpha) as [n Hn] ; specialize (Hd alpha) as [m Hm].
-  eapply eval_ext_tree_output_unique ; eauto.
+  exists d ; intros alpha.
+  specialize (HF alpha) as [n Hn] ; specialize (Hd alpha) as [m Hm].
+  eapply eval_ext_tree_output_unique ; now eauto.
 Qed.  
   
   
 End GeneralisedBarInduction.
-.
+
