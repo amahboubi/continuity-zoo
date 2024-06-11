@@ -14,5 +14,3 @@ theories/BI.v
 # theories/continuity_zoo.v
 # theories/fujiwara_kawai.v
 theories/minimal_example.v
-
-theories/cantor.v

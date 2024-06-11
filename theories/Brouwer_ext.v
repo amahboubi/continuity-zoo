@@ -98,6 +98,11 @@ Definition Bvalid_ext_tree (tau : Bext_tree) :=
   forall (f : I -> O) (k : I) (a : A), tau (map f (iota 0 k)) = Some a ->
                           tau (map f (iota 0 k.+1)) = Some a.
 
+Definition Bseq_cont_valid F :=
+  exists tau : Bext_tree,
+    (forall alpha, exists n : nat, Beval_ext_tree tau alpha n = Some (F alpha)) /\
+      (Bvalid_ext_tree tau).
+
 Lemma Bvalid_plus (tau : Bext_tree) :
   Bvalid_ext_tree tau -> forall f k j a,
       tau (map f (iota 0 k)) = Some a ->

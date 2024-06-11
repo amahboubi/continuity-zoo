@@ -16,19 +16,38 @@ Set Bullet Behavior "Strict Subproofs".
 Set Default Goal Selector "!".
 
 
-(** Kawaii's "Principles of bar induction and continuity on Baire space" has the notions of neighborhood function and Brouwer operation, and derived continuity notions based on them. Brouwer operations are an inductive _predicate_ on neighborhood functions.
+(** Kawaii's "Principles of bar induction and continuity on Baire space" has the notions of
+    neighborhood function and Brouwer operation, and derives continuity notions based on them.
+    Brouwer operations are an inductive _predicate_ on neighborhood functions.
 
-conjecture 1: a neighborhood function is just an extensional tree,
-thus neigh_cont is equivalent to Bseq_cont
+Result 1: a neighborhood function is just a valid Brouwer extensional tree,
+       thus neigh_cont is equivalent to Bseq_cont_valid. We prove this in 
+            Theorem neigh_cont_Bseq_cont.
 
-conjecture 2: a Brouwer operation can be turned into the existence of a Brouwer tree (through the Acc trick used in extra_principles.v). Thus, Bneigh_cont is equivalent to dialogue_cont_Brouwer.
-The underlying insight is: The existence of a Brouwer tree is equivalent to the existence of an extensional tree that is inductively barred. This equivalence only works in the Brouwer / Baire case, not in general.
+Result 2: a Brouwer operation can be turned into the existence of a Brouwer tree 
+       (through the Acc trick used in extra_principles.v). 
+       Thus, Bneigh_cont is equivalent to dialogue_cont_Brouwer.
+       We prove this in
+            Theorem Bneigh_cont_equiv_dialogue_cont_Brouwer.
+
+       The underlying insight is: The existence of a Brouwer tree is equivalent to 
+       the existence of an extensional tree that is inductively barred. 
+       This equivalence only works in the Brouwer / Baire case, not in general.
 
 *)
 
 Definition neighborhoodfunction (γ : list nat -> option nat) :=
   (forall α : nat -> nat, exists n : nat, γ (map α (iota 0 n)) <> None) /\
     forall a b : list nat, γ a <> None -> γ a = γ (a ++ b).
+
+
+Definition neigh_realises γ (F : (nat -> nat) -> nat) :=
+    forall α, exists m, γ (map α (iota 0 m)) = Some (F α) /\
+              forall z, z < m -> γ (map α (iota 0 z)) = None.
+
+Definition neigh_cont F :=
+  exists γ, neighborhoodfunction γ /\ neigh_realises γ F.
+
 
 Lemma neighborhood_wf_valid_Bext_tree (tau : list nat -> option nat) :
   neighborhoodfunction tau <-> (wf_Bext_tree tau /\ Bvalid_ext_tree tau).
@@ -60,6 +79,62 @@ Proof.
       * erewrite map_nth_iota0 ; [ | rewrite Heq ; now apply leqnSn].
         rewrite catA take_size_cat => //.
 Qed.
+
+Lemma neigh_realises_Beval_aux (tau : seq nat -> option nat) a alpha l i :
+  (exists n, 
+      (tau (l ++ [seq alpha i | i <- iota i n]) = Some a /\
+         (forall z : nat, z < n -> tau (l ++ [seq alpha i | i <- iota i z]) = None))) <->
+    exists n, Beval_ext_tree_aux tau alpha n l i = Some a.
+Proof.
+  split.
+  - intros [n Hyp] ; exists n ; revert l i Hyp.
+    induction n ; intros l i [Hsome Hinfn]  ; [ now rewrite cats0 in Hsome | ].
+    cbn ; remember (tau l) as aux ; destruct aux as [r | ].
+    + specialize (Hinfn 0) ; rewrite cats0 in Hinfn.
+      now rewrite Hinfn in Heqaux ; [inversion Heqaux | ].
+    + eapply IHn ; split ; [ now rewrite cat_rcons | ].
+      intros z Hinfz ; rewrite cat_rcons.
+      now apply (Hinfn z.+1).
+  - intros [n Heq].
+    exists (Beval_ext_tree_trace_aux tau alpha n l i).
+    rewrite Beval_ext_tree_map_aux in Heq.
+    split ; [assumption | ].
+    revert l i Heq ; induction n ; intros l i Heq z Hinf ; cbn in * ; [now inversion Hinf | ].
+    remember (tau l) as aux ; destruct aux as [r | ] ; [inversion Hinf | ].
+    destruct z ; cbn in * ; [now rewrite cats0 | rewrite - cat_rcons].
+    apply IHn ; auto ; now rewrite cat_rcons.
+Qed.
+
+
+Lemma neigh_realises_Beval (tau : seq nat -> option nat) F :
+  neigh_realises tau F <->
+  forall alpha, exists n, Beval_ext_tree tau alpha n = Some (F alpha).
+Proof.
+  split.
+  - intros Hyp alpha ; specialize (Hyp alpha) as [n [Hsome Hinfn]].
+    eapply neigh_realises_Beval_aux ; now eauto.
+  - intros Hyp alpha ; specialize (Hyp alpha) as [n Heq].
+    eapply (neigh_realises_Beval_aux _ _ _ nil).
+    now exists n.
+Qed.
+
+
+Theorem neigh_cont_Bseq_cont F :
+  neigh_cont F <-> Bseq_cont_valid F.
+Proof.
+  split.
+  - intros [tau [Hneigh Hreal]].
+    exists tau ; split ; [ | now eapply neighborhood_wf_valid_Bext_tree].
+    now apply neigh_realises_Beval.
+  - intros [tau [Hcont Hval] ].
+    exists tau ; split ; [ | now apply neigh_realises_Beval].
+    eapply neighborhood_wf_valid_Bext_tree.
+    split ; [ | assumption].
+    intros alpha ; specialize (Hcont alpha) as [n Heq].
+    exists (Beval_ext_tree_trace_aux tau alpha n nil 0), (F alpha).
+    now rewrite - (Beval_ext_tree_map_aux tau alpha n nil 0).
+Qed.
+
 
 Inductive Brouwer_operation : (list nat -> option nat) -> Prop :=
 | Bconst γ n : (forall a, γ a = Some n) -> Brouwer_operation γ
@@ -95,16 +170,13 @@ Lemma Brouwer_operation_at'_spec1 γ l :
 Proof.
   (* split. *)
   - induction 1.
-    + econstructor. intros. enough (None = Some n) by congruence.
-      rewrite <- H0. erewrite <- H.
-      erewrite cats0 => //.
+    + econstructor. intros [Hnone | Hnex].
+      * enough (None = Some n) by congruence.
+        rewrite <- Hnone. erewrite <- H.
+        erewrite cats0 => //.
+      * exfalso ; apply Hnex.
+        exists n ; now auto.
     + econstructor. intros. eauto.
-  (* - induction 1. *)
-(*     destruct (γ l) eqn:E. *)
-(*     + econstructor 1. *)
-(*       admit. *)
-(*     + econstructor 2; eauto. *)
-(* Admitted. *)
 Qed.
 
 Lemma Brouwer_operation_at_Type_spec γ l :
@@ -113,16 +185,6 @@ Proof.
   (* split. *)
   - induction 1.
     econstructor. auto.
-    (* + econstructor. intros. enough (None = Some n) by congruence. *)
-    (*   rewrite <- H0. erewrite <- H. *)
-    (*   erewrite cats0 => //. *)
-    (* + econstructor. intros. eauto. *)
-      (* - induction 1. *)
-      (*     destruct (γ l) eqn:E. *)
-      (*     + econstructor 1. *)
-      (*       admit. *)
-      (*     + econstructor 2; eauto. *)
-      (* Admitted. *)
 Qed.
 
 Require Import FunctionalExtensionality.
@@ -154,8 +216,10 @@ Proof.
       intros. cbn. rewrite cat_rcons => //.
 Qed.
 
-Lemma K0K γ :
-  Brouwer_operation γ -> neighborhoodfunction γ.
+Lemma K0K_aux γ l :
+  Brouwer_operation_at γ l ->
+  (forall α : nat -> nat, exists n : nat, γ (l ++ (map α (iota 0 n))) <> None) /\
+    forall a b : list nat, γ (l ++ a) <> None -> γ (l ++ a) = γ (l ++ a ++ b).
 Proof.
   induction 1.
   - split.
@@ -170,22 +234,27 @@ Proof.
         replace 1 with (1 + 0). 
         1: rewrite iotaDl.
         2: now rewrite addn0.
-        rewrite <- map_comp. eassumption.
+        now rewrite - map_comp - cat_rcons .
     + intros a b Ha.
-      destruct a. 1: congruence.
+      destruct a. 1: rewrite cats0 in Ha ; congruence.
       destruct (H1 n) as [H1' H2'].
-      eapply H2'. congruence.
+      rewrite catA - cat_rcons - catA.
+      eapply H2'.
+      rewrite cat_rcons ; congruence.
 Qed.
 
-Definition neigh_realises γ (F : (nat -> nat) -> nat) :=
-    forall α, exists m, γ (map α (iota 0 m)) = Some (F α) /\
-              forall z, z < m -> γ (map α (iota 0 m)) = None.
+Lemma K0K γ :
+  Brouwer_operation_at γ nil ->
+  neighborhoodfunction γ.
+Proof.
+  unfold neighborhoodfunction.
+  now apply K0K_aux.
+Qed.
 
-Definition neigh_cont F :=
-  exists γ, neighborhoodfunction γ /\ neigh_realises γ F.
 
 Definition Bneigh_cont F :=
-  exists γ, Brouwer_operation γ /\ neigh_realises γ F.
+  exists γ, Brouwer_operation_at γ nil /\ neigh_realises γ F.
+
 
 Lemma Bneigh_continuous_neigh_continuous F :
   Bneigh_cont F -> neigh_cont F.
@@ -194,13 +263,13 @@ Proof.
   firstorder.
 Qed.
 
-Lemma Bneigh_cont_equiv_dialogue_cont_Brouwer F :
+
+Theorem Bneigh_cont_equiv_dialogue_cont_Brouwer F :
   Bneigh_cont F <-> dialogue_cont_Brouwer F.
 Proof.
   split.
   - intros (γ & H1 & H2).
-    eapply Brouwer_operation_at_spec with (l := nil) in H1.
-    revert H1. generalize (@nil nat) as l. intros l H1.
+    have Hvalid := Bvalid_Bvalid2 ((neighborhood_wf_valid_Bext_tree _).1 (K0K H1)).2.
     eapply Brouwer_operation_at'_spec1 in H1.
     eapply Brouwer_operation_at_Type_spec in H1.
     unshelve eexists.
@@ -208,33 +277,93 @@ Proof.
       destruct (γ l) eqn:E.
       -- eapply spit. exact n.
       -- eapply bite. intros n.
-         eapply (X ltac:(reflexivity) n).
+         eapply (X (erefl) n).
     + cbn.
-      set (Brouwer_operation_at_Type_rect _) as f.
-      cbn in *.
+      set (Brouwer_operation_at_Type_rect _) as f ; cbn in *.
       intros α.
-      destruct (H2 α) as (? & ? & ?).
-      enuogh (Some (beval (f l H1) α) = (γ [seq α i | i <- iota 0 x])).
-      { rewrite H in H3. now inversion H3. }
-      symmetry. clear H. 
-      induction H1. cbn.
-      destruct (γ l) eqn:E.
-      -- simpl in *.
-         admit.
-      -- admit.
+      destruct (H2 α) as (m & Hm & Hinfm).
+      erewrite beval_beval' ; unfold beval'.
+      revert H1 α m Hinfm Hm.
+      suff: forall l (H1 : Brouwer_operation_at_Type γ l) (α : nat -> nat) (m : nat)
+                   (Hinfz : forall z : nat, z < m ->
+                                            γ (l ++ [seq α i | i <- iota (size l) z]) = None),
+          γ (l ++ [seq α i | i <- iota (size l) m]) = Some (F α) ->
+          F α = beval_aux (f l H1) α (size l) by (intros Hyp ; eapply Hyp).
+      intros l H1.
+      induction H1 as [ l k IHk ] ; intros α m Hinfz Hm.
+      generalize (@erefl _ (γ l)) ; generalize (γ l) at 2.
+      intros aux Heqaux ; destruct aux as [n | ] ; cbn.
+      * destruct m ; [rewrite cats0 in Hm | specialize (Hinfz 0) ; rewrite cats0 in Hinfz].
+        -- now symmetry in Hm ; destruct Hm.
+        -- now rewrite Hinfz in Heqaux ; [inversion Heqaux | ].
+      * symmetry in Heqaux ; destruct Heqaux ; cbn.
+        erewrite IHk with erefl (α (size l)) α m.-1 ; rewrite size_rcons ; auto.
+        -- intros z Hinf ; rewrite cat_rcons.
+           change (γ (l ++ [seq α i | i <- iota (size l) z.+1]) = None).
+           apply Hinfz ; now destruct m ; [inversion Hinf | ].
+        -- destruct m ; cbn in * ; [ | now rewrite cat_rcons].
+           rewrite cats0 ; rewrite cats0 in Hm ; now eapply Hvalid.
   - intros [b Hb].
     unshelve eexists.
-    + clear Hb. induction b.
-      * exact (fun _ => Some r).
+    + clear F Hb. induction b.
+      * intros [].
+        -- exact None.
+        -- exact (Some r).
       * intros [].
         -- exact None.
         -- eapply (H n l).
-    + induction b in F, Hb |- *; cbn in *.
-      * split. 1: econstructor.
-        (* intros α. *)
-      (*   exists 0. split; auto. lia. *)
-      (* * split. *)
-      (*   -- econstructor => //. *)
-      (*      intros. eapply H. *)
-      (*   -- intros α. *)
-Admitted.
+    + split.
+      * clear F Hb.
+        generalize (@nil nat) as l.
+        induction b as [ | k IHk] ; intros.
+        -- cbn in *.
+           destruct l ; [ econstructor 2 | econstructor ] ; cbn ; eauto.
+           intros n ; econstructor ; eauto ; intros a ; now eauto.
+        -- revert IHk ; remember (Btree_rec _ _) as f ; intros IHk.
+           destruct l as [ | a l] ; auto.
+           ++ econstructor 2 ; [ rewrite Heqf ; auto | ].
+              intros n.
+              specialize (IHk n nil).
+              rewrite Heqf ; cbn ; rewrite - Heqf.
+              remember (f (k n)) as tau.
+              induction IHk as [ l tau m Hsome | l tau Hnone _ IHk].
+              ** econstructor ; intros u ; cbn ; rewrite - Heqtau ; now apply Hsome. 
+              ** econstructor 2 ; cbn ; [now rewrite - Heqtau | ].
+                 intros m ; now eapply IHk.
+           ++ rewrite Heqf ; cbn ; rewrite - Heqf.
+              specialize (IHk a l).
+              remember (f (k a)) as tau.
+              induction IHk as [ l tau m Hsome | l tau Hnone _ IHk].
+              ** econstructor ; intros u ; cbn ; rewrite - Heqtau ; now apply Hsome.
+              ** econstructor 2 ; cbn ; [now rewrite - Heqtau | ].
+                 intros m ; now apply IHk.
+      * intros alpha.
+        set (f := Btree_rec _ _).
+        suff: exists m, f b [seq alpha i | i <- iota 0 m] = Some (beval b alpha) /\
+                          (forall z : nat, z < m -> f b [seq alpha i | i <- iota 0 z] = None).
+        { intros [m [Hm1 Hm2]] ; exists m ; split ; [ now erewrite Hb | auto]. }
+        clear F Hb.
+        revert alpha.
+        induction b ; intros.
+        -- exists 1 ; split ; cbn ; auto.
+           intros z eqz.
+           destruct z ; cbn ; [auto | inversion eqz].
+        -- have auxil : forall  (m n : nat) (f : nat -> nat),
+               [seq f i | i <- iota n.+1 m] = [seq (f \o succn) i | i <- iota n m].
+           { clear.
+             induction m ; cbn in * ; auto.
+             intros n f ; f_equal.
+             now erewrite <- IHm.
+           }
+           specialize (H (alpha 0) (alpha \o succn)) as [m [Hm1 Hm2]].
+           rewrite - Hm1.
+           exists m.+1 ; split ; auto.
+           ++ cbn ; now erewrite auxil.
+           ++ intros z Hinfz.
+              case: (leqP m z) ; intros Hinfz'.
+              ** destruct z ; cbn ; [reflexivity | ].
+                 now rewrite - (Hm2 z) ; [now rewrite auxil | ].
+              ** destruct z ; cbn ; [reflexivity | ].
+                 rewrite - (Hm2 z) ; [now rewrite auxil | ].
+                 now apply ltnW.
+Qed.                 

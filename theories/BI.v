@@ -17,12 +17,51 @@ Set Default Goal Selector "!".
 Arguments ext_tree {_ _ _}, _ _ _.
 Arguments Btree {_ _}, _ _.
 
+Section Beval.
+Variables O A : Type.
+Notation I := nat.
+Implicit Type (F : (I -> O) -> A).
+Fixpoint beval_aux (b : Btree O A) (f : I -> O) (n : nat) {struct b} : A :=
+  match b with
+  | spit o => o
+  | bite k => beval_aux (k (f n)) f (S n)
+  end.
+
+Definition beval' b f := beval_aux b f 0.
+
+Lemma beval_ext (b : Btree O A) (f1 f2 : I -> O) :
+  (forall x, f1 x = f2 x) -> beval b f1 = beval b f2.
+Proof.
+  revert f1 f2 ; induction b as [ | k IHk] ; intros * H ; [ reflexivity | ].
+  cbn in * ; erewrite  H.
+  eapply IHk.
+  intros x ; cbn ; now apply H.
+Qed.
+
+Lemma beval_beval_aux (b : Btree O A) f k :
+  beval b (fun n => f (k + n)) = beval_aux b f k.
+Proof.
+  revert k f ; induction b as [ | k IHk] ; cbn ; intros k' f; [reflexivity |].
+  specialize (IHk (f k') (S k')).
+  erewrite <- IHk, <- plus_n_O.
+  eapply beval_ext ; cbn.
+  intros n ; now erewrite <- plus_n_Sm.
+Qed.
+
+Lemma beval_beval' b f : beval b f = beval' b f.
+Proof.
+  exact (beval_beval_aux b f 0).
+Qed.
+
+End Beval.
+
 Section ContinuousInduction.
 
 Variable O : Type.
 Notation I := nat.
 Notation A := (seq O).
 Implicit Type (F : (I -> O) -> A).
+Implicit Type (b : @Btree O A).
 
 Variable CI : forall F, seq_cont F -> dialogue_cont F.
 
@@ -97,37 +136,6 @@ Proof.
   now exists i.
 Defined.
 
-Fixpoint beval_aux (b : Btree O A) (f : I -> O) (n : nat) {struct b} : A :=
-  match b with
-  | spit o => o
-  | bite k => beval_aux (k (f n)) f (S n)
-  end.
-
-Definition beval' b f := beval_aux b f 0.
-
-Lemma beval_ext (b : Btree O A) (f1 f2 : I -> O) :
-  (forall x, f1 x = f2 x) -> beval b f1 = beval b f2.
-Proof.
-  revert f1 f2 ; induction b as [ | k IHk] ; intros * H ; [ reflexivity | ].
-  cbn in * ; erewrite  H.
-  eapply IHk.
-  intros x ; cbn ; now apply H.
-Qed.
-
-Lemma beval_beval_aux (b : Btree O A) f k :
-  beval b (fun n => f (k + n)) = beval_aux b f k.
-Proof.
-  revert k f ; induction b as [ | k IHk] ; cbn ; intros k' f; [reflexivity |].
-  specialize (IHk (f k') (S k')).
-  erewrite <- IHk, <- plus_n_O.
-  eapply beval_ext ; cbn.
-  intros n ; now erewrite <- plus_n_Sm.
-Qed.
-
-Lemma beval_beval' b f : beval b f = beval' b f.
-Proof.
-  exact (beval_beval_aux b f 0).
-Qed.
 
   (*We define a specific oracle (pref_o l o alpha) that is equal to o for n <= (size l),
    and coincides with alpha everywhere else.*)
@@ -338,12 +346,8 @@ Qed.
 
 
 Lemma Bseq_cont_to_Bseq_cont_valid F :
-  (exists tau : Bext_tree,
-           forall alpha, exists n : nat, Beval_ext_tree tau alpha n = Some (F alpha)
-   ) ->
-  exists tau : Bext_tree,
-           (forall alpha, exists n : nat, Beval_ext_tree tau alpha n = Some (F alpha)) /\
-             (Bvalid_ext_tree tau).
+  Bseq_cont F ->
+  Bseq_cont_valid F.
 Proof.
   intros [tau Htau].
   exists (fun l => Bextree_to_valid tau l nil).
