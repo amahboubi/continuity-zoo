@@ -34,7 +34,10 @@ Result 2: a Brouwer operation can be turned into the existence of a Brouwer tree
        the existence of an extensional tree that is inductively barred. 
        This equivalence only works in the Brouwer / Baire case, not in general.
 
-*)
+ *)
+
+(*We first define neighborhood functions and what it means to be
+ continuous with respect to them.*)
 
 Definition neighborhoodfunction (γ : list nat -> option nat) :=
   (forall α : nat -> nat, exists n : nat, γ (map α (iota 0 n)) <> None) /\
@@ -49,6 +52,8 @@ Definition neigh_cont F :=
   exists γ, neighborhoodfunction γ /\ neigh_realises γ F.
 
 
+(*A first result is that neighborhood functions are well-founded, valid
+ Brouwer extensional trees.*)
 Lemma neighborhood_wf_valid_Bext_tree (tau : list nat -> option nat) :
   neighborhoodfunction tau <-> (wf_Bext_tree tau /\ Bvalid_ext_tree tau).
 Proof.
@@ -80,6 +85,10 @@ Proof.
         rewrite catA take_size_cat => //.
 Qed.
 
+(*Moreover, the notion of a neighborhood function realising F is similar
+ to the use of Beval_ext_tree, albeit the natural number n must be the smallest
+ one in the case of neighborhood functions, while it can be any large enough
+ natural number in the case of Beval_ext_tree_aux. *)
 Lemma neigh_realises_Beval_aux (tau : seq nat -> option nat) a alpha l i :
   (exists n, 
       (tau (l ++ [seq alpha i | i <- iota i n]) = Some a /\
@@ -118,6 +127,7 @@ Proof.
     now exists n.
 Qed.
 
+(*We now get to Result 1.*)
 
 Theorem neigh_cont_Bseq_cont F :
   neigh_cont F <-> Bseq_cont_valid F.
@@ -135,6 +145,8 @@ Proof.
     now rewrite - (Beval_ext_tree_map_aux tau alpha n nil 0).
 Qed.
 
+(*Let us now define Brouwer_operation. As explained, it is 
+ an inductive predicate on functions of type list nat -> option nat.*)
 
 Inductive Brouwer_operation : (list nat -> option nat) -> Prop :=
 | Bconst γ n : (forall a, γ a = Some n) -> Brouwer_operation γ
@@ -142,12 +154,11 @@ Inductive Brouwer_operation : (list nat -> option nat) -> Prop :=
            (forall n, Brouwer_operation (fun a => γ (n :: a))) ->
            Brouwer_operation γ.
 
-Inductive wf (P : nat -> bool) n :=
-| wf_ok : P n = true -> wf P n
-| wf_step : P n = false -> wf P (S n) -> wf P n.
-
-Inductive wf' (P : nat -> bool) n :=
-| wf_one : (P n = false -> wf' P (S n)) -> wf' P n.
+(*Brouwer_operation lands in Prop but we can use decidability of 
+ the result of γ applied to some list l to go from Prop to Type.
+However, Brouwer_operation as it stands is too intensional.
+ We thus start by defining Brouwer_operation_at, a variant of Brouwer_operation
+ that does not require function extensionality.*)
 
 Inductive Brouwer_operation_at : (list nat -> option nat) -> list nat -> Prop :=
 | Bconst_at l γ n : (forall a, γ (l ++ a) = Some n) -> Brouwer_operation_at γ l
@@ -155,37 +166,7 @@ Inductive Brouwer_operation_at : (list nat -> option nat) -> list nat -> Prop :=
            (forall n, Brouwer_operation_at γ (rcons l n)) ->
            Brouwer_operation_at γ l.
 
-Inductive Brouwer_operation_at' (γ : list nat -> option nat) (l : list nat) : Prop :=
-| Bsup_at' : (γ l = None \/ ~ (exists n, forall a, γ (l ++ a) = Some n) ->
-                (forall n, Brouwer_operation_at' γ (rcons l n))) ->
-                Brouwer_operation_at' γ l.
-
-Inductive Brouwer_operation_at_Type (γ : list nat -> option nat) (l : list nat) : Type :=
-| Bsup_at_Type : (γ l = None ->
-              (forall n, Brouwer_operation_at_Type γ (rcons l n))) ->
-             Brouwer_operation_at_Type γ l.
-
-Lemma Brouwer_operation_at'_spec1 γ l :
-  Brouwer_operation_at γ l -> Brouwer_operation_at' γ l.
-Proof.
-  (* split. *)
-  - induction 1.
-    + econstructor. intros [Hnone | Hnex].
-      * enough (None = Some n) by congruence.
-        rewrite <- Hnone. erewrite <- H.
-        erewrite cats0 => //.
-      * exfalso ; apply Hnex.
-        exists n ; now auto.
-    + econstructor. intros. eauto.
-Qed.
-
-Lemma Brouwer_operation_at_Type_spec γ l :
-  Brouwer_operation_at' γ l -> Brouwer_operation_at_Type γ l.
-Proof.
-  (* split. *)
-  - induction 1.
-    econstructor. auto.
-Qed.
+(*Using Function Extensionality, the two predicates are equivalent.*)
 
 Require Import FunctionalExtensionality.
 
@@ -216,6 +197,50 @@ Proof.
       intros. cbn. rewrite cat_rcons => //.
 Qed.
 
+(*We now define Brouwer_operation_at', similar to Brouwer_operation but with only
+ one constructor, to be able to escape Prop.*)
+
+Inductive Brouwer_operation_at' (γ : list nat -> option nat) (l : list nat) : Prop :=
+| Bsup_at' : (γ l = None \/ ~ (exists n, forall a, γ (l ++ a) = Some n) ->
+                (forall n, Brouwer_operation_at' γ (rcons l n))) ->
+                Brouwer_operation_at' γ l.
+
+(*Brouwer_operation_at_Type is similar to Brouwer_operation_at', but lives in Type.*)
+Inductive Brouwer_operation_at_Type (γ : list nat -> option nat) (l : list nat) : Type :=
+| Bsup_at_Type : (γ l = None ->
+              (forall n, Brouwer_operation_at_Type γ (rcons l n))) ->
+             Brouwer_operation_at_Type γ l.
+
+(*As expected, we can go from Brouwer_operation_at to Brouwer_operation_at'.*)
+Lemma Brouwer_operation_at'_spec1 γ l :
+  Brouwer_operation_at γ l -> Brouwer_operation_at' γ l.
+Proof.
+  (* split. *)
+  - induction 1.
+    + econstructor. intros [Hnone | Hnex].
+      * enough (None = Some n) by congruence.
+        rewrite <- Hnone. erewrite <- H.
+        erewrite cats0 => //.
+      * exfalso ; apply Hnex.
+        exists n ; now auto.
+    + econstructor. intros. eauto.
+Qed.
+
+(*And we can go from Brouwer_operation_at' to Brouwer_operation_at_Type*)
+Lemma Brouwer_operation_at_Type_spec γ l :
+  Brouwer_operation_at' γ l -> Brouwer_operation_at_Type γ l.
+Proof.
+  (* split. *)
+  - induction 1.
+    econstructor. auto.
+Qed.
+
+
+(*We now define Brouwer operation continuity.*)
+Definition Bneigh_cont F :=
+  exists γ, Brouwer_operation_at γ nil /\ neigh_realises γ F.
+
+(*Functions that are Brouwer operations are neighborhood functions.*)
 Lemma K0K_aux γ l :
   Brouwer_operation_at γ l ->
   (forall α : nat -> nat, exists n : nat, γ (l ++ (map α (iota 0 n))) <> None) /\
@@ -251,10 +276,7 @@ Proof.
   now apply K0K_aux.
 Qed.
 
-
-Definition Bneigh_cont F :=
-  exists γ, Brouwer_operation_at γ nil /\ neigh_realises γ F.
-
+(*Hence, Brouwer operation continuity implies neighborhood function continuity.*)
 
 Lemma Bneigh_continuous_neigh_continuous F :
   Bneigh_cont F -> neigh_cont F.
@@ -263,6 +285,8 @@ Proof.
   firstorder.
 Qed.
 
+(*We now turn to Result 2, the fact that Brouwer operation continuity is equivalent
+ to Brouwer trees continuity.*)
 
 Theorem Bneigh_cont_equiv_dialogue_cont_Brouwer F :
   Bneigh_cont F <-> dialogue_cont_Brouwer F.
