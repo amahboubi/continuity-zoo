@@ -391,3 +391,101 @@ Proof.
                  rewrite - (Hm2 z) ; [now rewrite auxil | ].
                  now apply ltnW.
 Qed.                 
+
+
+(** *** Sequential continuity is equivalent to interaction tree continuity  *)
+
+CoFixpoint neigh_to_Bitree (e : list nat -> option nat) (l : list nat) :
+  @Bitree nat nat :=
+  match e l with
+  | None => Bvis (fun a => neigh_to_Bitree e (rcons l a))
+  | Some o => Bret _ o
+  end.
+
+
+Lemma neigh_cont_to_Bseq_cont_interaction F :
+  neigh_cont F -> Bseq_cont_interaction F.
+Proof.
+  intros [e [Hne Hrel]].
+  exists (neigh_to_Bitree e nil).
+  intros f ; specialize (Hrel f) as [n [Heq Hn]].
+  exists n.
+  rewrite <- Heq.
+  suff: forall l, Bieval (neigh_to_Bitree e l) (n_comp f (size l)) n =
+                    e (l ++ [seq f i | i <- iota (size l) n]).
+  { intros Hyp ; now apply Hyp. }
+  clear Heq Hn.
+  revert f e Hne.
+  induction n as [ | n IHn] ; intros.
+  - cbn in * ; rewrite cats0.
+    now destruct (e l).
+  - cbn in *.
+    remember (e l) as aux ; destruct aux as [o | ].
+    + rewrite Heqaux ; apply Hne ; now rewrite - Heqaux.
+    + specialize (IHn f e Hne (rcons l (f (size l)))).
+      rewrite size_rcons - cats1 - catA in IHn.
+      now rewrite - IHn n_comp_n_plus addn0 - cats1.
+Qed.
+
+
+Fixpoint Bieval_trace {X Y} (i : Bitree X Y) (alpha : nat -> X) (n : nat) : nat :=
+  match n with
+  | 0 => 0
+  | S j => match i with
+           | Bret o => 0
+           | Bvis k => S (Bieval_trace (k (alpha 0)) (alpha \o S) j)
+           end
+  end.
+
+Lemma Bieval_trace_Some {X Y} (i : Bitree X Y) (alpha : nat -> X) (n : nat) (y : Y) :
+  Bieval i alpha n = Some y ->
+  Bieval i alpha (Bieval_trace i alpha n) = Some y.
+Proof.
+  revert i alpha ; induction n as [ | n IHn] ; intros i alpha Heq ; [now auto | ].
+  cbn in *.
+  destruct i as [ | k] ; [now auto | ].
+  cbn in *.
+  now apply IHn.
+Qed.
+
+Lemma Bieval_trace_inf {X Y} (i : Bitree X Y) (alpha : nat -> X) (n m : nat) :
+  m < (Bieval_trace i alpha n) ->
+  Bieval i alpha m = None.
+Proof.
+  revert i alpha m ; induction n as [ | n IHn] ; intros i alpha m Hinf ; [now inversion Hinf | ].
+  destruct i ; cbn in * ; [now inversion Hinf | ].
+  destruct m ; [reflexivity | cbn ; now apply IHn].
+Qed.
+
+Lemma Bseq_cont_interaction_to_neigh_cont F :
+  Bseq_cont_interaction F -> neigh_cont F.
+Proof.
+  intros [b Hb].
+  suff: forall f, exists n, Bitree_to_option b [seq f i | i <- iota 0 n] = Some (F f) /\
+                              forall z, z < n ->
+                                        Bitree_to_option b [seq f i | i <- iota 0 z] = None.
+  - intros Hyp.
+    exists (Bitree_to_option b) ; split.
+    + split ; [intros alpha | ].
+      * specialize (Hyp alpha) as [n [Hn Hinf]].
+        exists n ; now rewrite Hn.
+      * clear Hb Hyp F ; intros a ; revert b ; induction a as [ | x q IHq] ; intros b v Heqv.
+        -- cbn in * ; destruct b ; [now destruct v | now exfalso].
+        -- cbn in * ; destruct b ; [reflexivity | now apply IHq].
+    + intros alpha ; specialize (Hyp alpha) as [n [Hn Hinf]].
+      exists n ; now split.
+  - intros alpha ; specialize (Hb alpha) as [n Hn].
+    exists (Bieval_trace b alpha n) ; split.
+    + rewrite - Bitree_to_option_Bieval.
+      now apply Bieval_trace_Some.
+    + intros m Hinf ; rewrite - Bitree_to_option_Bieval.
+      eapply Bieval_trace_inf ; eauto.
+Qed.
+
+Theorem neigh_cont_iff_Bseq_cont_interaction (F : (nat -> nat) -> nat) :
+  neigh_cont F <-> Bseq_cont_interaction F.
+Proof.
+  split.
+  - apply neigh_cont_to_Bseq_cont_interaction.
+  - apply Bseq_cont_interaction_to_neigh_cont.
+Qed.

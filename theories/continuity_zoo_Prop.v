@@ -171,6 +171,16 @@ Fixpoint ieval (i : Itree) (f : Q -> A) (n : nat) : result :=
            end
   end.
 
+Lemma ieval_output_unique tau f n1 n2 o1 o2 :
+  ieval tau f n1 = output o1 ->
+  ieval tau f n2 = output o2 ->
+  o1 = o2.
+Proof.
+  elim: n1 n2 tau => [| n1 ihn1] [ | n2] /= ; intros tau H1 H2.
+  all: destruct tau ; inversion H1 ; inversion H2 ; subst ; auto.
+  eapply ihn1 ; eauto.
+Qed.
+
 Definition seq_cont_interaction F :=
   exists τ : Itree, forall f : Q -> A, exists n : nat, ieval τ f n = output (F f).
 

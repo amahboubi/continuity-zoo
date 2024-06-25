@@ -10,6 +10,8 @@ Unset Printing Implicit Defensive.
 Require Import continuity_zoo_Prop.
 
 Arguments ext_tree {_ _ _}, _ _ _.
+Set Bullet Behavior "Strict Subproofs".
+Set Default Goal Selector "!".
 
 (* Now let's prove seq_contW + bar induction -> dialogue or Brouwer
    May be find a better principle for reasoning on trees, equivalent to bar induction
@@ -279,16 +281,17 @@ Proof.
   rewrite {}/m1 {}/m2.
   set m:= (X in (n + X)).
   set x := eval_ext_tree_trace_aux _ _ _ _.
-  suff -> : x = eval_ext_tree_trace_aux tau alpha n [::].
-  by rewrite {}/x {}/m addnS ltnS leq_addl.
+  suff -> : x = eval_ext_tree_trace_aux tau alpha n [::]
+    by rewrite {}/x {}/m addnS ltnS leq_addl.
   rewrite {}/x.
   erewrite (eval_ext_tree_trace_monotone (n := n) m) ; [ | eassumption].
   erewrite (eval_ext_tree_trace_from_pref (f := alpha) (l := nil)) ;
     rewrite {}/m ; first by rewrite addnS.
   set m1 := List.list_max _.
   set m2 := List.list_max _.
-  suff: m1 = m2 ; rewrite {}/m1 {}/m2.
-  by intros H ; rewrite H ; apply PeanoNat.Nat.le_add_l.
+  suff: m1 = m2.
+  { rewrite {}/m1 {}/m2. intros H ; rewrite H ; apply PeanoNat.Nat.le_add_l. }
+  rewrite {}/m1 {}/m2.
   f_equal.
   cbn ; symmetry.
   eapply eval_ext_tree_trace_monotone.
@@ -436,3 +439,241 @@ Proof.
 Qed.
 
 End Brouwer_ext_tree.
+
+
+
+
+Section Brouwer_interaction_trees.
+  
+Variable A R : Type.
+Notation Q := nat.
+Implicit Type (F : (Q -> A) -> R).
+
+CoInductive Bitree : Type :=
+  | Bret : R -> Bitree
+| Bvis : (A -> Bitree) -> Bitree.
+
+Local Notation itree := (@Itree nat A R).
+
+Fixpoint Bieval (b : Bitree) (f : Q -> A) (n : nat) : option R :=
+  match n with
+  | 0 => match b with
+         | Bret o => Some o
+         | Bvis k => None
+         end
+  | S n => match b with
+           | Bret o => Some o
+           | Bvis k => Bieval (k (f 0)) (f \o S) n
+           end
+  end.
+
+Lemma Bieval_monotone b f n r:
+  Bieval b f n = Some r ->
+  Bieval b f n.+1 = Some r.
+Proof.
+  revert b f ; induction n ; intros b f Heq ; cbn in * ; [destruct b ; now inversion Heq | ].
+  destruct b ; [now inversion Heq | ].
+  now eapply (IHn (b (f 0)) (f \o succn)).
+Qed.
+
+Lemma Bieval_monotone_plus b f n m r:
+  Bieval b f n = Some r ->
+  Bieval b f (n + m) = Some r.
+Proof.
+  revert n ; induction m ; intros n Heq ; [ now rewrite addn0 | ].
+  rewrite addnS - addSn ; now apply IHm, Bieval_monotone.
+Qed.
+
+Lemma Bieval_output_unique b f n m r r' :
+  Bieval b f n = Some r ->
+  Bieval b f m = Some r' ->
+  r = r'.
+Proof.
+  destruct (@leqP n m) as [Hinf | Hinf].
+  - rewrite - (subnKC Hinf) ; intros Heqr Heqr'.
+    erewrite Bieval_monotone_plus in Heqr' ; eauto ; now inversion Heqr'.
+  - rewrite - (subnKC Hinf) ; intros Heqr Heqr'.
+    erewrite Bieval_monotone_plus in Heqr ; [ | eapply Bieval_monotone ; eauto].
+    now inversion Heqr.
+Qed.
+
+
+Definition Bseq_cont_interaction F :=
+  exists τ : Bitree, forall f : Q -> A, exists n : nat, Bieval τ f n = Some (F f).
+
+
+Fixpoint Bitree_to_option (i : Bitree)  (l : list A) : option R :=
+  match l with
+  | nil => match i with
+           | Bvis k => None
+           | Bret o => Some o
+           end
+  | cons a l' => match i with
+                 | Bvis k => Bitree_to_option (k a) l'
+                 | Bret o => Some o
+                 end
+  end.
+
+Lemma Bitree_to_option_Bieval (i : Bitree) (n : nat) (alpha : Q -> A) :
+  Bieval i alpha n = Bitree_to_option i (map alpha (iota 0 n)).
+Proof.
+  revert alpha i ; induction n as [ | n IHn] ; intros ; [auto | ].
+  cbn ; destruct i as [ | k] ; [reflexivity | ].
+  suff: forall m, [seq alpha i | i <- iota m.+1 n] = [seq (alpha \o succn) i | i <- iota m n].
+  { intros H ; rewrite H ; now apply IHn. }
+  clear ; revert alpha ; induction n as [ | n IHn] ; intros alpha m ; [auto | ].
+  cbn ; f_equal.
+  now apply IHn.
+Qed.  
+
+(*Going from Brouwer interaction trees to interaction trees*)
+
+CoFixpoint Bitree_to_itree_aux  (b : Bitree) (n : nat) : itree :=
+  match b with
+  | Bret a => ret a
+  | Bvis k => vis n (fun o => Bitree_to_itree_aux (k o) (S n))
+  end.
+
+Definition Bitree_to_itree b := Bitree_to_itree_aux b 0.
+
+Lemma Bitree_to_itreeP_aux b alpha n m r:
+  Bieval b (n_comp alpha n) m = Some r <->
+    ieval (Bitree_to_itree_aux b n) alpha m = output r.
+Proof.
+  split.
+  - revert n b ; induction m ; cbn ; intros n b Heq.
+    + destruct b ; inversion Heq ; now subst.
+    + destruct b ; [inversion Heq ; now subst | ].
+      apply IHm.
+      rewrite n_comp_n_plus in Heq ; now rewrite addn0 in Heq.
+  - revert n b ; induction m ; cbn ; intros n b Heq.
+    + destruct b ; now inversion Heq.
+    + destruct b ; [now inversion Heq | ].
+      change (n_comp alpha n \o succn) with (n_comp alpha n.+1).
+      apply IHm.
+      now rewrite n_comp_n_plus addn0.
+Qed.
+
+
+Lemma Bitree_to_itreeP b alpha m r :
+  Bieval b alpha m = Some r <->
+    ieval (Bitree_to_itree b) alpha m = output r.
+Proof.
+  exact (Bitree_to_itreeP_aux b alpha 0 m r).
+Qed.
+
+
+Lemma Bitree_cont_to_itree_cont (F : (nat -> A) -> R) :
+  Bseq_cont_interaction F -> seq_cont_interaction F.
+Proof.
+  intros [b Hb].
+  exists (Bitree_to_itree b) ; intros alpha.
+  specialize (Hb alpha) as [n Hn] ; exists n.
+  now apply Bitree_to_itreeP.
+Qed.
+
+CoFixpoint itree_to_Bitree (l : seq A) (d : itree) : Bitree.
+Proof.
+  refine (match d with
+          | ret o => Bret o
+          | vis n k => Bvis (fun a => _)
+          end).
+  refine (if n < size l
+          then itree_to_Bitree (rcons l a) (k (nth a l n))
+          else itree_to_Bitree (rcons l a) (vis n k)).
+Defined.  
+
+Lemma itree_to_Bitree_seq (n m : nat) (d : itree) (alpha : Q -> A) (r : R) :
+  Bieval (itree_to_Bitree (map alpha (iota 0 m)) d) (n_comp alpha m) n = Some r ->
+  Bieval (itree_to_Bitree (map alpha (iota 0 m.+1)) d) (n_comp alpha m.+1) n = Some r.
+Proof.
+  revert d alpha m ; induction n ; intros * Hyp.
+  - cbn in * ; destruct d ; now inversion Hyp.
+  - cbn in * ; destruct d as [ | q k] ; [now inversion Hyp | ].
+    destruct (leqP q.+1 m) as [H | H].
+    + have aux := ltn_addr 1 H ; rewrite addn1 in aux ; cbn in aux, H.
+      rewrite size_map size_iota H in Hyp.
+      rewrite size_map size_iota aux.
+      rewrite - cats1 n_comp_n_plus addn1 ; rewrite n_comp_n_plus addn0 in Hyp.
+      change [:: alpha m.+1] with (map alpha (iota m.+1 1)).
+      rewrite - map_cat - iotaD addn1.
+      change (n_comp alpha m \o succn) with (n_comp alpha m.+1).
+      apply IHn ; unfold itree_to_Bitree.
+      rewrite - cat1s ; change [:: alpha 0] with (map alpha (iota 0 1)).
+      rewrite - map_cat - iotaD add1n.
+      erewrite nth_map, (nth_iota q) ; [ | | rewrite size_iota] ; eauto ; cbn.
+      erewrite nth_map, (nth_iota q) in Hyp ; [ | | rewrite size_iota] ; eauto ; cbn in *.
+      rewrite - Hyp - cats1 ; change [:: alpha m] with (map alpha (iota m 1)).
+      now rewrite - map_cat - iotaD addn1.
+    + rewrite ltnNge - subn_eq0  in H ; rewrite size_map size_iota - if_neg in Hyp.
+      cbn in * ; rewrite H in Hyp.
+      rewrite size_map size_iota.
+      rewrite n_comp_n_plus addn0 - cats1 in Hyp.
+      rewrite - (map_cat alpha _ (iota m 1)) - iotaD in Hyp.
+      remember (eqn (q - m)%Nrec 0) as b ; destruct b.
+      * rewrite n_comp_n_plus addn1 - cats1 ; rewrite addn1 in Hyp.
+        apply Bieval_monotone in Hyp; cbn in Hyp.
+        rewrite size_map size_iota - Heqb - cats1 n_comp_n_plus addn1 in Hyp.
+        assumption.
+      * rewrite n_comp_n_plus addn1 - cats1 - (map_cat alpha _ (iota m.+1 1)) - iotaD addn1.
+        apply IHn.
+        rewrite addn1 in Hyp.
+        assumption.
+Qed.
+    
+Lemma itree_to_BitreeP (n m : nat) (d : itree) (alpha : Q -> A) (r : R) :
+  ieval d alpha n = output r ->
+  exists k, Bieval (itree_to_Bitree (map alpha (iota 0 m)) d) (n_comp alpha m) k = Some r.
+Proof.
+  revert d m ; induction n ; intros d m Hyp.
+  - cbn in *.
+    exists 0 ; cbn.
+    destruct d ; now inversion Hyp.
+  - cbn in *.
+    destruct d as [ | q k ] ; [exists 0 ; now inversion Hyp | ] ; cbn.
+    specialize (IHn (k (alpha q)) m.+1 Hyp) as [i Hj].
+    exists (i.+1 + (q.+1 - m)).
+    remember (q.+1 - m) as x.
+    clear Hyp.
+    revert q m Heqx Hj.
+    induction x ; intros.
+    + rewrite addn0.
+      cbn in * ; rewrite size_map size_iota.
+      rewrite - Heqx ; cbn.
+      rewrite (nth_map 0) ; [ rewrite nth_iota | rewrite size_iota] ; cbn ; eauto.
+      rewrite n_comp_n_plus addn0 - cats1.
+      now change ([:: alpha m]) with (map alpha (iota m 1)) ; rewrite - map_cat - iotaD addn1.
+    + rewrite addnS ; cbn in *.
+      rewrite size_map size_iota.
+      rewrite - if_neg - Heqx ; cbn.
+      specialize (IHx q m.+1).
+      rewrite size_rcons size_map size_iota; rewrite size_map size_iota in IHx.
+      cbn in *.
+      have aux : x = q - m. 
+      { eapply (f_equal Nat.pred) in Heqx ; cbn in * ; now rewrite Heqx subSKn. }
+      cbn in aux ; rewrite - aux; rewrite - aux in IHx ; specialize (IHx erefl).
+      destruct x.
+      * cbn in * ; rewrite -> addn0 ; rewrite -> addn0 in IHx.
+        do 2 (rewrite n_comp_n_plus - cats1) ; rewrite addn0 addn1.
+        rewrite - (map_cat alpha _ (iota m 1)) - iotaD addn1.
+        rewrite n_comp_n_plus - cats1 in IHx ; rewrite addn1 in IHx.
+        now apply IHx, (itree_to_Bitree_seq (m := m.+1)).
+      * cbn in *.
+        rewrite - IHx ; [ | now apply  (itree_to_Bitree_seq (m := m.+1))].
+        repeat (rewrite n_comp_n_plus) ; rewrite addn0 addn1.
+        repeat (rewrite - cats1).
+        now change ([:: alpha m]) with (map alpha (iota m 1)) ; rewrite - map_cat - iotaD addn1.
+Qed.
+    
+Lemma itree_to_Bitree_cont (F : (nat -> A) -> R) :
+  seq_cont_interaction F -> Bseq_cont_interaction F.
+Proof.
+  intros [d Hd].
+  exists (itree_to_Bitree nil d).
+  intros alpha ; specialize (Hd alpha) as [n Hn].
+  now apply (itree_to_BitreeP (n := n) 0).
+Qed.
+
+
+  
+End Brouwer_interaction_trees.
