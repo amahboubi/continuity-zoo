@@ -17,266 +17,11 @@ Set Default Goal Selector "!".
 Arguments ext_tree {_ _ _}, _ _ _.
 Arguments Btree {_ _}, _ _.
 
-Section Beval.
-Variables O A : Type.
-Notation I := nat.
-Implicit Type (F : (I -> O) -> A).
-Fixpoint beval_aux (b : Btree O A) (f : I -> O) (n : nat) {struct b} : A :=
-  match b with
-  | spit o => o
-  | bite k => beval_aux (k (f n)) f (S n)
-  end.
-
-Definition beval' b f := beval_aux b f 0.
-
-Lemma beval_ext (b : Btree O A) (f1 f2 : I -> O) :
-  (forall x, f1 x = f2 x) -> beval b f1 = beval b f2.
-Proof.
-  revert f1 f2 ; induction b as [ | k IHk] ; intros * H ; [ reflexivity | ].
-  cbn in * ; erewrite  H.
-  eapply IHk.
-  intros x ; cbn ; now apply H.
-Qed.
-
-Lemma beval_beval_aux (b : Btree O A) f k :
-  beval b (fun n => f (k + n)) = beval_aux b f k.
-Proof.
-  revert k f ; induction b as [ | k IHk] ; cbn ; intros k' f; [reflexivity |].
-  specialize (IHk (f k') (S k')).
-  erewrite <- IHk, <- plus_n_O.
-  eapply beval_ext ; cbn.
-  intros n ; now erewrite <- plus_n_Sm.
-Qed.
-
-Lemma beval_beval' b f : beval b f = beval' b f.
-Proof.
-  exact (beval_beval_aux b f 0).
-Qed.
-
-End Beval.
-
 Section ContinuousInduction.
 
-Variable O : Type.
-Notation I := nat.
-Notation A := (seq O).
-Implicit Type (F : (I -> O) -> A).
-Implicit Type (b : @Btree O A).
-
-Variable CI : forall F, seq_cont F -> dialogue_cont F.
-
-Definition wf_ext_tree' (tau : ext_tree I O A) :=
-  forall alpha : I -> O,
-    {n : nat & { a : A & eval_ext_tree tau alpha n = output a}}.
-
-Definition pred_to_ext_tree (P : list O -> bool) : ext_tree I O A :=
-  fun l => if P l then output l else ask (size l).
-
-Lemma pred_to_ext_tree_inv1 P l a :
-  pred_to_ext_tree P l = output a -> l = a.
-Proof.
-  unfold pred_to_ext_tree ; intros H.
-  case_eq (P l) ; intros Heq ; rewrite Heq in H ; now inversion H.
-Qed.
-
-Lemma pred_to_ext_tree_trace_aux
-  (P : list O -> bool) (n : nat) (l : list O) (alpha : I -> O) :
-      P (l ++ (map alpha (iota (size l) n))) ->
-      P (l ++ (map alpha (eval_ext_tree_trace_aux (pred_to_ext_tree P) alpha n l))).
-Proof.
-  revert l ; induction n as [ | ? IHn]; cbn ; intros l HP ; [assumption |].
-  unfold pred_to_ext_tree.
-  case_eq (P l) ; cbn ; intros HeqP ; [now rewrite cats0 |].
-  rewrite <- cat_rcons ; rewrite <- cat_rcons in HP.
-  apply IHn.
-  now rewrite size_rcons.
-Qed.
-
-Lemma pred_to_ext_tree_trace
-  (P : list O -> bool) (n : nat) (alpha : I -> O) :
-      P (map alpha (iota 0 n)) ->
-      P (map alpha (eval_ext_tree_trace (pred_to_ext_tree P) alpha n)).
-Proof.
-  now apply pred_to_ext_tree_trace_aux with (l := nil).
-Qed.
-
-Lemma barred_pred_wf_ext_tree (P : list O -> bool) :
-  barred P -> inhabited (wf_ext_tree' (pred_to_ext_tree P)).
-Proof.
-  intros H. unfold wf_ext_tree'.
-  enough (inhabited (forall alpha : I -> O, {n : I | exists a : A, eval_ext_tree (pred_to_ext_tree P) alpha n = output a})) as Hi.
-  { destruct Hi as [Hi]. econstructor.
-    intros alpha. destruct (Hi alpha) as [n Hn].
-    exists n. destruct eval_ext_tree; eauto. exfalso. now firstorder congruence.
-  }
-  eapply Delta0_choice.
-  {
-    intros. destruct eval_ext_tree; firstorder (eauto || congruence).
-  }
-  intros alpha.
-  specialize (H alpha) as [l [Hpref HP]].
-  exists (size l).
-  exists (map alpha (eval_ext_tree_trace (pred_to_ext_tree P) alpha (size l))).
-  suff: P (map alpha (eval_ext_tree_trace (pred_to_ext_tree P) alpha (size l))).
-  { intros H ; unfold pred_to_ext_tree ; unfold prefix in Hpref.
-    rewrite eval_ext_tree_map ; now rewrite H. }
-  apply pred_to_ext_tree_trace.
-  unfold prefix in Hpref ; now rewrite - Hpref.
-Qed.
-
-Definition ext_tree_to_fun (tau : ext_tree I O A) (H : wf_ext_tree' tau) :
-  (I -> O) -> A := fun alpha =>  projT1 (projT2 (H alpha)).
-
-Lemma ext_tree_to_fun_seqW tau H :
-  seq_cont (@ext_tree_to_fun tau H).
-Proof.
-  exists tau.
-  intros alpha.
-  unfold ext_tree_to_fun ; destruct (((H alpha))) as [i [a Ha]] ; cbn.
-  now exists i.
-Defined.
-
-
-  (*We define a specific oracle (pref_o l o alpha) that is equal to o for n <= (size l),
-   and coincides with alpha everywhere else.*)
-
-Definition pref_o (m : nat) (o : O) (alpha : I -> O) (n : I) :=
-  if n <= m then o else alpha n.
-
-Lemma pref_o_sizel m o : forall alpha, pref_o m o alpha m = o.
-Proof.
-  intros alpha ; unfold pref_o in *.
-  now rewrite leqnn.
-Qed.
-
-Lemma pref_o_alpha m o : forall alpha n, m < n -> pref_o m o alpha n = alpha n.
-Proof.
-  intros alpha n H ; unfold pref_o.
-  rewrite ltnNge in H ; rewrite (Bool.negb_involutive_reverse (n <= m)).
-  now rewrite H.
-Qed.
-
-Lemma pref_o_eval P (l l' : seq O) o : forall alpha n,
-    size l < size l' ->
-    eval_ext_tree_aux (pred_to_ext_tree P) alpha n l' =
-      eval_ext_tree_aux (pred_to_ext_tree P) (pref_o (size l) o alpha) n l'.
-Proof.
-  intros alpha n H ; revert l l' o H.
-  induction n as [ | ? IHn].
-  { cbn ; intros ; reflexivity. }
-  intros ? l' ? ?; cbn.
-  unfold pred_to_ext_tree ; cbn.
-  case_eq (P l') ; intros Heq ; [reflexivity |].
-  erewrite pref_o_alpha ; [ | eauto].
-  1: eapply IHn.
-  erewrite size_rcons ; now eauto.
-Qed.
-
-Lemma pref_o_beval_aux b m o n:
-  m < n ->
-  forall alpha, beval_aux b (pref_o m o alpha) n =
-                  beval_aux b alpha n.
-Proof.
-  revert m n ; induction b as [ | ? IH] ; intros * Hinf alpha ; [reflexivity |].
-  cbn.
-  erewrite pref_o_alpha ; [ | assumption].
-  eapply IH ; now eauto.
-Qed.
-
-Proposition CI_BI (P : list O -> bool) :
-  barred P -> inductively_barred P.
-Proof.
-  unfold inductively_barred ; intros HP.
-  assert (Hwf := barred_pred_wf_ext_tree HP); clear HP.
-  destruct Hwf as [Hwf].
-  destruct (dialogue_to_btree_cont (CI (ext_tree_to_fun_seqW Hwf))) as [b H].
-  assert (ext_tree_to_fun Hwf =1 fun f => beval_aux b f 0) as Hb.
-  { intros alpha ; erewrite H ; exact (beval_beval' _ _). }
-  clear H.
-  revert Hwf Hb.
-  unfold ext_tree_to_fun, wf_ext_tree', eval_ext_tree.
-  change 0 with (size (@nil O)) ; generalize (@nil O) as l.
-  induction b as [ a | k IHk].
-  { cbn in * ; intros l Hwf Hb.
-    (*Making use of Hwf and Hb, we can extract a uniform n : nat that constitutes
-     the maximum number of questions the evaluation of (pred_to_ext_tree P) is
-     going to take. We can then conclude by induction on this n.*)
-    assert ({n : nat & forall alpha,
-                   eval_ext_tree_aux (pred_to_ext_tree P) alpha n l = output a})
-      as [n Hyp].
-    { exists (size a) ; intros alpha.
-      rewrite - (Hb alpha).
-      destruct (Hwf alpha) as [n [x Hx]] ; cbn in *.
-      assert (Hx' := Hx).
-      rewrite eval_ext_tree_map_aux in Hx'.
-      eapply pred_to_ext_tree_inv1 in Hx'.
-      rewrite <- Hx' at 1.
-      rewrite -> size_cat, size_map, PeanoNat.Nat.add_comm.
-      eapply eval_ext_tree_monotone.
-      now eapply eval_ext_tree_trace_size_eval.
-    }
-    clear Hb Hwf ; revert l Hyp.
-    induction n as [ | n IHn] ; cbn ; intros l Hyp.
-    all: case_eq (P l) ; intros Heq ; [now econstructor |].
-    all: unfold pred_to_ext_tree in Hyp ; rewrite Heq in Hyp.
-    all:  eapply hereditary_sons ; intros o.
-    { specialize (Hyp (fun=> o)) ; now inversion Hyp. }
-    change (fun l => if P l then output l else ask (size l))
-      with (pred_to_ext_tree P) in Hyp.
-    eapply IHn.
-    intros alpha.
-    rewrite <- (Hyp (pref_o (size l) o alpha)), pref_o_sizel.
-    rewrite <- pref_o_eval ; [ | rewrite size_rcons] ; now eauto.
-  }
-  (*Now comes the recursive case.*)
-  cbn in * ; intros.
-  case_eq (P l) ; intros eqP.
-  { econstructor ; assumption. }
-  apply hereditary_sons ; intros o.
-  (*We show that the evaluation of pred_to_ext_tree P using
-    (pref_o alpha) leads to the same result as when using alpha. *)
-  assert (forall alpha,
-             {a : A &
-                    eval_ext_tree_aux (pred_to_ext_tree P) alpha
-                      (projT1 (Hwf (pref_o (size l) o alpha))).-1 (rcons l o) =
-                      output a}) as Hyp.
-  { intros alpha.
-    erewrite (pref_o_eval P (l := l) o) ; [ | erewrite size_rcons ; now eauto].
-    clear Hb IHk ; destruct (Hwf (pref_o (size l) o alpha)) as [n Hn].
-    destruct Hn as [a Ha].
-    destruct n.
-    { cbn in * ; unfold pred_to_ext_tree in * ; rewrite eqP in Ha.
-      now inversion Ha. }
-    unfold pred_to_ext_tree in * ; cbn in * ; rewrite eqP in Ha ; cbn in Ha.
-    exists a.
-    now erewrite pref_o_sizel in Ha.
-  }
-  unshelve eapply (IHk o).
-  { intros alpha.
-    exists (projT1 (Hwf (pref_o (size l) o alpha))).-1.
-    now apply Hyp.
-  }
-  intros alpha ; specialize (Hb (pref_o (size l) o alpha)) ; cbn in *.
-  rewrite pref_o_sizel in Hb.
-  rewrite size_rcons.
-  revert Hb ; generalize (Hyp alpha) ; generalize (Hwf (pref_o (size l) o alpha)).
-  clear Hyp Hwf ; intros [n [x Hx]] [y Hy] Hb; cbn in *.
-  rewrite - (pref_o_beval_aux _ o (m := (size l))) ; [ | now eauto].
-  rewrite - Hb.
-  clear IHk Hb.
-  destruct n ; unfold pred_to_ext_tree in * ; cbn in *.
-  { rewrite eqP in Hx ; now inversion Hx. }
-  rewrite eqP in Hx.
-  eapply eval_ext_tree_output_unique ; [eassumption |].
-  rewrite pref_o_sizel in Hx.
-  pose (H := @pref_o_eval P l (rcons l o) o) ; unfold pred_to_ext_tree in H.
-  erewrite <- H in Hx ; [ | erewrite size_rcons ; now eauto].
-  eassumption.
-Qed.
-
-End ContinuousInduction.
-
-Section ContinuousInductionCoind.
+(*The aim of this Section is to prove that assuming as an axiom the 
+  equivalence between Bseq_cont_interaction and dialogue_cont_Brouwer
+  allows to derive Bar Induction. *)  
 
 Variable O : Type.
 Notation I := nat.
@@ -412,6 +157,23 @@ Definition pred_to_fun
   fun alpha => proj1_sig (projT2 (H alpha)).
 
 
+
+Definition pref_o (m : nat) (o : O) (alpha : I -> O) (n : I) :=
+  if n <= m then o else alpha n.
+
+Lemma pref_o_eq m o : forall alpha, pref_o m o alpha m = o.
+Proof.
+  intros alpha ; unfold pref_o in *.
+  now rewrite leqnn.
+Qed.
+
+Lemma pref_o_alpha m o : forall alpha n, m < n -> pref_o m o alpha n = alpha n.
+Proof.
+  intros alpha n H ; unfold pref_o.
+  rewrite ltnNge in H ; rewrite (Bool.negb_involutive_reverse (n <= m)).
+  now rewrite H.
+Qed.
+
 Lemma pref_o_beval (b : @Btree O A) m o n:
   m < n ->
   forall alpha, beval b (n_comp (pref_o m o alpha) n) =
@@ -434,6 +196,7 @@ Proof.
   do 2 (rewrite n_comp_n_plus addn0) ; rewrite pref_o_alpha ; [ | assumption].
   specialize (IHi m n.+1 (k (alpha n)) (ltnW Hinf)) ; cbn in *;  eapply IHi ; eauto.  
 Qed.  
+
 
 Proposition CoCI_BI (P : list O -> bool) :
   barred P -> inductively_barred P.
@@ -472,15 +235,12 @@ Proof.
     }
     clear Heq aux ; revert l Hyp.
     induction n as [ | n IHn] ; cbn ; intros l Hyp.
-    all: case_eq (P l) ; intros Heq ; [now econstructor |].
-    all: unfold pred_to_ext_tree in Hyp ; rewrite Heq in Hyp.
+    all: case_eq (P l) ; intros Heq ; [now econstructor | rewrite Heq in Hyp].
     all:  eapply hereditary_sons ; intros o.
     { specialize (Hyp (fun=> o)) ; now inversion Hyp. }
-    change (fun l => if P l then output l else ask (size l))
-      with (pred_to_ext_tree P) in Hyp.
     eapply IHn.
     intros alpha.
-    rewrite <- (Hyp (pref_o (size l) o alpha)), n_comp_n_plus, addn0, pref_o_sizel.
+    rewrite <- (Hyp (pref_o (size l) o alpha)), n_comp_n_plus, addn0, pref_o_eq.
     rewrite size_rcons ; erewrite <- (@pref_o_Bieval _ (size l) o (S (size l)) n) ; eauto.
   - cbn in * ; intros l aux Heq.
     case_eq (P l) ; intros eqP ; [ econstructor ; assumption | ].
@@ -498,7 +258,7 @@ Proof.
         exists (projT1 (Hyp alpha)) ; split ; [ | apply (projT2 (Hyp alpha))].
         eapply Bieval_pred_to_Bitree_spec ; exact (projT2 (Hyp alpha)).
       * intros alpha ; specialize (Heq (pref_o (size l) o alpha)) ; cbn in *.
-        rewrite n_comp_n_plus addn0 pref_o_sizel in Heq.
+        rewrite n_comp_n_plus addn0 pref_o_eq in Heq.
         revert Heq ; generalize (Hyp alpha) ; rewrite size_rcons.
         generalize (aux (pref_o (size l) o alpha)) ; clear aux Hyp.
         intros [n [u [HPu Hu]]] [v Heqv] Hequ ; cbn in *.
@@ -506,738 +266,25 @@ Proof.
         { rewrite Hequ ; now apply (@pref_o_beval _ _ _ (size l).+1). }
         rewrite - H ; clear H Hequ.
         destruct n ; cbn in * ; rewrite eqP in Hu ; [ inversion Hu | ].
-        rewrite n_comp_n_plus addn0 pref_o_sizel in Hu.
+        rewrite n_comp_n_plus addn0 pref_o_eq in Hu.
         suff: Some u = Some v by (intros H ; inversion H).
         rewrite - Heqv - Hu.
         now eapply (@pref_o_Bieval _ (size l) o (S (size l)) n).
     + erewrite <- (@pref_o_Bieval _ (size l) o) ; [ | now rewrite size_rcons].
       destruct (aux (pref_o (size l) o alpha)) as [m [v [HPv Hv]]] ; cbn in *.
       destruct m ; cbn in * ; rewrite eqP in Hv ; [ now inversion Hv | ].
-      rewrite n_comp_n_plus addn0 pref_o_sizel in Hv.
+      rewrite n_comp_n_plus addn0 pref_o_eq in Hv.
       exists v ; now rewrite size_rcons.
 Qed.
 
-Print pref_o_eval.
-      suff: 
-      
-      rewrite - Hu.
-      eauto.
-        Print pref_o_beval.
-        g
-        
-  { intros alpha.
-    erewrite (pref_o_eval P (l := l) o) ; [ | erewrite size_rcons ; now eauto].
-    clear Hb IHk ; destruct (Hwf (pref_o l o alpha)) as [n Hn].
-    destruct Hn as [a Ha].
-    destruct n.
-    { cbn in * ; unfold pred_to_ext_tree in * ; rewrite eqP in Ha.
-      now inversion Ha. }
-    unfold pred_to_ext_tree in * ; cbn in * ; rewrite eqP in Ha ; cbn in Ha.
-    exists a.
-    now erewrite pref_o_sizel in Ha.
-  }
-  unshelve eapply (IHk o).
-  { intros alpha.
-    exists (projT1 (Hwf (pref_o l o alpha))).-1.
-    now apply Hyp.
-  }
-  intros alpha ; specialize (Hb (pref_o l o alpha)) ; cbn in *.
-  rewrite pref_o_sizel in Hb.
-  rewrite size_rcons.
-  revert Hb ; generalize (Hyp alpha) ; generalize (Hwf (pref_o l o alpha)).
-  clear Hyp Hwf ; intros [n [x Hx]] [y Hy] Hb; cbn in *.
-  rewrite - (pref_o_beval _ o (l := l)) ; [ | now eauto].
-  rewrite - Hb.
-  clear IHk Hb.
-  destruct n ; unfold pred_to_ext_tree in * ; cbn in *.
-  { rewrite eqP in Hx ; now inversion Hx. }
-  rewrite eqP in Hx.
-  eapply eval_ext_tree_output_unique ; [eassumption |].
-  rewrite pref_o_sizel in Hx.
-  pose (H := @pref_o_eval P l (rcons l o) o) ; unfold pred_to_ext_tree in H.
-  erewrite <- H in Hx ; [ | erewrite size_rcons ; now eauto].
-  eassumption.
-  }
-
-    
-  suff: forall alpha, P (beval b alpha).
-  { clear Hbar aux F Hb ; induction b as [ r | k IHk] ; intros Hyp.
-    - econstructor.
-    
-  
-
-Fixpoint minimal_list_P (P : seq O -> bool) (u v : seq O) : seq O :=
-  match v with
-  | nil => u
-  | a :: v => if P u then u else minimal_list_P P (rcons u a) v
-  end.
-
-Lemma minimal_list_P_spec (P : seq O -> bool) (u v : seq O) :
-  P (u ++ v) = true ->
-  (forall n, n < size u -> P (take n u) = false) ->
-  P (minimal_list_P P u v) = true /\
-    forall n, n < size (minimal_list_P P u v) -> P (take n (minimal_list_P P u v)) = false.
-Proof.
-  revert u ; induction v ; intros u Htrue Htake ; cbn in *.
-  - rewrite cats0 in Htrue ; split ; auto.
-  - remember (P u) as b ; destruct b.
-    + split ; auto.
-    + rewrite - cat1s catA cats1 in Htrue.
-      specialize (IHv (rcons u a) Htrue).
-      destruct (IHv) ; [ | split ; auto].
-      rewrite size_rcons ; intros n Heq.
-      case: (leqP n.+1 (size u)) ; intros Hinf.
-      * rewrite - cats1 takel_cat ; [now apply Htake | now apply ltnW ].
-      * pose (aux1:= minnE n (size u)) ; pose (aux2 := minnE (size u) n).
-        erewrite subKn in aux1, aux2 ; [ | auto | auto].
-        rewrite minnC in aux1 ; rewrite aux1 in aux2 ; subst.
-        rewrite - cats1 takel_cat ; [now rewrite take_size | now apply leqnn].
-Qed.
-(*
-Lemma barred_Bseq_cont_aux (P : seq O -> bool) :
-  barred P ->
-  forall (alpha : I -> O), exists u,
-    (forall n, n < size u -> P (take n u) = false) /\
-      forall n, n <= size u ->
-                Bieval (pred_to_Bitree_aux P (take n u)) alpha (size u - n) = Some u.
-Proof.
-  intros Hbar alpha ; specialize (Hbar alpha) as [ u [Hpref HP]].
-  exists (minimal_list_P P nil u) ; split.
-  - apply minimal_list_P_spec ; now cbn.
-  - have aux := @minimal_list_P_spec P nil u HP.
-    destruct aux as [Htrue Hfalse] ; [ intros ? Hyp ; now inversion Hyp | ].
-    revert Htrue Hfalse ; generalize (@nil O) as l ; clear HP Hpref.
-    induction u as [ | u a IHu] using last_ind ; intros l Htrue Hfalse n Hinf.
-    + cbn in *.
-      induction l ; cbn in * ; [now rewrite Htrue | ].
-      destruct n ; cbn.
-      * rewrite (Hfalse 0) ; cbn.
-    induction l as [ | l a IHl] using last_ind ; intros Htrue Hfalse n Hinf.
-    + now cbn ; rewrite Htrue.
-    + rewrite size_rcons.
-      case: (leqP (size (rcons l a)) n) ; intros Hinf2.
-      * suff: n = size (rcons l a).
-        { intros Heq ; subst ; cbn.
-          rewrite -> take_size, -> size_rcons, -> subnn ; cbn ; now rewrite Htrue.
-        }
-        rewrite - (subKn Hinf) - minnE ; rewrite <- (subKn Hinf2) at 2.
-        now rewrite - minnE minnC.
-      * specialize (Hfalse n Hinf2).
-        rewrite - cats1 takel_cat ; [ | rewrite size_rcons in Hinf2 ; now apply ltnSE].
-
-        2:{
-        .
-        .
-        
-      *
-        rewrite take_size.
-
-    apply minimal_list_P_spec ; now cbn.
-Qed.
-
-revert HP Hpref ; induction u as [ | u a IHu] using last_ind ; intros ; cbn in *.
-  - exists nil ; split ; cbn ; [intros H ; now inversion H| now auto].
-  -
-       
-Proof.
-  intros Hbar alpha ; specialize (Hbar alpha) as [ u [Hpref HP]].
-  revert HP Hpref ; induction u as [ | u a IHu] using last_ind ; intros ; cbn in *.
-  - exists nil ; split ; cbn ; intros ? H ; [now inversion H | now rewrite HP].
-  - have Hpref' : prefix alpha u.
-    { unfold prefix in *.
-      rewrite size_rcons - cats1 - addn1 iotaD map_cat in Hpref.
-      apply (f_equal (take (size u))) in Hpref ; erewrite take_size_cat in Hpref ; [ | auto].
-      now erewrite take_size_cat in Hpref ; [ | now rewrite size_map size_iota].
-    }
-    remember (P u) as b ; destruct b.
-    + now apply IHu.
-    + exists (rcons u a).
-      
-     
-Qed.
-
-Lemma barred_Bseq_cont (P : seq O -> bool) :
-  barred P ->
-  (forall m, P (take m nil) = false) ->
-  forall alpha, exists u, 
-    Bieval (pred_to_Bitree_aux P nil) alpha (size u) = Some u.
-Proof.
-  intros Hbar Hnot alpha ; specialize (Hbar alpha) as [u [Hpref HP]].
-  exists (minimal_list_P P nil u).
-  destruct (@minimal_list_P_spec P nil u HP) as [Hmint Hminf] ; [intros ? H ; inversion H | ].
-  revert alpha Hpref HP Hmint Hminf Hnot.
-  change u with (nil ++ u) at 1 2 ; generalize (@nil O) as l.
-  induction u as [ | a u IHu] ; intros l.
-  - cbn in *.
-    rewrite cats0 ; induction l as [ | a l IHl].
-    all:cbn in * ; intros alpha Hpref HP ; now rewrite HP.
-  - intros alpha Hpref HP Hmint Hminf Hnot ; cbn in *.
-    have aux:= Hnot (size l) ; rewrite take_size in aux ; rewrite aux.
-    rewrite aux in Hmint, Hminf.
-    remember (size (minimal_list_P P (rcons l a) u)) as m.
-    destruct m.
-    + symmetry in Heqm ; apply size0nil in Heqm.
-      rewrite Heqm in Hmint ; specialize (Hnot 0).
-      rewrite take0 in Hnot ; rewrite Hnot in Hmint ; now inversion Hmint.
-    + cbn in * ; rewrite aux.
-      erewrite <- IHu.
-      rewrite - Heqm .
-      cbn in * ; rewrite aux.
-      eapply IHu.
-    
-    + now intros alpha Hpref HP ; cbn in * ; rewrite HP.
-    revert alpha Hpref HP
-  
-  
-  intros Hbar alpha ; apply barred_Bseq_cont_aux with P alpha in Hbar.
-  destruct Hbar as [u [Htake Heval]].
-  exists u.
-  specialize (Heval 0
-  forall alpha, exists u,
-    (forall n, n < size u -> P (take n u) = false) /\
-      forall n, n < size u ->
-                Bieval (pred_to_Bitree_aux P (take n u)) alpha (size u - n) = Some u. 
-
-  
-}
-    specialize (IHu Hpref') as [v [HP Heval]].
-    remember (P u) as b ; destruct b.
-    + exists v ; split ; auto.
-    + exists v ; split ; auto.
-    + exists (rcons u a) ; split.
-  
-  exists u.
-  suff: forall l, prefix alpha (l ++ u) ->
-                  P (l ++ u) ->
-                  Bieval (pred_to_Bitree_aux P l) alpha (size u) = Some (l ++ u).
-  { intros Hyp ; apply (Hyp nil) ; cbn ; auto. }
-  clear ; induction u as [ | a u IHu] ; intros l Hpref HP ; cbn in *.
-  - rewrite cats0 in Hpref, HP ; now rewrite HP cats0.
-  - 
-  *)
-  
-Proposition CoCI_BI (P : list O -> bool) :
-  barred P -> inductively_barred P.
-Proof.
-  unfold inductively_barred ; intros HP.
-  unfold barred in HP.
-  assert (Hwf := barred_pred_wf_ext_tree HP); clear HP.
-  destruct Hwf as [Hwf].
-  destruct (dialogue_to_btree_cont (CI (ext_tree_to_fun_seqW Hwf))) as [b H].
-  assert (ext_tree_to_fun Hwf =1 fun f => beval_aux b f 0) as Hb.
-  { intros alpha ; erewrite H ; exact (beval_beval' _ _). }
-  clear H.
-  revert Hwf Hb.
-  unfold ext_tree_to_fun, wf_ext_tree', eval_ext_tree.
-  change 0 with (size (@nil O)) ; generalize (@nil O) as l.
-  induction b as [ a | k IHk].
-  { cbn in * ; intros l Hwf Hb.
-    (*Making use of Hwf and Hb, we can extract a uniform n : nat that constitutes
-     the maximum number of questions the evaluation of (pred_to_ext_tree P) is
-     going to take. We can then conclude by induction on this n.*)
-    assert ({n : nat & forall alpha,
-                   eval_ext_tree_aux (pred_to_ext_tree P) alpha n l = output a})
-      as [n Hyp].
-    { exists (size a) ; intros alpha.
-      rewrite - (Hb alpha).
-      destruct (Hwf alpha) as [n [x Hx]] ; cbn in *.
-      assert (Hx' := Hx).
-      rewrite eval_ext_tree_map_aux in Hx'.
-      eapply pred_to_ext_tree_inv1 in Hx'.
-      rewrite <- Hx' at 1.
-      rewrite -> size_cat, size_map, PeanoNat.Nat.add_comm.
-      eapply eval_ext_tree_monotone.
-      now eapply eval_ext_tree_trace_size_eval.
-    }
-    clear Hb Hwf ; revert l Hyp.
-    induction n as [ | n IHn] ; cbn ; intros l Hyp.
-    all: case_eq (P l) ; intros Heq ; [now econstructor |].
-    all: unfold pred_to_ext_tree in Hyp ; rewrite Heq in Hyp.
-    all:  eapply hereditary_sons ; intros o.
-    { specialize (Hyp (fun=> o)) ; now inversion Hyp. }
-    change (fun l => if P l then output l else ask (size l))
-      with (pred_to_ext_tree P) in Hyp.
-    eapply IHn.
-    intros alpha.
-    rewrite <- (Hyp (pref_o l o alpha)), pref_o_sizel.
-    rewrite <- pref_o_eval ; [ | rewrite size_rcons] ; now eauto.
-  }
-  (*Now comes the recursive case.*)
-  cbn in * ; intros.
-  case_eq (P l) ; intros eqP.
-  { econstructor ; assumption. }
-  apply hereditary_sons ; intros o.
-  (*We show that the evaluation of pred_to_ext_tree P using
-    (pref_o alpha) leads to the same result as when using alpha. *)
-  assert (forall alpha,
-             {a : A &
-                    eval_ext_tree_aux (pred_to_ext_tree P) alpha
-                      (projT1 (Hwf (pref_o l o alpha))).-1 (rcons l o) =
-                      output a}) as Hyp.
-  { intros alpha.
-    erewrite (pref_o_eval P (l := l) o) ; [ | erewrite size_rcons ; now eauto].
-    clear Hb IHk ; destruct (Hwf (pref_o l o alpha)) as [n Hn].
-    destruct Hn as [a Ha].
-    destruct n.
-    { cbn in * ; unfold pred_to_ext_tree in * ; rewrite eqP in Ha.
-      now inversion Ha. }
-    unfold pred_to_ext_tree in * ; cbn in * ; rewrite eqP in Ha ; cbn in Ha.
-    exists a.
-    now erewrite pref_o_sizel in Ha.
-  }
-  unshelve eapply (IHk o).
-  { intros alpha.
-    exists (projT1 (Hwf (pref_o l o alpha))).-1.
-    now apply Hyp.
-  }
-  intros alpha ; specialize (Hb (pref_o l o alpha)) ; cbn in *.
-  rewrite pref_o_sizel in Hb.
-  rewrite size_rcons.
-  revert Hb ; generalize (Hyp alpha) ; generalize (Hwf (pref_o l o alpha)).
-  clear Hyp Hwf ; intros [n [x Hx]] [y Hy] Hb; cbn in *.
-  rewrite - (pref_o_beval _ o (l := l)) ; [ | now eauto].
-  rewrite - Hb.
-  clear IHk Hb.
-  destruct n ; unfold pred_to_ext_tree in * ; cbn in *.
-  { rewrite eqP in Hx ; now inversion Hx. }
-  rewrite eqP in Hx.
-  eapply eval_ext_tree_output_unique ; [eassumption |].
-  rewrite pref_o_sizel in Hx.
-  pose (H := @pref_o_eval P l (rcons l o) o) ; unfold pred_to_ext_tree in H.
-  erewrite <- H in Hx ; [ | erewrite size_rcons ; now eauto].
-  eassumption.
-Qed.
-
-
-Lemma pred_to_Bitree_inv1 P l a :
-  pred_to_Bitree_aux P l = Bret _ a -> l = a.
-Proof.
-  remember (pred_to_Bitree_aux P l) as aux.
-  destruct aux.
-  - unfold pred_to_Bitree_aux in *.
-    inversion Heqaux.
-  
-  destruct (pred_to_Bitree_aux P l).
-  destruct l ; cbn in *.
-  case_eq (P l) ; intros Heq ; unfold pred_to_Bitree_aux in H.
-  - rewrite Heq in H. ; now inversion H.
-Qed.
-
-Lemma pred_to_ext_tree_trace_aux
-  (P : list O -> bool) (n : nat) (l : list O) (alpha : I -> O) :
-      P (l ++ (map alpha (iota (size l) n))) ->
-      P (l ++ (map alpha (eval_ext_tree_trace_aux (pred_to_ext_tree P) alpha n l))).
-Proof.
-  revert l ; induction n as [ | ? IHn]; cbn ; intros l HP ; [assumption |].
-  unfold pred_to_ext_tree.
-  case_eq (P l) ; cbn ; intros HeqP ; [now rewrite cats0 |].
-  rewrite <- cat_rcons ; rewrite <- cat_rcons in HP.
-  apply IHn.
-  now rewrite size_rcons.
-Qed.
-
-Lemma pred_to_ext_tree_trace
-  (P : list O -> bool) (n : nat) (alpha : I -> O) :
-      P (map alpha (iota 0 n)) ->
-      P (map alpha (eval_ext_tree_trace (pred_to_ext_tree P) alpha n)).
-Proof.
-  now apply pred_to_ext_tree_trace_aux with (l := nil).
-Qed.
-
-Lemma barred_pred_wf_ext_tree (P : list O -> bool) :
-  barred P -> inhabited (wf_ext_tree' (pred_to_ext_tree P)).
-Proof.
-  intros H. unfold wf_ext_tree'.
-  enough (inhabited (forall alpha : I -> O, {n : I | exists a : A, eval_ext_tree (pred_to_ext_tree P) alpha n = output a})) as Hi.
-  { destruct Hi as [Hi]. econstructor.
-    intros alpha. destruct (Hi alpha) as [n Hn].
-    exists n. destruct eval_ext_tree; eauto. exfalso. now firstorder congruence.
-  }
-  eapply Delta0_choice.
-  {
-    intros. destruct eval_ext_tree; firstorder (eauto || congruence).
-  }
-  intros alpha.
-  specialize (H alpha) as [l [Hpref HP]].
-  exists (size l).
-  exists (map alpha (eval_ext_tree_trace (pred_to_ext_tree P) alpha (size l))).
-  suff: P (map alpha (eval_ext_tree_trace (pred_to_ext_tree P) alpha (size l))).
-  { intros H ; unfold pred_to_ext_tree ; unfold prefix in Hpref.
-    rewrite eval_ext_tree_map ; now rewrite H. }
-  apply pred_to_ext_tree_trace.
-  unfold prefix in Hpref ; now rewrite - Hpref.
-Qed.
-
-Definition ext_tree_to_fun (tau : ext_tree I O A) (H : wf_ext_tree' tau) :
-  (I -> O) -> A := fun alpha =>  projT1 (projT2 (H alpha)).
-
-Lemma ext_tree_to_fun_seqW tau H :
-  seq_cont (@ext_tree_to_fun tau H).
-Proof.
-  exists tau.
-  intros alpha.
-  unfold ext_tree_to_fun ; destruct (((H alpha))) as [i [a Ha]] ; cbn.
-  now exists i.
-Defined.
-
-
-  (*We define a specific oracle (pref_o l o alpha) that is equal to o for n <= (size l),
-   and coincides with alpha everywhere else.*)
-
-Definition pref_o (l : list O) (o : O) (alpha : I -> O) (n : I) :=
-  if n <= size l then o else alpha n.
-
-Lemma pref_o_sizel l o : forall alpha, pref_o l o alpha (size l) = o.
-Proof.
-  intros alpha ; unfold pref_o in *.
-  now rewrite leqnn.
-Qed.
-
-Lemma pref_o_alpha l o : forall alpha n, size l < n -> pref_o l o alpha n = alpha n.
-Proof.
-  intros alpha n H ; unfold pref_o.
-  rewrite ltnNge in H ; rewrite (Bool.negb_involutive_reverse (n <= size l)).
-  now rewrite H.
-Qed.
-
-Lemma pref_o_eval P l l' o : forall alpha n,
-    size l < size l' ->
-    eval_ext_tree_aux (pred_to_ext_tree P) alpha n l' =
-      eval_ext_tree_aux (pred_to_ext_tree P) (pref_o l o alpha) n l'.
-Proof.
-  intros alpha n H ; revert l l' o H.
-  induction n as [ | ? IHn].
-  { cbn ; intros ; reflexivity. }
-  intros ? l' ? ?; cbn.
-  unfold pred_to_ext_tree ; cbn.
-  case_eq (P l') ; intros Heq ; [reflexivity |].
-  erewrite pref_o_alpha ; [ | eauto].
-  1: eapply IHn.
-  erewrite size_rcons ; now eauto.
-Qed.
-
-Lemma pref_o_beval b l o n:
-  size l < n ->
-  forall alpha, beval_aux b (pref_o l o alpha) n =
-                  beval_aux b alpha n.
-Proof.
-  revert l n ; induction b as [ | ? IH] ; intros * Hinf alpha ; [reflexivity |].
-  cbn.
-  erewrite pref_o_alpha ; [ | assumption].
-  eapply IH ; now eauto.
-Qed.
-
-Proposition CI_BI (P : list O -> bool) :
-  barred P -> inductively_barred P.
-Proof.
-  unfold inductively_barred ; intros HP.
-  assert (Hwf := barred_pred_wf_ext_tree HP); clear HP.
-  destruct Hwf as [Hwf].
-  destruct (dialogue_to_btree_cont (CI (ext_tree_to_fun_seqW Hwf))) as [b H].
-  assert (ext_tree_to_fun Hwf =1 fun f => beval_aux b f 0) as Hb.
-  { intros alpha ; erewrite H ; exact (beval_beval' _ _). }
-  clear H.
-  revert Hwf Hb.
-  unfold ext_tree_to_fun, wf_ext_tree', eval_ext_tree.
-  change 0 with (size (@nil O)) ; generalize (@nil O) as l.
-  induction b as [ a | k IHk].
-  { cbn in * ; intros l Hwf Hb.
-    (*Making use of Hwf and Hb, we can extract a uniform n : nat that constitutes
-     the maximum number of questions the evaluation of (pred_to_ext_tree P) is
-     going to take. We can then conclude by induction on this n.*)
-    assert ({n : nat & forall alpha,
-                   eval_ext_tree_aux (pred_to_ext_tree P) alpha n l = output a})
-      as [n Hyp].
-    { exists (size a) ; intros alpha.
-      rewrite - (Hb alpha).
-      destruct (Hwf alpha) as [n [x Hx]] ; cbn in *.
-      assert (Hx' := Hx).
-      rewrite eval_ext_tree_map_aux in Hx'.
-      eapply pred_to_ext_tree_inv1 in Hx'.
-      rewrite <- Hx' at 1.
-      rewrite -> size_cat, size_map, PeanoNat.Nat.add_comm.
-      eapply eval_ext_tree_monotone.
-      now eapply eval_ext_tree_trace_size_eval.
-    }
-    clear Hb Hwf ; revert l Hyp.
-    induction n as [ | n IHn] ; cbn ; intros l Hyp.
-    all: case_eq (P l) ; intros Heq ; [now econstructor |].
-    all: unfold pred_to_ext_tree in Hyp ; rewrite Heq in Hyp.
-    all:  eapply hereditary_sons ; intros o.
-    { specialize (Hyp (fun=> o)) ; now inversion Hyp. }
-    change (fun l => if P l then output l else ask (size l))
-      with (pred_to_ext_tree P) in Hyp.
-    eapply IHn.
-    intros alpha.
-    rewrite <- (Hyp (pref_o l o alpha)), pref_o_sizel.
-    rewrite <- pref_o_eval ; [ | rewrite size_rcons] ; now eauto.
-  }
-  (*Now comes the recursive case.*)
-  cbn in * ; intros.
-  case_eq (P l) ; intros eqP.
-  { econstructor ; assumption. }
-  apply hereditary_sons ; intros o.
-  (*We show that the evaluation of pred_to_ext_tree P using
-    (pref_o alpha) leads to the same result as when using alpha. *)
-  assert (forall alpha,
-             {a : A &
-                    eval_ext_tree_aux (pred_to_ext_tree P) alpha
-                      (projT1 (Hwf (pref_o l o alpha))).-1 (rcons l o) =
-                      output a}) as Hyp.
-  { intros alpha.
-    erewrite (pref_o_eval P (l := l) o) ; [ | erewrite size_rcons ; now eauto].
-    clear Hb IHk ; destruct (Hwf (pref_o l o alpha)) as [n Hn].
-    destruct Hn as [a Ha].
-    destruct n.
-    { cbn in * ; unfold pred_to_ext_tree in * ; rewrite eqP in Ha.
-      now inversion Ha. }
-    unfold pred_to_ext_tree in * ; cbn in * ; rewrite eqP in Ha ; cbn in Ha.
-    exists a.
-    now erewrite pref_o_sizel in Ha.
-  }
-  unshelve eapply (IHk o).
-  { intros alpha.
-    exists (projT1 (Hwf (pref_o l o alpha))).-1.
-    now apply Hyp.
-  }
-  intros alpha ; specialize (Hb (pref_o l o alpha)) ; cbn in *.
-  rewrite pref_o_sizel in Hb.
-  rewrite size_rcons.
-  revert Hb ; generalize (Hyp alpha) ; generalize (Hwf (pref_o l o alpha)).
-  clear Hyp Hwf ; intros [n [x Hx]] [y Hy] Hb; cbn in *.
-  rewrite - (pref_o_beval _ o (l := l)) ; [ | now eauto].
-  rewrite - Hb.
-  clear IHk Hb.
-  destruct n ; unfold pred_to_ext_tree in * ; cbn in *.
-  { rewrite eqP in Hx ; now inversion Hx. }
-  rewrite eqP in Hx.
-  eapply eval_ext_tree_output_unique ; [eassumption |].
-  rewrite pref_o_sizel in Hx.
-  pose (H := @pref_o_eval P l (rcons l o) o) ; unfold pred_to_ext_tree in H.
-  erewrite <- H in Hx ; [ | erewrite size_rcons ; now eauto].
-  eassumption.
-Qed.
-
-End ContinuousInductionCoind.
-
+End ContinuousInduction.
 
 
 Section BarInduction.
 
-  (*The aim of this Section is to prove that Sequential continuity + Bar Induction
-   implies Dialogue continuity for I = nat.*)
-Variable BI : forall A T, @BI_ind A T.
-Variable O A : Type.
-Notation I := nat.
-Implicit Type (F : (I -> O) -> A).
-Local Notation Bext_tree := (@Bext_tree O A).
-
-
-Fixpoint Bextree_to_valid (tau : Bext_tree) (l acc : list O) : option A :=
-  match l with
-  | nil => tau acc
-  | cons a q => match tau acc with
-                | None => Bextree_to_valid tau q (rcons acc a)
-                | Some a => Some a
-                end
-  end.
-
-Lemma Bextree_to_valid_eq (tau : Bext_tree) k n alpha:
-  Bextree_to_valid tau ((map alpha (iota k n))) (map alpha (iota 0 k)) =
-    Beval_ext_tree_aux tau alpha n (map alpha (iota 0 k)) k.
-Proof.
-  revert k ; induction n ; intros ; cbn.
-  1: reflexivity.
-  destruct (tau (map alpha (iota 0 k))) ; [reflexivity |].
-  erewrite <- map_rcons.
-  erewrite iota_rcons.
-  now erewrite IHn.
-Qed.
-
-Lemma Bextree_to_valid_const (tau : Bext_tree) l1 l2 acc a :
-  forall H : Bextree_to_valid tau l1 acc = Some a,
-  Bextree_to_valid tau (l1 ++ l2) acc = Some a.
-Proof.
-  revert l2 acc ; induction l1 ; cbn ; intros.
-  1: destruct l2 ; cbn ; [assumption | now rewrite H].
-  destruct (tau acc) ; [assumption |].
-  now erewrite IHl1.
-Qed.
-
-Lemma Bextree_to_valid_id (tau : Bext_tree) l acc  :
-  Bextree_to_valid tau (acc ++ l) nil =
-    Bextree_to_valid (fun q => Bextree_to_valid tau q nil) l acc.
-Proof.
-  revert tau acc.
-  induction l ; intros ; cbn.
-  1: now erewrite List.app_nil_r.
-  remember (Bextree_to_valid tau acc [::]) as r ; destruct r.
-  + symmetry in Heqr.
-    erewrite Bextree_to_valid_const ; try eassumption ; reflexivity.
-  + cbn.
-    erewrite <- cat_rcons.
-    now erewrite IHl.
-Qed.
-
-Lemma Bext_tree_to_valid_valid tau :
-  Bvalid_ext_tree (fun l => Bextree_to_valid tau l nil).
-Proof.
-  intros f k a H.
-  erewrite <- iota_rcons ; cbn.
-  erewrite <- cats1.
-  erewrite map_cat.
-  now eapply Bextree_to_valid_const.
-Qed.
-
-
-Lemma Bseq_cont_to_Bseq_cont_valid F :
-  Bseq_cont F ->
-  Bseq_cont_valid F.
-Proof.
-  intros [tau Htau].
-  exists (fun l => Bextree_to_valid tau l nil).
-  split.
-  2: now eapply Bext_tree_to_valid_valid.
-  intros alpha ; specialize (Htau alpha) as [n Hn].
-  exists n.
-  unfold Beval_ext_tree in *.
-  change (@nil O) with (map alpha (iota 0 0)).
-  rewrite <- Bextree_to_valid_eq.
-  erewrite <- Bextree_to_valid_id ; cbn.
-  now erewrite Bextree_to_valid_eq .
-Qed.
-
-Definition Bvalid_ext_tree2 (tau : Bext_tree) :=
-  forall l a,  tau l = Some a -> forall o, tau (rcons l o) = Some a.
-
-Lemma Bvalid_Bvalid2 (tau : Bext_tree) :
-  Bvalid_ext_tree tau -> Bvalid_ext_tree2 tau.
-Proof.
-  intros H l a Heq o.
-  unfold Bvalid_ext_tree in H.
-  specialize (H (from_pref o (rcons l o)) (size l) a).
-  unfold from_pref in H.
-  do 2 erewrite map_nth_iota0 in H.
-  2-4: rewrite size_rcons ; now auto.
-  rewrite - (size_rcons l o) take_size in H.
-  apply H.
-  have aux: forall l o, take (size l) (rcons l o) = l
-      by clear ; intros ; induction l ; [reflexivity | cbn ; now rewrite IHl].
-  now rewrite aux.
-Qed.
-
-Lemma Beval_ext_tree_output_unique (tau : Brouwer_ext.Bext_tree O A) f l m n1 n2 o1 o2 :
-  Beval_ext_tree_aux tau f n1 l m = Some o1 ->
-  Beval_ext_tree_aux tau f n2 l m = Some o2 ->
-  o1 = o2.
-Proof.
-  elim: n1 n2 m l => [| n1 ihn1] [ | n2] m l /=.
-  all: try by move=> -> [].
-  all: case: (tau l) => //; try congruence.
-  eapply ihn1.
-Qed.
-
-Lemma Bseq_cont_valid2_to_dialogue F :
-  (exists tau : Bext_tree,
-            (forall alpha, exists n : nat, Beval_ext_tree tau alpha n = Some (F alpha)) /\
-             (Bvalid_ext_tree2 tau)) ->
-  dialogue_cont_Brouwer F.
-Proof.
-  intros [tau [HF Hvalid]].
-  pose (T := fun l => exists a : A, tau l = Some a).
-  have Help : barred T.
-  { intros alpha.
-    specialize (HF alpha) as [n HF].
-    unfold prefix ; unfold T.
-    unfold Beval_ext_tree in *.
-    exists (map alpha (iota 0 (Beval_ext_tree_trace tau alpha n))).
-    split.
-    1: erewrite size_map ; now erewrite size_iota.
-    exists (F alpha).
-    unfold Beval_ext_tree in *.
-    now erewrite Beval_ext_tree_map_aux in HF.
-  }
-  eapply BI in Help.
-  eapply Delta0_choice in HF as [HF].
-  2:{
-    intros α n. destruct Beval_ext_tree eqn:E.
-    - left. destruct (HF α) as [m].
-      f_equal. eapply Beval_ext_tree_output_unique; eauto.
-    - firstorder congruence.
-  }
-  revert Help HF ; unfold inductively_barred, Beval_ext_tree.
-  generalize (@nil O) ; intros l Help HF.
-  unfold dialogue_cont_Brouwer.
-  suff: { b : Btree | forall (alpha : I -> O),
-    exists n : I, Beval_ext_tree_aux tau alpha n l 0 = Some (beval b alpha) }.
-  { intros [b Hb].
-    exists b ; intros alpha; specialize (Hb alpha) as [n Heqn].
-    specialize (HF alpha) as [m Heqm].
-    unfold Beval_ext_tree in *.
-    eapply Beval_ext_tree_output_unique ; eassumption.
-  }
-  clear HF.
-  pattern l.
-  eapply hereditary_closure_rect in Help.
-  - exact Help.
-  - unfold T ; intros u ; destruct (tau u) ; [left ; now exists a | right].
-    intros [a Hyp] ; now inversion Hyp.
-  - clear l Help.
-    intros u Hu ; cbn.
-    remember (tau u) as r ; destruct r.
-    + exists (spit a) ; intros alpha ; exists 0 ; now cbn.
-    + exfalso ; destruct Hu as [a Ha] ; rewrite Ha in Heqr.
-      now inversion Heqr.
-  - intros u k IHk ; cbn in *.
-    unshelve eexists.
-    + apply bite ; intros o.
-      exact (proj1_sig (IHk o)).
-    + cbn.
-      intros alpha.
-      destruct (IHk (alpha 0)) as [b IHb].
-      destruct (IHb (alpha \o succn)) as [n Hn] ; cbn in *.
-      exists (S n) ; cbn ; rewrite <- Hn.
-      clear -Hvalid.
-      remember (tau u) as r ; destruct r.
-      * destruct n ; cbn ; [symmetry ; now apply Hvalid |].
-        suff: tau (rcons u (alpha 0)) = Some a by (intros Hyp ; now rewrite Hyp).
-        now apply Hvalid.
-      * generalize 0 ; clear Heqr ; revert alpha u.
-        induction n ; [ reflexivity | cbn ; intros alpha u i].
-        destruct (tau (rcons u (alpha i))) ; [reflexivity |].
-        now eapply IHn.
-Qed.
-
-Lemma Bseq_cont_valid_to_dialogue F :
-  (exists tau : Bext_tree,
-           (forall alpha, exists n : nat, Beval_ext_tree tau alpha n = Some (F alpha)) /\
-             Bvalid_ext_tree tau) ->
-  dialogue_cont_Brouwer F.
-Proof.
-  intros [tau [HF Hvalid]].
-  eapply Bseq_cont_valid2_to_dialogue.
-  exists tau.
-  split ; [assumption |].
-  now apply Bvalid_Bvalid2.
-Qed.
-
-Proposition Bseq_cont_to_Bcont F :
-  seq_cont F ->
-  dialogue_cont F.
-Proof.
-  intros H.
-  eapply dialogue_cont_Brouwer_to_dialogue_cont.
-  eapply Bseq_cont_valid_to_dialogue.
-  eapply seq_cont_to_Brouwer in H. destruct H as [b Hb].
-  edestruct Bseq_cont_to_Bseq_cont_valid.
-  - exists b. eassumption.
-  - exists x. eassumption.
-Qed.
-
-End BarInduction.
-
-
-Section BarInductionCoind.
+(*The aim of this Section is to prove that Bar Induction implies the equivalence
+ between Bseq_cont_interaction and dialogue_cont_Brouwer.
+ Thus, together with the previous Section, the two axioms are equivalent.*)
   
 Variable BI : forall A T, @BI_ind A T.
 Variables O A : Type.
@@ -1245,9 +292,7 @@ Notation I := nat.
 Implicit Type (F : (I -> O) -> A).
 Implicit Type (b : @Bitree O A).
 
-Print hereditary_closure.
-
-Lemma Bseq_cont_to_dialogue_cont_Brouwer F :
+Proposition Bseq_cont_to_dialogue_cont_Brouwer F :
   Bseq_cont_interaction F -> dialogue_cont_Brouwer F.
 Proof.
   intros [b Hb].
@@ -1267,7 +312,8 @@ Proof.
     - left. destruct (Hb α) as [m Hm].
       rewrite - E ; clear Hb Help T ; revert b E m Hm.
       generalize (F α) as a' ; clear F ; revert α.
-      induction n ; intros ; [destruct b, m ; cbn in * ; inversion E ; inversion Hm ; now subst | ].
+      induction n ; intros ; [destruct b, m ; cbn in * ; inversion E ; inversion Hm ;
+                              now subst | ].
       destruct b ; cbn in * ; [destruct m ; inversion Hm ; now subst | ].
       destruct m ; [now inversion Hm | cbn in * ].
       eapply IHn ; eauto.
@@ -1304,7 +350,7 @@ Proof.
       exists (S n) ; cbn ; now rewrite - Hn - cats1 - catA cat1s.
 Qed.
 
-End BarInductionCoind.
+End BarInduction.
 
 
 Section GeneralisedBarInduction.
