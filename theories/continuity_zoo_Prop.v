@@ -52,7 +52,6 @@ Definition dialogue_cont F := exists d : dialogue, F =1 deval d.
 
 (** ** Intensional dialogue continuity  *)
 
-(* Intensional dialogue continuity.*)
 Inductive is_dialogue : ((Q -> A) -> R) -> Type :=
   | teta o : is_dialogue (fun _ => o)
   | tbeta (q : Q) (k : A -> (Q -> A) -> R) (H : forall a, is_dialogue (k a))

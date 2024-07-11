@@ -17,11 +17,85 @@ Set Default Goal Selector "!".
 Arguments ext_tree {_ _ _}, _ _ _.
 Arguments Btree {_ _}, _ _.
 
+
+Section BarInduction.
+
+(*The aim of this Section is to prove that Bar Induction implies the equivalence
+ between Bseq_cont_interaction and dialogue_cont_Brouwer.*)
+  
+Variable BI : forall A T, @BI_ind A T.
+Variables O A : Type.
+Notation I := nat.
+Implicit Type (F : (I -> O) -> A).
+Implicit Type (b : @Bitree O A).
+
+Proposition Bseq_cont_to_dialogue_cont_Brouwer F :
+  Bseq_cont_interaction F -> dialogue_cont_Brouwer F.
+Proof.
+  intros [b Hb].
+  pose (T:= fun l => exists r, Bitree_to_option b l = Some r).
+   have Help : barred T.
+  { intros alpha.
+    specialize (Hb alpha) as [n HF].
+    exists (map alpha (iota 0 n)) ; unfold T, prefix.
+    split ; [ erewrite size_map ; now erewrite size_iota | ].
+    exists (F alpha).
+    now rewrite - Bitree_to_option_Bieval.
+  }
+  eapply BI in Help.
+  eapply Delta0_choice in Hb as [HF].
+  2:{
+    intros α n. destruct Bieval eqn:E.
+    - left. destruct (Hb α) as [m Hm].
+      rewrite - E ; clear Hb Help T ; revert b E m Hm.
+      generalize (F α) as a' ; clear F ; revert α.
+      induction n ; intros ; [destruct b, m ; cbn in * ; inversion E ; inversion Hm ;
+                              now subst | ].
+      destruct b ; cbn in * ; [destruct m ; inversion Hm ; now subst | ].
+      destruct m ; [now inversion Hm | cbn in * ].
+      eapply IHn ; eauto.
+    - firstorder congruence.
+  }
+  suff: forall l, hereditary_closure T l ->
+                  {d : Btree | forall f,
+                    exists n, Bitree_to_option b (l ++ (map f (iota (size l) n))) = Some (beval d (n_comp f (size l)))}.
+  { intros H ; specialize (H nil Help) as [d Hd] ; auto ; cbn.
+    exists d ; intros f.
+    specialize (HF f) as [n Hn] ; specialize (Hd f) as [m Hm].
+    rewrite - Bitree_to_option_Bieval in Hm.
+    eapply Bieval_output_unique ; eauto.
+  }
+  clear F HF Help ; intros l Help.
+  pattern l.
+  eapply hereditary_closure_rect in Help.
+  - exact Help.
+  - unfold T ; intros u ; destruct (Bitree_to_option b u) ; [now eauto | ].
+    right ; intros [a Hyp] ; now inversion Hyp.
+  - clear l Help ; intros u Hu ; cbn.
+    remember (Bitree_to_option b u) as r ; destruct r.
+    + exists (spit a) ; intros alpha ; exists 0 ; cbn ; now rewrite cats0.
+    + exfalso ; destruct Hu as [a Ha] ; rewrite Ha in Heqr.
+      now inversion Heqr.
+  - intros u k IHk ; cbn in *.
+    unshelve eexists.
+    + apply bite ; intros o.
+      exact (proj1_sig (IHk o)).
+    + intros alpha ; cbn ; rewrite n_comp_n_plus addn0.
+      destruct (IHk (alpha (size u))) as [x IHx].
+      destruct (IHx alpha) as [n Hn] ; cbn in *.
+      rewrite size_rcons in Hn ; cbn in *.
+      exists (S n) ; cbn ; now rewrite - Hn - cats1 - catA cat1s.
+Qed.
+
+End BarInduction.
+
+
 Section ContinuousInduction.
 
 (*The aim of this Section is to prove that assuming as an axiom the 
   equivalence between Bseq_cont_interaction and dialogue_cont_Brouwer
-  allows to derive Bar Induction. *)  
+  allows to derive Bar Induction. 
+ Thus, together with the previous Section, the two axioms are equivalent.*)  
 
 Variable O : Type.
 Notation I := nat.
@@ -218,8 +292,8 @@ Proof.
                    {n : I & {u : A | P u /\
                                        Bieval (pred_to_Bitree_aux P l)
                                          (n_comp alpha (size l)) n = Some u}}),
-    (forall alpha : I -> O, ` (projT2 (aux alpha)) = beval b (n_comp alpha (size l))) ->
-                           hereditary_closure (fun x : A => P x) l.
+      (forall alpha : I -> O, ` (projT2 (aux alpha)) = beval b (n_comp alpha (size l))) ->
+      hereditary_closure (fun x : A => P x) l.
   { intros H ??? ; eapply H ; eauto.}
   clear Hbar ; induction b as [ | k IHk].
   - intros l aux Heq ; cbn in *.
@@ -245,13 +319,13 @@ Proof.
   - cbn in * ; intros l aux Heq.
     case_eq (P l) ; intros eqP ; [ econstructor ; assumption | ].
     apply hereditary_sons ; intros o.
-  (*We show that the evaluation of pred_to_ext_tree P using
-    (pref_o alpha) leads to the same result as when using alpha. *)
-  suff: forall alpha,
-      {a : A &
-             Bieval (pred_to_Bitree_aux P (rcons l o)) (n_comp alpha (size (rcons l o)))
-               (projT1 (aux (pref_o (size l) o alpha))).-1 =
-               Some a} ; [ intros Hyp | intros alpha].
+    (*We show that the evaluation of pred_to_ext_tree P using
+      (pref_o alpha) leads to the same result as when using alpha. *)
+    suff: forall alpha,
+        {a : A &
+               Bieval (pred_to_Bitree_aux P (rcons l o)) (n_comp alpha (size (rcons l o)))
+                 (projT1 (aux (pref_o (size l) o alpha))).-1 =
+                 Some a} ; [ intros Hyp | intros alpha].
     + unshelve eapply (IHk o).
       * intros alpha.
         exists (projT1 (aux (pref_o (size l) o alpha))).-1.
@@ -280,77 +354,6 @@ Qed.
 End ContinuousInduction.
 
 
-Section BarInduction.
-
-(*The aim of this Section is to prove that Bar Induction implies the equivalence
- between Bseq_cont_interaction and dialogue_cont_Brouwer.
- Thus, together with the previous Section, the two axioms are equivalent.*)
-  
-Variable BI : forall A T, @BI_ind A T.
-Variables O A : Type.
-Notation I := nat.
-Implicit Type (F : (I -> O) -> A).
-Implicit Type (b : @Bitree O A).
-
-Proposition Bseq_cont_to_dialogue_cont_Brouwer F :
-  Bseq_cont_interaction F -> dialogue_cont_Brouwer F.
-Proof.
-  intros [b Hb].
-  pose (T:= fun l => exists r, Bitree_to_option b l = Some r).
-   have Help : barred T.
-  { intros alpha.
-    specialize (Hb alpha) as [n HF].
-    exists (map alpha (iota 0 n)) ; unfold T, prefix.
-    split ; [ erewrite size_map ; now erewrite size_iota | ].
-    exists (F alpha).
-    now rewrite - Bitree_to_option_Bieval.
-  }
-  eapply BI in Help.
-  eapply Delta0_choice in Hb as [HF].
-  2:{
-    intros α n. destruct Bieval eqn:E.
-    - left. destruct (Hb α) as [m Hm].
-      rewrite - E ; clear Hb Help T ; revert b E m Hm.
-      generalize (F α) as a' ; clear F ; revert α.
-      induction n ; intros ; [destruct b, m ; cbn in * ; inversion E ; inversion Hm ;
-                              now subst | ].
-      destruct b ; cbn in * ; [destruct m ; inversion Hm ; now subst | ].
-      destruct m ; [now inversion Hm | cbn in * ].
-      eapply IHn ; eauto.
-    - firstorder congruence.
-  }
-  suff: forall l, hereditary_closure T l ->
-                  {d : Btree | forall f,
-                    exists n, Bitree_to_option b (l ++ (map f (iota (size l) n))) = Some (beval d (n_comp f (size l)))}.
-  { intros H ; specialize (H nil Help) as [d Hd] ; auto ; cbn.
-    exists d ; intros f.
-    specialize (HF f) as [n Hn] ; specialize (Hd f) as [m Hm].
-    rewrite - Bitree_to_option_Bieval in Hm.
-    eapply Bieval_output_unique ; eauto.
-  }
-  clear F HF Help ; intros l Help.
-  pattern l.
-  eapply hereditary_closure_rect in Help.
-  - exact Help.
-  - unfold T ; intros u ; destruct (Bitree_to_option b u) ; [now eauto | ].
-    right ; intros [a Hyp] ; now inversion Hyp.
-  - clear l Help ; intros u Hu ; cbn.
-    remember (Bitree_to_option b u) as r ; destruct r.
-    + exists (spit a) ; intros alpha ; exists 0 ; cbn ; now rewrite cats0.
-    + exfalso ; destruct Hu as [a Ha] ; rewrite Ha in Heqr.
-      now inversion Heqr.
-  - intros u k IHk ; cbn in *.
-    unshelve eexists.
-    + apply bite ; intros o.
-      exact (proj1_sig (IHk o)).
-    + intros alpha ; cbn ; rewrite n_comp_n_plus addn0.
-      destruct (IHk (alpha (size u))) as [x IHx].
-      destruct (IHx alpha) as [n Hn] ; cbn in *.
-      rewrite size_rcons in Hn ; cbn in *.
-      exists (S n) ; cbn ; now rewrite - Hn - cats1 - catA cat1s.
-Qed.
-
-End BarInduction.
 
 
 Section GeneralisedBarInduction.
