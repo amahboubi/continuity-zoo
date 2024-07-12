@@ -302,17 +302,16 @@ Proof.
       -- eapply spit. exact n.
       -- eapply bite. intros n.
          eapply (X (erefl) n).
-    + cbn.
-      set (Brouwer_operation_at_Type_rect _) as f ; cbn in *.
+    + cbn ; set (Brouwer_operation_at_Type_rect _) as f ; cbn in *.
       intros α.
       destruct (H2 α) as (m & Hm & Hinfm).
       erewrite beval_beval' ; unfold beval'.
-      revert H1 α m Hinfm Hm.
       suff: forall l (H1 : Brouwer_operation_at_Type γ l) (α : nat -> nat) (m : nat)
                    (Hinfz : forall z : nat, z < m ->
                                             γ (l ++ [seq α i | i <- iota (size l) z]) = None),
           γ (l ++ [seq α i | i <- iota (size l) m]) = Some (F α) ->
-          F α = beval_aux (f l H1) α (size l) by (intros Hyp ; eapply Hyp).
+          F α = beval_aux (f l H1) α (size l) by (intros Hyp ; eapply Hyp ; eauto).
+      clear H1 α m Hinfm Hm.
       intros l H1.
       induction H1 as [ l k IHk ] ; intros α m Hinfz Hm.
       generalize (@erefl _ (γ l)) ; generalize (γ l) at 2.
@@ -329,71 +328,55 @@ Proof.
            rewrite cats0 ; rewrite cats0 in Hm ; now eapply Hvalid.
   - intros [b Hb].
     unshelve eexists.
-    + clear F Hb. induction b.
-      * intros [].
-        -- exact None.
-        -- exact (Some r).
-      * intros [].
-        -- exact None.
-        -- eapply (H n l).
+    + clear F Hb. induction b ; intros [] ; [ exact None | exact (Some r) | exact None | ].
+      eapply (H n l).
     + split.
       * clear F Hb.
         generalize (@nil nat) as l.
         induction b as [ | k IHk] ; intros.
-        -- cbn in *.
-           destruct l ; [ econstructor 2 | econstructor ] ; cbn ; eauto.
+        -- destruct l ; [ econstructor 2 | econstructor ] ; cbn ; eauto.
            intros n ; econstructor ; eauto ; intros a ; now eauto.
         -- revert IHk ; remember (Btree_rec _ _) as f ; intros IHk.
            destruct l as [ | a l] ; auto.
-           ++ econstructor 2 ; [ rewrite Heqf ; auto | ].
-              intros n.
+           ++ econstructor 2 ; [ rewrite Heqf ; auto | intros n ].
               specialize (IHk n nil).
               rewrite Heqf ; cbn ; rewrite - Heqf.
               remember (f (k n)) as tau.
               induction IHk as [ l tau m Hsome | l tau Hnone _ IHk].
               ** econstructor ; intros u ; cbn ; rewrite - Heqtau ; now apply Hsome. 
-              ** econstructor 2 ; cbn ; [now rewrite - Heqtau | ].
-                 intros m ; now eapply IHk.
+              ** econstructor 2 ; cbn ; [now rewrite - Heqtau | now eauto].
            ++ rewrite Heqf ; cbn ; rewrite - Heqf.
               specialize (IHk a l).
               remember (f (k a)) as tau.
               induction IHk as [ l tau m Hsome | l tau Hnone _ IHk].
               ** econstructor ; intros u ; cbn ; rewrite - Heqtau ; now apply Hsome.
-              ** econstructor 2 ; cbn ; [now rewrite - Heqtau | ].
-                 intros m ; now apply IHk.
+              ** econstructor 2 ; cbn ; [now rewrite - Heqtau | eauto ].
       * intros alpha.
         set (f := Btree_rec _ _).
         suff: exists m, f b [seq alpha i | i <- iota 0 m] = Some (beval b alpha) /\
                           (forall z : nat, z < m -> f b [seq alpha i | i <- iota 0 z] = None).
         { intros [m [Hm1 Hm2]] ; exists m ; split ; [ now erewrite Hb | auto]. }
-        clear F Hb.
-        revert alpha.
-        induction b ; intros.
+        clear F Hb ; revert alpha ; induction b as [ r | k IHk] ; intros.
         -- exists 1 ; split ; cbn ; auto.
            intros z eqz.
            destruct z ; cbn ; [auto | inversion eqz].
         -- have auxil : forall  (m n : nat) (f : nat -> nat),
                [seq f i | i <- iota n.+1 m] = [seq (f \o succn) i | i <- iota n m].
-           { clear.
-             induction m ; cbn in * ; auto.
-             intros n f ; f_equal.
-             now erewrite <- IHm.
+           { clear ; induction m as [ | m IHm] ; cbn in * ; auto.
+             intros n f ; f_equal ; now erewrite <- IHm.
            }
-           specialize (H (alpha 0) (alpha \o succn)) as [m [Hm1 Hm2]].
+           specialize (IHk (alpha 0) (alpha \o succn)) as [m [Hm1 Hm2]].
            rewrite - Hm1.
            exists m.+1 ; split ; auto.
            ++ cbn ; now erewrite auxil.
            ++ intros z Hinfz.
-              case: (leqP m z) ; intros Hinfz'.
-              ** destruct z ; cbn ; [reflexivity | ].
-                 now rewrite - (Hm2 z) ; [now rewrite auxil | ].
-              ** destruct z ; cbn ; [reflexivity | ].
-                 rewrite - (Hm2 z) ; [now rewrite auxil | ].
-                 now apply ltnW.
+              case: (leqP m z) ; intros Hinfz' ; destruct z ; cbn ; try reflexivity.
+              ** now rewrite - (Hm2 z) ; [now rewrite auxil | ].
+              ** rewrite - (Hm2 z) ; [now rewrite auxil | now apply ltnW].
 Qed.                 
 
 
-(** *** Sequential continuity is equivalent to interaction tree continuity  *)
+(** *** Neighborhood continuity is equivalent to interaction tree continuity  *)
 
 CoFixpoint neigh_to_Bitree (e : list nat -> option nat) (l : list nat) :
   @Bitree nat nat :=
