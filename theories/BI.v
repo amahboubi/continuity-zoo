@@ -20,10 +20,10 @@ Arguments Btree {_ _}, _ _.
 
 Section BarInduction.
 
-(*The aim of this Section is to prove that Bar Induction implies the equivalence
+(*The aim of this Section is to prove that decidable Bar Induction implies the equivalence
  between Bseq_cont_interaction and dialogue_cont_Brouwer.*)
   
-Variable BI : forall A T, @BI_ind A T.
+Variable dBI : forall A T, (forall a, {T a} + {~ (T a)}) -> @BI_ind A T.
 Variables O A : Type.
 Notation I := nat.
 Implicit Type (F : (I -> O) -> A).
@@ -34,7 +34,7 @@ Proposition Bseq_cont_to_dialogue_cont_Brouwer F :
 Proof.
   intros [b Hb].
   pose (T:= fun l => exists r, Bitree_to_option b l = Some r).
-   have Help : barred T.
+  have Help : barred T.
   { intros alpha.
     specialize (Hb alpha) as [n HF].
     exists (map alpha (iota 0 n)) ; unfold T, prefix.
@@ -42,7 +42,11 @@ Proof.
     exists (F alpha).
     now rewrite - Bitree_to_option_Bieval.
   }
-  eapply BI in Help.
+  eapply dBI in Help.
+  2:{ intros a ; remember (Bitree_to_option b a) as r ; destruct r as [r | ].
+      + left ; exists r ; eauto.
+      + right ; intros [x Hx] ; rewrite - Heqr in Hx ; inversion Hx.
+  }
   eapply Delta0_choice in Hb as [HF].
   2:{
     intros α n. destruct Bieval eqn:E.
@@ -94,7 +98,7 @@ Section ContinuousInduction.
 
 (*The aim of this Section is to prove that assuming as an axiom the 
   equivalence between Bseq_cont_interaction and dialogue_cont_Brouwer
-  allows to derive Bar Induction. 
+  allows to derive decidable Bar Induction. 
  Thus, together with the previous Section, the two axioms are equivalent.*)  
 
 Variable O : Type.
