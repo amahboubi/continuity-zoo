@@ -13,17 +13,18 @@ Arguments ext_tree {_ _ _}, _ _ _.
 Set Bullet Behavior "Strict Subproofs".
 Set Default Goal Selector "!".
 
-(* Now let's prove seq_contW + bar induction -> dialogue or Brouwer
-   May be find a better principle for reasoning on trees, equivalent to bar induction
-   TODO: find a better way to separate the concern of orders in queries and
-   the "bar-induction-like" principle
-   TODO : tame the le vs <= mess.
-*)
+(* This file presents Brouwer-like equivalents of extensional trees and interaction,
+   trees, i.e. trees that ask their questions "in order", much like Brouwer trees 
+   vs dialogue trees.
+ *)
+
+(*TODO : in the other files we never use Brouwer extensional trees, only Brouwer
+ interaction trees, maybe remove the former altogether? *)
 
 Section Brouwer_ext_tree.
 
-  (*The goal of this Section is to provide an extensional tree equivalent to Brouwer trees,
-   and to prove that it is equivalent to seq_contW. *)
+  (*The goal of this Section is to provide an extensional tree equivalent to Brouwer
+    trees, and to prove that it is equivalent to seq_contW. *)
 
 Variable O A : Type.
 Notation I := nat.

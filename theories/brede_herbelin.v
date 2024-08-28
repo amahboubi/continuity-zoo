@@ -1544,6 +1544,11 @@ Section GDC_gen.
       intros [f [f' [n [Hnoteq [Hinf Hinf']]]]].
       apply Hnoteq ; eapply Hu ; apply H0 ; eassumption.
     }
+    apply (H1 0).
+    intros f f' n Hf Hf'.
+    apply List.in_app_or in Hf, Hf'.
+    
+    
   Abort.
     
     

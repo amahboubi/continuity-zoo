@@ -15,8 +15,7 @@ Require Import BI.
 Set Bullet Behavior "Strict Subproofs".
 Set Default Goal Selector "!".
 
-
-(** Kawaii's "Principles of bar induction and continuity on Baire space" has the notions of
+(** Kawai's "Principles of bar induction and continuity on Baire space" has the notions of
     neighborhood function and Brouwer operation, and derives continuity notions based on them.
     Brouwer operations are an inductive _predicate_ on neighborhood functions.
 
@@ -525,80 +524,3 @@ Proof.
   - apply Bseq_cont_interaction_to_neigh_cont.
 Qed.
 
-Section ContinuousBarInduction.
-
-  Variable CI : forall F : (nat -> nat) -> nat,
-      ex_modulus_cont F -> dialogue_cont_Brouwer F.
-
-  Definition c_bar (P : seq nat -> Prop) :=
-    exists F : (nat -> nat) -> nat,
-      ex_modulus_cont F /\
-    (forall (alpha : nat -> nat) (l : seq nat), P (map alpha l) <->
-                                                 modulus_at F alpha l).
-
-  Definition c_BI := forall P, c_bar P -> inductively_barred P.
-
-  Print beval.
-  Fixpoint beval_list {X Y : Type} (b : @Btree X Y) (l : seq X) : option Y :=
-    match b with
-    | spit o => Some o
-    | bite k => match l with
-                | nil => None
-                | x :: q => beval_list (k x) q
-                end
-    end.
-  
-  Lemma beval_list_barred_aux {X Y : Type} (b : @Btree X Y) (P : seq X -> Prop)
-    (u : seq X) (Hyp : forall v, (exists y, beval_list b v = Some y) -> P (u ++ v)) :
-    hereditary_closure P u.
-  Proof.
-    revert u Hyp ; induction b as [ r | k IHk] ; intros u Hyp.
-    - econstructor ; erewrite <- cats0 ; apply Hyp ; exists r ; now trivial.
-    - econstructor 2 ; intros x.
-      apply (IHk x).
-      intros v ; rewrite - cats1 - catA cat1s ; now apply (Hyp (x::v)).
-  Qed.
-
-  Lemma beval_list_barred {X Y : Type} (b : @Btree X Y) :
-    hereditary_closure (fun l => exists y, beval_list b l = Some y) nil.
-  Proof.
-    eapply beval_list_barred_aux ; cbn ; intros v ; now eauto.
-  Qed.
-
-  Lemma beval_list_modulus_at {X Y : Type} (b: @Btree X Y) (x : X) (u : seq X) (y : Y) :
-    beval_list b u = Some y -> modulus_at (beval b) (from_pref x u) (iota 0 (size u)).
-  Proof.
-    revert x u y ; induction b as [ r | k IHk] ; intros x u y Heq beta Hbeta ; [reflexivity | ].
-    cbn ; unfold from_pref.
-    destruct u as [ | x' u] ; cbn in * ; [now inversion Heq | ].
-    have aux: (nth x (x':: u) \o succn) =1 nth x u by (intros [] ; reflexivity).
-    etransitivity ; [eapply (@beval_ext _ _ _ _ (nth x u)) ; auto | ].
-    have Heq':= f_equal (fun l => nth x l 0) Hbeta ; cbn in * ; subst.
-    eapply IHk ; [now eauto | ].
-    have Heq' := f_equal (drop 1) Hbeta ; cbn in * ; do 2 rewrite drop0 in Heq'.
-    suff: forall m n (x1 x2 : X) u beta,
-        [seq from_pref x1 (x2 :: u) i | i <- iota n.+1 m] = [seq beta i | i <- iota n.+1 m] ->
-        [seq from_pref x1 u i | i <- iota n m] = [seq (beta \o succn) i | i <- iota n m].
-    { clear - Heq' ; intros Hyp ; eapply Hyp ; eauto. }
-    clear ; induction m as [ | m IHm] ; intros * H ; cbn in * ; [reflexivity | ].
-    f_equal ; [exact (f_equal (fun l => nth x1 l 0) H) | ].
-    eapply IHm.
-    apply (f_equal (drop 1)) in H ; cbn in * ; do 2 rewrite drop0 in H ; eassumption.
-Qed.    
-    
-    
-  
-Lemma CI_imp_c_BI : c_BI.
-Proof.
-  intros P [F [contF HF]].
-  unfold inductively_barred.
-  apply CI in contF as [b Hb].
-  have aux := beval_list_barred b.
-  induction aux as [ u [y Hy] | ] ; [ | now econstructor 2].
-  econstructor. 
-  rewrite <- take_size, <- (map_nth_iota0 0) ; [ | auto].
-  apply HF ; intros beta Heq ; do 2 (rewrite Hb).
-  eapply beval_list_modulus_at ; eauto.
-Qed.    
-  
-End ContinuousBarInduction.

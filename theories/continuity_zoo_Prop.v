@@ -772,7 +772,6 @@ Proof.
   - intros [τ H]. exists τ. intros f.
     eapply interrogation_equiv_eval_ext_tree. eapply H.
 Qed.
-Print Assumptions continuous_via_interrogations_iff.
 
 (** *** Sequential continuity is equivalent to interaction tree continuity  *)
 

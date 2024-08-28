@@ -1,14 +1,14 @@
 From mathcomp Require Import all_ssreflect.
 Require Import Program.
 From Equations Require Import Equations.
-Require Import extra_principles.
-Require Import continuity_zoo_Prop.
-Require Import Brouwer_ext.
-Require Import brede_herbelin.
 Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 Require Import Lia.
+Require Import extra_principles.
+Require Import continuity_zoo_Prop.
+Require Import Brouwer_ext.
+Require Import brede_herbelin.
 
 Set Bullet Behavior "Strict Subproofs".
 Set Default Goal Selector "!".
@@ -17,6 +17,40 @@ Set Default Goal Selector "!".
 Arguments ext_tree {_ _ _}, _ _ _.
 Arguments Btree {_ _}, _ _.
 
+
+(*
+In this file, we study different variants of Bar Induction and try to relate them to
+continuity principles.
+
+Variant 1 : Decidable Bar Induction. We prove in the first two Sections
+          that decidable Bar Induction is equivalent to an axiom stating that
+          (Bseq_cont_interaction <-> dialogue_cont_Brouwer). We call that axiom 
+          Continuity Induction.
+
+Variant 2 : following Brede and Herbelin in "On the logical structure of choice and 
+            bar induction principles", we define Generalized decidable Bar Induction.
+            This generalizes decidable Bar Induction at any query and answer types Q and A.
+            We prove that GdBI implies that
+            (seq_cont_interaction <-> dialogue_cont),
+            i.e. the generalization of Continuity Induction to arbitrary Q and A.
+            However, this time the generalization of Continuity Induction does not imply
+            GdBI ; we need an enumeration of Q.
+
+Variant 3 : in "Principles of bar induction and continuity on Baire space",
+            Kawai defines a variant of Bar Induction which he dubs c_BI for 
+            "Bar induction for continuous functions".
+            This variant is redefined in Fujiwara-Kawai's paper "Equivalence of
+            bar induction
+            and bar recursion for continuous functions with continuous moduli".
+            We follow this last definition and get the following :
+            - assuming equivalence between existential modulus continuity and 
+            Brouwer continuity, we can derive Kawai's c_BI.
+            - assuming Kawai's c_BI, we cannot prove the converse, we would need
+            stronger choice axioms. Kawai manages to prove it, using AC^{0,1} and
+            AC^{1,0}_{!}.
+            If we replaced existantials in Prop by existentials in Type,
+            we would be able to prove their equivalence.
+*)
 
 Section BarInduction.
 
@@ -298,7 +332,7 @@ Proof.
                                          (n_comp alpha (size l)) n = Some u}}),
       (forall alpha : I -> O, ` (projT2 (aux alpha)) = beval b (n_comp alpha (size l))) ->
       hereditary_closure (fun x : A => P x) l.
-  { intros H ??? ; eapply H ; eauto.}
+  { intros H ??? ; eapply H ; eauto. }
   clear Hbar ; induction b as [ | k IHk].
   - intros l aux Heq ; cbn in *.
     assert ({n : nat & forall alpha,
@@ -1358,3 +1392,188 @@ Qed.
 
 
 End GeneralisedBarInduction.
+
+
+
+
+Section ContinuousBarInduction.
+  
+  Variables A R : Type.
+
+  Variable CI : forall F : (nat -> A) -> R,
+      ex_modulus_cont_nat F -> dialogue_cont_Brouwer F.
+
+  Definition c_bar (P : seq A -> Prop) :=
+    exists F : (nat -> A) -> R,
+      ex_modulus_cont_nat F /\
+        (forall (alpha : nat -> A) (n : nat), P (map alpha (iota 0 n)) <->
+                                                modulus_at F alpha (iota 0 n)).
+
+  Definition c_BI := forall P, c_bar P -> inductively_barred P.
+
+  Lemma beval_ext (b : @Btree A R) f g :
+    f =1 g ->
+    beval b f = beval b g.
+  Proof.
+    revert f g ; induction b as [ | k IHk] ; [reflexivity | intros f g Heq ; cbn ].
+    rewrite Heq ; apply IHk.
+    intros n ; cbn ; now rewrite Heq.
+  Qed.         
+
+  Fixpoint beval_list (b : @Btree A R) (l : seq A) : option R :=
+    match b with
+    | spit o => Some o
+    | bite k => match l with
+                | nil => None
+                | x :: q => beval_list (k x) q
+                end
+    end.
+
+  Lemma beval_list_mon (b : @Btree A R) (l l' : seq A) (r : R) :
+    beval_list b l = Some r -> beval_list b (l ++ l') = Some r.
+  Proof.
+    revert l l' ; induction b ; cbn in * ; intros l l' Heq ; [auto | ].
+    destruct l ; [now inversion Heq | cbn ; now apply H].
+  Qed.
+  
+  Lemma beval_list_barred_aux (b : @Btree A R) (P : seq A -> Prop)
+    (u : seq A) (Hyp : forall v, (exists y, beval_list b v = Some y) -> P (u ++ v)) :
+    hereditary_closure P u.
+  Proof.
+    revert u Hyp ; induction b as [ r | k IHk] ; intros u Hyp.
+    - econstructor ; erewrite <- cats0 ; apply Hyp ; exists r ; now trivial.
+    - econstructor 2 ; intros x.
+      apply (IHk x).
+      intros v ; rewrite - cats1 - catA cat1s ; now apply (Hyp (x::v)).
+  Qed.
+
+  Lemma beval_list_barred (b : @Btree A R) :
+    hereditary_closure (fun l => exists y, beval_list b l = Some y) nil.
+  Proof.
+    eapply beval_list_barred_aux ; cbn ; intros v ; now eauto.
+  Qed.
+
+  Lemma beval_list_modulus_at (b: @Btree A R) (a : A) (u : seq A) (r : R) :
+    beval_list b u = Some r -> modulus_at (beval b) (from_pref a u) (iota 0 (size u)).
+  Proof.
+    revert a u r ; induction b as [ r | k IHk] ; intros x u y Heq beta Hbeta ; [reflexivity | ].
+    destruct u as [ | x' u] ; cbn in * ; [now inversion Heq | ].
+    have aux: (nth x (x':: u) \o succn) =1 nth x u by (intros [] ; reflexivity).
+    etransitivity ; [eapply (@beval_ext _ _ (nth x u)) ; auto | ].
+    have Heq':= f_equal (fun l => nth x l 0) Hbeta ; cbn in * ; subst.
+    eapply IHk ; [now eauto | ].
+    have Heq' := f_equal (drop 1) Hbeta ; cbn in * ; do 2 rewrite drop0 in Heq'.
+    suff: forall m n (x1 x2 : A) u beta,
+        [seq from_pref x1 (x2 :: u) i | i <- iota n.+1 m] = [seq beta i | i <- iota n.+1 m] ->
+        [seq from_pref x1 u i | i <- iota n m] = [seq (beta \o succn) i | i <- iota n m].
+    { clear - Heq' ; intros Hyp ; eapply Hyp ; eauto. }
+    clear ; induction m as [ | m IHm] ; intros * H ; cbn in * ; [reflexivity | ].
+    f_equal ; [exact (f_equal (fun l => nth x1 l 0) H) | ].
+    eapply IHm.
+    apply (f_equal (drop 1)) in H ; cbn in * ; do 2 rewrite drop0 in H ; eassumption.
+Qed.    
+    
+
+Theorem CI_imp_c_BI : c_BI.
+Proof.
+  intros P [F [contF HF]] ; apply CI in contF as [b Hb].
+  unfold inductively_barred.
+  have aux := beval_list_barred b.
+  econstructor 2.
+  induction aux as [ u [y Hy] | ] ; intros a ; [ | now econstructor 2].
+  econstructor. 
+  erewrite <- take_size.
+  erewrite <- (map_nth_iota0 a) ; [ | eauto].
+  unfold pref in HF.
+  rewrite size_rcons.
+  apply HF ; intros beta Heq ; do 2 (rewrite Hb).
+  eapply beval_list_modulus_at with y ; [ | rewrite size_rcons] ; eauto.
+  now rewrite - cats1 ; apply beval_list_mon.
+Qed.    
+  
+End ContinuousBarInduction.
+
+
+Section cBI_implies_CI_fail.
+  (*Below is an attempt at proving that cBI implies CI, failing because of a lack of 
+    choice principles.*)
+          
+  Variables A R : Type.
+
+  Variable cBI : c_BI A R.
+
+  (*We need to redefine the nth function, such that it immediately reduces when
+   applied to nil. *)
+  
+  Fixpoint nth' {T} (t : T) (s : seq T) (n : nat) {struct s} : T :=
+    match s, n with
+    | [::], _ => t
+    | x :: s', 0 => x
+    | x :: s', k.+1 => nth' t s' k
+    end.
+
+  Lemma nth_nth' {T} (t : T) s n : nth t s n = nth' t s n.
+  Proof.
+    revert n ; induction s ; cbn ; [now destruct n | induction n ; now cbn ; auto].
+  Qed.
+    
+  (*This is the failing Lemma.*)
+  Lemma c_BI_imp_CI (a : A) : forall F : (nat -> A) -> R,
+      ex_modulus_cont_nat F -> dialogue_cont_Brouwer F.
+  Proof.
+    intros F HF.
+    (*We need a suitable predicate to become a c_bar.
+     The following is quite natural, we need to assume a : A to define it.*)
+    pose (P := fun l => modulus_at F (from_pref a l) (iota 0 (size l))).
+    have aux: c_bar R P.
+    { exists F ; split ; [assumption | ].
+      intros alpha n ; split ; [intros HP beta Heq | unfold P].
+      + etransitivity ; [symmetry |] ; apply HP ; rewrite size_map size_iota.
+        * erewrite map_nth_iota0 ; [ | rewrite size_map size_iota ; lia]. 
+          now erewrite <- take_size, size_map, size_iota.
+        * erewrite map_nth_iota0 ; [ | rewrite size_map size_iota ; lia]. 
+          now erewrite <- take_size, size_map, size_iota, Heq.
+      + rewrite size_map size_iota ; intros Hmod beta Heq. 
+        etransitivity ; [symmetry ; eapply Hmod | eapply Hmod].
+        * erewrite map_nth_iota0 ; [ | rewrite size_map size_iota ; lia]. 
+          now erewrite <- take_size, size_map, size_iota at 1.
+        * erewrite <- Heq, map_nth_iota0 ; [ | rewrite size_map size_iota ; lia]. 
+          now erewrite <- take_size, size_map, size_iota at 1.
+    }
+    apply cBI in aux ; unfold inductively_barred, P in aux.
+    (*P is now inductively barred, we can try and build a Brouwer tree out of it.*)
+    unfold dialogue_cont_Brouwer.
+    (*We generalize the goal to any list l : A and not only nil. This is where we use
+     nth'. *)
+    suff: forall (l : seq A),
+        hereditary_closure (fun u => modulus_at F (from_pref a u) (iota 0 (size u))) l ->
+        exists b : Btree, forall alpha,
+          F (fun n => nth' (alpha n) l n) = beval b (fun n => nth' (alpha n) l n)
+          by (intros Hyp ; apply (Hyp nil aux)).
+    clear ; intros l aux.
+    (*We proceed by induction on aux.*)
+    induction aux as [u HP | u k IHk].
+    - (* The function
+         (fun n : nat => nth' (alpha n) u n)
+         validates the condition of HP, no matter what alpha is.*)
+      exists (spit (F (from_pref a u))).
+      intros alpha ; etransitivity ; [ symmetry |] ; eapply HP ; auto.
+      erewrite map_nth_iota0, take_size ; [ | lia].
+      suff: forall (alpha : nat -> A) u v,
+          u ++ v = u ++ [seq nth' (alpha i) (u ++ v) i | i <- iota (size u) (size v)]
+          by (intros Hyp ; apply (Hyp alpha nil)).
+      clear ; intros alpha u v ; revert u ; induction v as [ | x v IHv] ; [reflexivity | ].
+      cbn ; intros u ; do 2 (rewrite - cat1s catA cats1).
+      suff: x = nth' (alpha (size u)) (rcons u x ++ v) (size u).
+      { intros Heq ; rewrite - Heq - (size_rcons u x) ; now eapply IHv. }
+      clear ; generalize (alpha (size u)) as n ; revert v.
+      induction u ; cbn ; [reflexivity | assumption].
+    - (* Intuitively, the dialogue tree we want to build is
+       bite (fun (a : A) => (IHk a).1) 
+       Unfortunately, this does not work since (IHk a) provides a mere existence.
+       We thus cannot conclude.
+       *)
+  Abort. 
+
+
+End cBI_implies_CI_fail.
