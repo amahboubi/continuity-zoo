@@ -8,6 +8,7 @@ Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
 Require Import continuity_zoo_Prop.
+Require Import Lia.
 
 Arguments ext_tree {_ _ _}, _ _ _.
 Set Bullet Behavior "Strict Subproofs".
@@ -114,6 +115,18 @@ Proof.
 move=> H f k j; elim: j k => [| j ihj] k a e; first by rewrite addn0.
 rewrite addnS; apply: (ihj k.+1).
 exact: H.
+Qed.
+
+Lemma Bvalid_every_list (tau : Bext_tree) :
+  Bvalid_ext_tree tau ->
+  forall l l' a, tau l = Some a -> tau (l ++ l') = Some a.
+Proof.
+  unfold Bvalid_ext_tree ; intros Hvalid l l' r Heqr.
+  destruct l' as [ | o l'] ; [now rewrite cats0 | ].
+  rewrite - (take_size (l ++ o :: l')) - (map_nth_iota0 o) size_cat ; [ | lia].
+  apply Bvalid_plus ; auto.
+  rewrite map_nth_iota0  ; [ | rewrite size_cat ; lia].
+  now rewrite (take_size_cat (o :: l') erefl).
 Qed.
 
 Fixpoint Beval_ext_tree_trace_aux

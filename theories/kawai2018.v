@@ -299,7 +299,7 @@ Proof.
         2: now rewrite addn0.
         now rewrite - map_comp - cat_rcons .
     + intros a b Ha.
-      destruct a as [ | x a IHa]. 1: rewrite cats0 in Ha ; congruence.
+      destruct a as [ | x a ]. 1: rewrite cats0 in Ha ; congruence.
       destruct (H1 x) as [H1' H2'].
       rewrite catA - cat_rcons - catA.
       eapply H2'.
@@ -331,7 +331,7 @@ Theorem Bneigh_cont_equiv_dialogue_cont_Brouwer F :
 Proof.
   split.
   - intros (γ & H1 & H2).
-    have Hvalid := Bvalid_Bvalid2 ((neighborhood_wf_valid_Bext_tree _).1 (K0K H1)).2.
+    have Hvalid := Bvalid_every_list ((neighborhood_wf_valid_Bext_tree _).1 (K0K H1)).2.
     eapply Brouwer_operation_at'_spec1 in H1.
     eapply Brouwer_operation_at_Type_spec in H1.
     unshelve eexists.
@@ -343,12 +343,11 @@ Proof.
     + cbn ; set (Brouwer_operation_at_Type_rect _) as f ; cbn in *.
       intros α.
       destruct (H2 α) as (m & Hm & Hinfm).
-      erewrite beval_beval' ; unfold beval'.
       suff: forall l (H1 : Brouwer_operation_at_Type γ l) (α : nat -> A) (m : nat)
                    (Hinfz : forall z : nat, z < m ->
                                             γ (l ++ [seq α i | i <- iota (size l) z]) = None),
           γ (l ++ [seq α i | i <- iota (size l) m]) = Some (F α) ->
-          F α = beval_aux (f l H1) α (size l) by (intros Hyp ; eapply Hyp ; eauto).
+          F α = beval (f l H1) (n_comp α (size l)) by (intros Hyp ; eapply Hyp ; eauto).
       clear H1 α m Hinfm Hm.
       intros l H1.
       induction H1 as [ l k IHk ] ; intros α m Hinfz Hm.
@@ -359,11 +358,13 @@ Proof.
         -- now rewrite Hinfz in Heqaux ; [inversion Heqaux | ].
       * symmetry in Heqaux ; destruct Heqaux ; cbn.
         erewrite IHk with erefl (α (size l)) α m.-1 ; rewrite size_rcons ; auto.
+        -- now rewrite n_comp_n_plus addn0.
         -- intros z Hinf ; rewrite cat_rcons.
            change (γ (l ++ [seq α i | i <- iota (size l) z.+1]) = None).
            apply Hinfz ; now destruct m ; [inversion Hinf | ].
         -- destruct m ; cbn in * ; [ | now rewrite cat_rcons].
-           rewrite cats0 ; rewrite cats0 in Hm ; now eapply Hvalid.
+           rewrite cats0 - cats1 ; rewrite cats0 in Hm.
+           now eapply Hvalid.
   - intros [b Hb].
     unshelve eexists.
     + clear F Hb. induction b as [ | k IHk] ; intros [ | x l]  ;
