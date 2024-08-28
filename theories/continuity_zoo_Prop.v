@@ -1031,64 +1031,79 @@ Definition from_pref (a_dflt : A) (l : seq A) : nat -> A := nth a_dflt l.
 
 (*The function that goes from a modulus to an extensional tree.*)
 
-Definition modulus_to_ext_tree (a_dflt : A) F (M : (nat -> A) -> seq nat) (l : seq A) : @result nat R :=
-  let g := from_pref a_dflt l in
-    if \max_(i <- M g) i < size l
-    then output (F g)
-    else ask (size l).
+Definition modulus_to_ext_tree F (M : (nat -> A) -> seq nat) (l : seq A) :
+  @result nat R :=
+  match l with
+  | nil => ask 0
+  | x :: q => let g := from_pref x l in
+              if \max_(i <- M g) i < size l
+              then output (F g)
+              else ask (size l)
+  end.
 
-Lemma eval_modulus_to_ext a F M f m :  modulus M M ->
-                                       eval_ext_tree_trace (modulus_to_ext_tree a F M) f m = iota 0 (minn m (\max_(i <- M f) i).+1).
+Lemma eval_modulus_to_ext F M f m :  modulus M M ->
+                                       eval_ext_tree_trace (modulus_to_ext_tree F M) f m =
+                                         iota 0 (minn m (\max_(i <- M f) i).+1).
 Proof.
   move=> MmodM; rewrite /eval_ext_tree_trace.
   suff aux : forall i,
       i <= (\max_(j <- M f) j).+1 ->
-      iota 0 i ++ eval_ext_tree_trace_aux (modulus_to_ext_tree a F M) f m (map f (iota 0 i)) =
+      iota 0 i ++ eval_ext_tree_trace_aux (modulus_to_ext_tree F M) f m (map f (iota 0 i)) =
         iota 0 (minn (i + m) (\max_(j <- M f) j).+1).
   1: by apply:  (aux 0).
   elim: m=> [|m ihm] i /= hi1.
   1: by rewrite cats0 addn0; move/minn_idPl: hi1 => ->.
   rewrite /modulus_to_ext_tree size_map size_iota.
+  destruct i ; [now apply (ihm 1) | ].
   case: ifP=> hi2.
-  - have eM : M (from_pref a [seq f i | i <- iota 0 i]) = M f.
+  - have eM : M (from_pref (f 0) [seq f i | i <- iota 0 i.+1]) = M f.
     { apply: MmodM.
       apply/eq_in_map=> x hx.
-      have hi : x < i by apply: leq_ltn_trans hi2; exact: leq_bigmax_seq.
+      have hi : x < i.+1 by apply: leq_ltn_trans hi2; exact: leq_bigmax_seq.
       by rewrite /from_pref (nth_map 0)  ?size_iota // nth_iota // add0n.
     }
-    suff -> : i = (\max_(j <- M f) j).+1.
+    suff -> : i.+1 = (\max_(j <- M f) j).+1.
     + have /minn_idPr-> : (\max_(j <- M f) j).+1 <= (\max_(j <- M f) j).+1 + m.+1 by rewrite leq_addr.
       by rewrite cats0.
     + by move: hi1; rewrite -eM leq_eqVlt ltnNge hi2 orbF; move/eqP.
-  - rewrite -/(modulus_to_ext_tree a F M) -cat_rcons.
-    have -> : rcons (iota 0 i) i = iota 0 i.+1 by rewrite -cats1 -addn1 iotaD.
-    have -> : rcons [seq f i | i <- iota 0 i] (f i) = [seq f i | i <- iota 0 i.+1].
-    + by rewrite -cats1 -addn1 iotaD map_cat.
-    + rewrite addnS -addSn; apply: ihm.
-      move: hi1; rewrite leq_eqVlt; case/orP=> // /eqP ei.
-      suff : \max_(i <- M (from_pref a [seq f i | i <- iota 0 i])) i < i by rewrite hi2.
-      suff <- : M f = M (from_pref a [seq f i0 | i0 <- iota 0 i]) by rewrite ei.
-      apply: MmodM; apply/eq_in_map=> x hx.
-      have hi : x < i by rewrite ei ltnS; apply: leq_bigmax_seq.
-      rewrite /from_pref (nth_map 0)  ?size_iota // nth_iota // add0n.
+  - rewrite -/(modulus_to_ext_tree F M) -cat_rcons.
+    have -> : rcons (iota 0 i.+1) i.+1 = iota 0 (i.+2).
+    + rewrite -cats1 ; change [:: i.+1] with (iota i.+1 1).
+      now rewrite - iotaD addn1.
+    + have -> : rcons [seq f i | i <- iota 0 i.+1] (f i.+1) = [seq f i | i <- iota 0 i.+2].
+      * rewrite -cats1 ; change [:: f i.+1] with (map f (iota i.+1 1)).
+        now rewrite - map_cat - iotaD addn1.
+      * rewrite addnS -addSn; apply: ihm.
+        move: hi1; rewrite leq_eqVlt; case/orP=> // /eqP ei.
+        suff : \max_(i <- M (from_pref (f 0) [seq f i | i <- iota 0 i.+1])) i < i.+1 by rewrite hi2.
+        suff <- : M f = M (from_pref (f 0) [seq f i0 | i0 <- iota 0 i.+1]) by rewrite ei.
+        apply: MmodM; apply/eq_in_map=> x hx.
+        have hi : x < i.+1 by rewrite ei ltnS; apply: leq_bigmax_seq.
+        rewrite /from_pref (nth_map 0)  ?size_iota // nth_iota // add0n.
 Qed.
 
-Lemma self_modulus_seq_cont F (a : A) : 
+Lemma self_modulus_seq_cont F : 
   self_modulus_cont F -> seq_cont F.
 Proof.
   intros (M & MmodF & MmodM).
-  exists (modulus_to_ext_tree a F M) => f.
+  exists (modulus_to_ext_tree F M) => f.
   pose m := \max_(i <- M f) i.
   exists m.+1.
   rewrite eval_ext_tree_map.
-  have -> := eval_modulus_to_ext a F f m.+1 MmodM.
+  have -> := eval_modulus_to_ext F f m.+1 MmodM.
   rewrite /modulus_to_ext_tree size_map size_iota.
-  have eqM : M f = M (from_pref a [seq f i | i <- iota 0 m.+1]).
+  have eqM : M f = M (from_pref (f 0) [seq f i | i <- iota 0 m.+1]).
   { apply: MmodM.
     set l := M _.
     apply/eq_in_map=> x hx.
     have {hx} hx : x < m.+1 by rewrite ltnS /m; apply: leq_bigmax_seq.
     by rewrite /from_pref (nth_map 0) ?size_iota // nth_iota. }
+  rewrite minnSS.
+  change ((if
+       \max_(i <- M (from_pref (f 0) [seq f i | i <- iota 0 (minn m (\max_(i <- M f) i)).+1])) i <
+       (minn m (\max_(i <- M f) i)).+1
+      then output (F (from_pref (f 0) [seq f i | i <- iota 0 (minn m (\max_(i <- M f) i)).+1]))
+      else ask (minn m (\max_(i <- M f) i)).+1) = output (F f)).
   rewrite minnn -eqM leqnn; congr output; apply: MmodF.
   apply/eq_in_map=> x hx.
   have {hx} hx : x < m.+1 by rewrite ltnS /m eqM; apply: leq_bigmax_seq.
@@ -1222,14 +1237,14 @@ Proof.
   exists (N α) => *; exact: HNY.
 Qed.
 
-Theorem seq_cont_equiv_self_modulus_cont (a0 : A) (F : (Q -> A) -> R) :
+Theorem seq_cont_equiv_self_modulus_cont (F : (Q -> A) -> R) :
   seq_cont F <-> continuous_modulus_cont F.
 Proof.
   split.
   - intros contF. eapply seq_cont_to_self_modulus_cont in contF as (N & HF & HN). 
     eexists; split; eauto.
     intros f. exists (N f). red in HN. refine (HN f).
-  - intros (N' & HF' & HN'). eapply self_modulus_seq_cont. 1: assumption.
+  - intros (N' & HF' & HN'). eapply self_modulus_seq_cont.
     edestruct T14 as (N & HF & HN).
     + eexists. split.
       2:{ intros f. eapply modulus_at_to_modulus_at_nat. exact (HF' f). }
