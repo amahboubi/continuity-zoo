@@ -1,4 +1,6 @@
--Q theories ""
+ -Q theories ""
+ -Q theories/Brede-Herbelin ""
+ 
 
 -arg -w -arg -notation-overridden 
 COQDOCFLAGS = "--charset utf-8 --parse-comments -s --with-header ../website/resources/header.html --with-footer ../website/resources/footer.html --index indexpage"
