@@ -383,8 +383,8 @@ Defined.
 
 (*Then Sterling shows that any dialogue tree is normalizable.
 Unfortunately the following code is not accepted by Coq.*)
-(* TANSDANS see whether we can patch this *)
-Fail Equations reflect (l : list ANS) (d : dialogue) : norm1 l d:=
+(* TODO see whether we can patch this *)
+Fail Equations reflect (l : list O) (d : dialogue) : norm1 l d:=
   reflect l (eta a) := @normret l a ;
   reflect l (beta n q) := normask (@reflect2 l n q l)
 where reflect2 l1 i k l2 : norm2 l1 i k l2 :=
@@ -405,13 +405,13 @@ End reflect.
 
 Derive Subterm for list.
 
-Fail Equations reflect2 (l1 : list ANS) (i : nat) (k : ANS -> dialogue) (l2 : list ANS) : norm2 l1 i k l2 by wf (length l2, k) (lexprod (lt, lt)) :=
+Fail Equations reflect2 (l1 : list O) (i : nat) (k : O -> dialogue) (l2 : list O) : norm2 l1 i k l2 by wf (length l2, k) (lexprod (lt, lt)) :=
   reflect2 l1 0 k nil := normzeronil (fun o => reflect reflect2 (cons o l1) (k o)) ;
   reflect2 l1 (S j) k nil := normsuccnil (fun o => reflect2 (cons o l1) j k nil) ;
   reflect2 l1 0 k (cons o l2) := normzerocons l2 (reflect reflect2 l1 (k o)) ;
   reflect2 l1 (S j) k (cons o l2) := normsucccons o (reflect2 l1 j k l2) .
 
-(* This is the proof by Escardó and ANSliva:
+(* This is the proof by Escardó and Oliva:
   https://www.cs.bham.ac.uk//~mhe/dialogue/dialogue-to-brouwer.agda *)
 
 (* (follow n b) is the immediate subtree of b selected when alpha 0 = n,
@@ -1173,6 +1173,8 @@ Proof.
   apply/eq_in_map=> j; rewrite mem_iota add0n /padded_seq => /andP[_ hj].
   rewrite (nth_map 0) ?nth_iota ?add0n ?size_iota //; lia.
 Qed.
+
+
 
 (* Name from Yannick + Fujiwara - Kawai *)
 Lemma T14 Y :
