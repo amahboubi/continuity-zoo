@@ -3,6 +3,7 @@ Require Import Program Lia ConstructiveEpsilon.
 From mathcomp Require Import zify.
 From Equations Require Import Equations.
 Require Import extra_principles.
+
 Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
@@ -15,9 +16,8 @@ Lemma Delta0_choice {X} (R : X -> nat -> Prop) :
   (forall x, exists n, R x n) ->
   inhabited (forall x, {n | R x n}).
 Proof.
-  econstructor.
-  intros x.
-  eapply constructive_indefinite_ground_description_nat; eauto.
+  constructor => x.
+  exact: constructive_indefinite_ground_description_nat.
 Qed.
 
 (** * Definitions  *)
@@ -57,6 +57,7 @@ Inductive is_dialogue : ((Q -> A) -> R) -> Type :=
   | tbeta (q : Q) (k : A -> (Q -> A) -> R) (H : forall a, is_dialogue (k a))
       : is_dialogue (fun f => k (f q) f).
 
+(* Boxing is_dialogue in Prop *)
 Definition int_dialogue_cont F := inhabited (is_dialogue F).
 
 (** *** Brouwer continuity, Baire space variant of dialogue continuity  *)
@@ -208,7 +209,7 @@ Definition uni_cont (F : (Q -> A) -> R) :=
 
 End continuity_principles.
 
-Section special_cases.
+Section nat_queries.
 
 Notation Q := nat.
 Variable A R : Type.
@@ -231,52 +232,53 @@ Definition modulus_nat {R} (F : (nat -> A) -> R) M :=
 Definition continuous_modulus_cont_nat (F : (Q -> A) -> R) :=
   exists M, ex_modulus_cont_nat M /\ modulus_nat F M.
 
-End special_cases.
+End nat_queries.
 
 Section Intensional_Dialogue.
 
 Variable Q A R : Type.
 
 Implicit Type (F : (Q -> A) -> R).
+Implicit Type d : @dialogue Q A R.
 
-Lemma dialogue_is_dialogue (d : @dialogue Q A R) : is_dialogue (deval d).
+Lemma dialogue_is_dialogue d : is_dialogue (deval d).
 Proof.
-  induction d as [ | i k ke] ; cbn.
-  - now econstructor.
-  - now eapply (tbeta i ke).
+  elim: d => [| i k ke] //=; first by constructor.
+  exact: (tbeta i ke).
 Qed.
 
 Lemma is_dialogue_to_dialogue_ext F :
-  is_dialogue F -> {d : @dialogue Q A R & F =1 deval d}.
+  is_dialogue F -> {d & F =1 deval d}.
 Proof.
-elim=> [o |q k ih1 ih2].
-- by exists (eta o).
-- exists (beta q (fun a => projT1 (ih2 a))) => f /=.
+  elim=> [o |q k ih1 ih2].
+  - by exists (eta o).
+  - exists (beta q (fun a => projT1 (ih2 a))) => f /=.
   by case: (ih2 (f q)) => /=.
 Qed.
 
 Theorem int_dialogue_cont_to_dialogue_cont F :
   int_dialogue_cont F -> dialogue_cont F.
 Proof.
-  intros [[d H] % is_dialogue_to_dialogue_ext].
-  exists d. assumption.
+  case=> /is_dialogue_to_dialogue_ext [d H].
+  by exists d.
 Qed.
 
 Variable funext : forall R B (f g : R -> B), f =1 g -> f = g.
 
-Lemma is_dialogue_to_dialogue F : int_dialogue_cont F ->
-                                  exists d : @dialogue Q A R, F = deval d.
+Lemma is_dialogue_to_dialogue F : 
+  int_dialogue_cont F -> exists d : @dialogue Q A R, F = deval d.
 Proof.
-  intros [[d H] % is_dialogue_to_dialogue_ext].
-  exists d. apply funext, H.
+  Proof.
+  case=> /is_dialogue_to_dialogue_ext [d H].
+  by exists d; exact: funext.
 Qed.
 
-Lemma dialogue_cont_to_is_dialogue F :  dialogue_cont F ->
-                                        int_dialogue_cont F.
+Lemma dialogue_cont_to_is_dialogue F : 
+  dialogue_cont F -> int_dialogue_cont F.
 Proof.
-  intros [d Hd].
-  apply funext in Hd ; subst. econstructor.
-  now apply dialogue_is_dialogue.
+  case=> d /funext ->.
+  constructor.
+  exact: dialogue_is_dialogue.
 Qed.
 
 End Intensional_Dialogue.
@@ -285,68 +287,71 @@ End Intensional_Dialogue.
 
 Section Brouwer.
 
+(* In this section, we consider nat queries *)
 Notation Q := nat.
-Variable A R : Type.
-Local Notation Brouwer := (@Btree A R).
 
+Variables A R : Type.
+
+Local Notation Brouwer := (@Btree A R).
 Local Notation dialogue := (@dialogue nat A R).
 
-(*Going from Brouwer trees to dialogue trees*)
+Implicit Type (b : Brouwer) (d : dialogue) (n : nat).
 
-Fixpoint Btree_to_dialogue_aux  (b : Brouwer) (n : nat) : dialogue :=
+(* From Brouwer trees to dialogue trees *)
+
+Fixpoint Btree_to_dialogue_aux b n : dialogue :=
   match b with
   | spit a => eta a
-  | bite k => beta n (fun o => Btree_to_dialogue_aux (k o) (S n))
+  | bite k => beta n (fun q => Btree_to_dialogue_aux (k q) n.+1)
   end.
 
 Definition Btree_to_dialogue b := Btree_to_dialogue_aux b 0.
 
+(* Morally, n_comp is f \o (iter n S) but the next proof requires a definitional
+   identity between n_comp f n.+1 S and (n_comp f n \o S), and 
+   (iter n.+1 S) is defequal to S \o (iter n S) *)
 Fixpoint n_comp (f : nat -> A) (n : nat) : nat -> A :=
   match n with
   | 0 => f
-  | S k => (n_comp f k) \o S
+  | k.+1 => (n_comp f k) \o S
   end.
 
-Lemma n_comp_n_plus f n k : n_comp f n k = f (n + k).
+Lemma n_comp_n_plus f n k : 
+  n_comp f n k = f (n + k).
 Proof.
-  revert k ; induction n as [ | n IHn] ; [reflexivity |].
-  intros k ; cbn.
-  erewrite IHn.
-  now erewrite plus_n_Sm.
+  elim: n k => [ |n ihn] // k /=.
+  by rewrite ihn addnS.
 Qed.
 
 Lemma Btree_to_dialogueP_aux b alpha n :
   beval b (n_comp alpha n) = deval (Btree_to_dialogue_aux b n) alpha.
 Proof.
-  revert n ; induction b as [|k H] ; [reflexivity |].
-  intros n. cbn.
-  erewrite (H _ (S n)).
-  erewrite n_comp_n_plus.
-  now erewrite <- plus_n_O.
+  elim: b n => [ | k h] // n /=.
+  by rewrite (h _ n.+1) n_comp_n_plus addn0.
 Qed.
 
 Lemma Btree_to_dialogueP b alpha :
   beval b alpha = deval (Btree_to_dialogue b) alpha.
 Proof.
-  exact (Btree_to_dialogueP_aux b alpha 0).
+  exact: (Btree_to_dialogueP_aux b alpha 0).
 Qed.
 
 Lemma dialogue_cont_Brouwer_to_dialogue_cont (F : (nat -> A) -> R) :
   dialogue_cont_Brouwer F -> dialogue_cont F.
 Proof.
-  intros [b Hb].
-  exists (Btree_to_dialogue b) ; intros alpha.
-  rewrite (Hb alpha).
-  exact (Btree_to_dialogueP b alpha).
+  case=> b Hb.
+  exists (Btree_to_dialogue b) => alpha.
+  rewrite Hb.
+  exact: Btree_to_dialogueP.
 Qed.
 
-(*Going from dialogue trees to Brouwer trees, in two different ways.*)
+(* From dialogue trees to Brouwer trees, in two different ways. *)
 
-(*Here is the proof by Sterling:
-http://jonsterling.github.io/agda-effectful-forcing/Dialogue.Normalize.html*)
+(* First, the proof by Sterling:
+http://jonsterling.github.io/agda-effectful-forcing/Dialogue.Normalize.html *)
 
 
-(*norm1 and norm2 specify when a dialogue tree is normalizable into a Brouwerian one*)
+(* norm1 and norm2 specify when a dialogue tree is normalizable into a Brouwerian one *)
 Inductive norm1 : list A -> dialogue -> Type :=
 | normret : forall l a, norm1 l (eta a)
 | normask : forall l i k, norm2 l i k l -> norm1 l (beta i k)
@@ -362,7 +367,7 @@ with
     norm2 l (S i) k nil.
 
 
-(*If a dialogue tree is normalizable, we can indeed retrieve a Brouwer tree*)
+(* If a dialogue tree is normalizable, we can indeed retrieve a Brouwer tree *)
 Lemma reify : forall l d, norm1 l d -> Brouwer
 with reify2 : forall l i k l', norm2 l i k l' -> Brouwer.
 Proof.
@@ -380,6 +385,8 @@ Proof.
     + eapply bite.
       exact (fun o => reify2 _ _ _ _ (ke o)).
 Defined.
+
+    
 
 (*Then Sterling shows that any dialogue tree is normalizable.
 Unfortunately the following code is not accepted by Coq.*)
@@ -484,11 +491,8 @@ Qed.
 Lemma eval_ext_tree_constant tau (f : Q -> A) :
   forall n a l, tau l = output a -> eval_ext_tree_aux tau f n l = output a.
 Proof.
-  intros n a.
-  induction n ; intros l H.
-  - assumption.
-  - cbn.
-    now rewrite H.
+  elim=> [| n hn] a l h //=.
+  by rewrite h.
 Qed.
 
 Lemma eval_ext_tree_output_unique tau f l n1 n2 o1 o2 :
@@ -496,7 +500,7 @@ Lemma eval_ext_tree_output_unique tau f l n1 n2 o1 o2 :
   eval_ext_tree_aux tau f n2 l = output o2 ->
   o1 = o2.
 Proof.
-  elim: n1 n2 l => [| n1 ihn1] [ | n2] l /=.
+  elim: n1 n2 l=> [| n1 ihn1] [| n2] l /=.
   1, 2: by move=> -> [].
   1, 2: case: (tau l) => [q // | o -> [] //]; exact: ihn1.
 Qed.
@@ -525,40 +529,35 @@ Qed.
 Lemma eval_ext_tree_map tau f n :
   eval_ext_tree tau f n = tau (map f (eval_ext_tree_trace tau f n)).
 Proof.
-rewrite /eval_ext_tree_trace /eval_ext_tree; exact:eval_ext_tree_map_aux.
+rewrite /eval_ext_tree_trace /eval_ext_tree; exact: eval_ext_tree_map_aux.
 Qed.
 
-
-(*TODO : move this to some Section with lemmas about eval_ext_tree*)
 Lemma eval_ext_tree_monotone tau f n k a l :
   eval_ext_tree_aux tau f n l = output a ->
   eval_ext_tree_aux tau f (n + k) l = output a.
 Proof.
-  revert l ; induction n as [ | n IHn] ; cbn in * ; intros l H.
-  1: now eapply eval_ext_tree_constant.
-  destruct (tau l) ; [ | assumption].
-  now eapply IHn.
+  elim: n l => [ |n ihn] l /=.
+  - by apply: eval_ext_tree_constant.
+  - case: (tau l) => // q; exact: ihn.
 Qed.
 
 Lemma eval_ext_tree_trace_monotone (tau : ext_tree) f n k a l :
   eval_ext_tree_aux tau f n l = output a ->
   eval_ext_tree_trace_aux tau f n l = eval_ext_tree_trace_aux tau f (n + k) l.
 Proof.
-  revert l ; induction n as [ | n IHn] ; cbn in * ; intros l H.
-  1: destruct k ; cbn ; [reflexivity | now rewrite H].
-  destruct (tau l) ; [ | reflexivity].
-  f_equal.
-  now eapply IHn.
+  elim: n l => [ |n ihn] l /=.
+  - by case: k => [| k] //= ->.
+  - by case: (tau l) => // q h; rewrite ihn. 
 Qed.
+
 
 Lemma eval_ext_tree_trace_size_eval (tau : ext_tree) f n a l :
   eval_ext_tree_aux tau f n l = output a ->
   eval_ext_tree_aux tau f (size (eval_ext_tree_trace_aux tau f n l)) l = output a.
 Proof.
-  revert l ; induction n as [ | n IHn] ; cbn in * ; intros l H ; [assumption |].
-  case_eq (tau l) ; intros i Heq ; rewrite Heq in H ; cbn ; rewrite Heq.
-  2: now trivial.
-  now eapply IHn.
+  elim: n l => [ | n ihn] l //=.
+  case e: (tau l) => [q | r /= <- //].
+  by rewrite /= e; apply: ihn.
 Qed.
 
 Lemma eval_ext_tree_trace_size_eval_trace (tau : ext_tree) f n a l :
@@ -566,10 +565,9 @@ Lemma eval_ext_tree_trace_size_eval_trace (tau : ext_tree) f n a l :
   eval_ext_tree_trace_aux tau f n l =
     eval_ext_tree_trace_aux tau f (size (eval_ext_tree_trace_aux tau f n l)) l.
 Proof.
-  revert l ; induction n as [ | n IHn] ; cbn in * ; intros l H ; [reflexivity |].
-  case_eq (tau l) ; intros i Heq ; rewrite Heq in H ; cbn ; [rewrite Heq | reflexivity].
-  f_equal.
-  now eapply IHn.
+  elim: n l => [ | n ihn] l //=.
+  case e: (tau l) => [q | r /= <- //] /= h.
+  by rewrite e -ihn.
 Qed.
 
 Definition ext_tree_for F tau :=
@@ -580,7 +578,7 @@ Definition seq_cont_wf F :=
   exists tau, wf_ext_tree tau /\ ext_tree_for F tau.
 
 Definition valid_ext_tree tau :=
-  forall l o,  tau l = output o -> forall a, tau (rcons l a) = output o.
+  forall l o, tau l = output o -> forall a, tau (rcons l a) = output o.
   
 Definition seq_cont_valid (F : (Q -> A) -> R) :=
   exists tau, ext_tree_for F tau /\ valid_ext_tree tau.
@@ -594,26 +592,35 @@ Qed.
 Lemma valid_cat (tau : ext_tree) l l' o :
   valid_ext_tree tau -> tau l = output o -> tau (l ++ l') = output o.
 Proof.
-  destruct l' using last_ind ; intros.
-  - now rewrite cats0.
-  - rewrite - rcons_cat.
-    eapply H.
-    now eapply IHl'.
+  move=> vtau.
+  elim/last_ind: l' => [| l' s ihl'] ho; first by rewrite -ho cats0.
+  rewrite -rcons_cat.
+  apply: vtau. 
+  exact: ihl'.
 Qed.
 
 (** *** Dialogue continuity implies sequential continuity  *)
 
 (** From dialogue to extensional trees **)
-Fixpoint dialogue_to_ext_tree (d : @dialogue Q A R) (l : seq A) : @result Q R :=
- match l, d with
-  | _ , eta o => output o
-  | [::], beta q _ => ask q
-  | a :: l, beta _ k => dialogue_to_ext_tree (k a) l
+
+Fixpoint dialogue_to_ext_tree d (l : seq A) : @result Q R :=
+  match d with
+   | eta o => output o
+   | beta q k => if l is a :: l then dialogue_to_ext_tree (k a) l else ask q
   end.
+  
+(*Fixpoint dialogue_to_ext_tree d (l : seq A) : @result Q R :=
+    match l, d with
+     | _ , eta o => output o
+     | [::], beta q _ => ask q
+     | a :: l, beta _ k => dialogue_to_ext_tree (k a) l
+     end.
+ *)
 
 (* Dialogue continuity implies any form of sequential continuity *)
 
-Lemma dialogue_to_ext_tree_wf d : wf_ext_tree (dialogue_to_ext_tree d).
+Lemma dialogue_to_ext_tree_wf d : 
+  wf_ext_tree (dialogue_to_ext_tree d).
 Proof.
   elim: d => [ o| n k ihd] f.
   - by exists 0; exists o.
@@ -624,7 +631,8 @@ Proof.
     by rewrite /=; congr (_ :: _); rewrite -[1]/(1 + 0) iotaDl -map_comp.
 Qed.
 
-Lemma dialogue_to_ext_tree_valid d : valid_ext_tree (dialogue_to_ext_tree d).
+Lemma dialogue_to_ext_tree_valid d : 
+  valid_ext_tree (dialogue_to_ext_tree d).
 Proof.
   elim: d => [ o| n k ihd]; first by case.
   case=> [| hd tl] //=; exact: ihd.
@@ -633,31 +641,23 @@ Qed.
 Lemma dialogue_to_ext_tree_for d :
   ext_tree_for (deval d) (dialogue_to_ext_tree d).
 Proof.
-  rewrite /ext_tree_for.
-  elim: d => [o | q k ihd] f.
+  rewrite /ext_tree_for /eval_ext_tree => f.
+  elim: d => [o | q k ihd].
   - by exists 0.
-  - specialize (ihd (f q) f) as [n Hn].
-    exists n.+1.
-    cbn.
-    revert Hn.
-    unfold eval_ext_tree.
-    generalize (@nil A) as l.
-    induction n as [ | n IHn] ; intros * Heq.
-    + cbn in *.
-      assumption.
-    + cbn in *.
-      destruct (dialogue_to_ext_tree (k (f q)) l).
-      2: assumption.
-      eapply IHn.
-      assumption.
+  - have {ihd} [n ihn] := ihd (f q).
+    exists n.+1 => /=.
+    elim: n (@nil A) ihn => [| n ihn] l //=.
+    case: (dialogue_to_ext_tree (k (f q))) => [qq | rr] he //.
+    exact: ihn.
 Qed.
 
 Theorem dialogue_to_seq_cont  (F : (Q -> A) -> R) :
   dialogue_cont F -> seq_cont F.
 Proof.
-  intros [d Hd]. exists (dialogue_to_ext_tree d).
-  red in Hd. setoid_rewrite Hd.
-  apply dialogue_to_ext_tree_for.
+  case=> d hd.  
+  exists (dialogue_to_ext_tree d) => f. 
+  rewrite hd.
+  exact: dialogue_to_ext_tree_for. 
 Qed.
 
 (** *** Sequential continuity is equivalent to sequential continuity with interrogations *)
@@ -665,43 +665,46 @@ Qed.
 Implicit Type f : Q -> A.
 Implicit Type τ : @ext_tree Q A R.
 
+Lemma inversion_ask f l τ a : 
+  interrogation f (rcons l a) τ -> 
+  exists q,
+  [/\ f q = a, τ l = ask q & interrogation f l τ].
+Proof.
+move=> h.
+inversion h as [tau e1 e2|ll tau qq a2 <- hi eask congr1 etau] => {h}.
+- by move: (f_equal size e1); rewrite size_rcons. 
+- have {congr1} [el ea] := rcons_inj congr1.
+  by subst; exists qq.
+Qed.
+
 Lemma interrogation_plus τ f n ans a :
   interrogation f ans (fun l => τ (a ++ l)) ->
   eval_ext_tree_aux τ f (size ans + n) a =
     eval_ext_tree_aux τ f n (a ++ ans).
 Proof.
-  intros Hi.
-  remember (fun l => τ (a ++ l)) as τ'.
-  revert τ Heqτ' n.
-  revert a.
-  induction Hi; simpl; intros.
-  + rewrite ?cats0 => //.
-  + subst.
-    rewrite size_rcons.
-    replace ((size l).+1 + n) with (size l + S n) by lia.
-    rewrite IHHi.
-    * cbn. rewrite H0.
-      now rewrite rcons_cat.
-    * reflexivity.
+   elim/last_ind: ans a n => [| l1 a1 ihl] l2 n.
+   - by rewrite cats0.
+   - case/inversion_ask => [q [<- e2 hi]].
+     rewrite size_rcons -[_ + n]addnS.
+     have /(_ n.+1) -> := ihl _ _ hi.
+     by rewrite /= e2 rcons_cat.
 Qed.
 
-Lemma interrogation_cons q1 a1 a2 τ (f : Q -> A) :
-  τ nil = ask q1 ->
-  f q1 = a1 ->
-  interrogation f a2 (fun l => τ (a1 :: l)) ->
-  interrogation f (a1 :: a2) τ.
+
+Lemma interrogation_cons q l τ (f : Q -> A) :
+  τ nil = ask q ->
+  interrogation f l (fun l => τ (f q :: l)) ->
+  interrogation f (f q :: l) τ.
 Proof.
-  intros H1 H2.
-  induction a2 in a1, H1, H2 |- * using List.rev_ind.
-  - inversion 1; subst.
-    + eapply Ask with (l := nil); eauto. constructor.
-    + destruct l; cbn in *; congruence.
-  - inversion 1.
-    + destruct a2; cbn in *; congruence.
-    + subst. setoid_rewrite (cats1 a2 x) in H0.
-      eapply rcons_inj in H0. inversion H0. subst.
-      eapply Ask with (l := f q1 :: a2); eauto.
+  move=> e; elim/last_ind: l => [_ | l qq ihl].
+  - rewrite -[[:: f q]]/(rcons [::] (f q)). 
+    by apply: (Ask _ _ e) => //; constructor.
+  - case/inversion_ask => [qqq [<- e2 hi]].
+    rewrite -rcons_cons.
+    apply: (Ask _ _ e2) => //; exact: ihl.
 Qed.
+
+(** HERE **)
 
 Lemma interrogation_ext τ τ' a f :
   (forall l, τ l = τ' l) ->
