@@ -53,7 +53,7 @@ Definition dialogue_cont F := exists d : dialogue, F =1 deval d.
 (** ** Intensional dialogue continuity  *)
 
 Inductive is_dialogue : ((Q -> A) -> R) -> Type :=
-  | teta o : is_dialogue (fun _ => o)
+  | teta r : is_dialogue (fun _ => r)
   | tbeta (q : Q) (k : A -> (Q -> A) -> R) (H : forall a, is_dialogue (k a))
       : is_dialogue (fun f => k (f q) f).
 
@@ -76,7 +76,7 @@ Implicit Type (b : Btree).
 
 Fixpoint beval b (f : nat -> A) : R :=
   match b with
-  |spit o => o
+  |spit r => r
   |bite k => beval (k (f 0)) (f \o S)
   end.
 
@@ -117,6 +117,8 @@ Fixpoint eval_ext_tree_aux (tau : ext_tree) (f : Q -> A) (n : nat) (l : list A) 
   end.
 
 Definition eval_ext_tree tau f n := eval_ext_tree_aux tau f n [::].
+
+Arguments eval_ext_tree {Q A R} tau f / n.
 
 (* TODO: as this is the one seq_cont we care about, may be change its name *)
 Definition seq_cont F :=
@@ -162,23 +164,22 @@ CoInductive Itree :=
 Fixpoint ieval (i : Itree) (f : Q -> A) (n : nat) : result :=
   match n with
   | 0 => match i with
-         | ret o => output o
+         | ret r => output r
          | vis q k => ask q
          end
   | S n => match i with
-           | ret o => output o
+           | ret r => output r
            | vis q k => ieval (k (f q)) f n
            end
   end.
 
-Lemma ieval_output_unique tau f n1 n2 o1 o2 :
-  ieval tau f n1 = output o1 ->
-  ieval tau f n2 = output o2 ->
-  o1 = o2.
+Lemma ieval_output_unique tau f n1 n2 r1 r2 :
+  ieval tau f n1 = output r1 ->
+  ieval tau f n2 = output r2 ->
+  r1 = r2.
 Proof.
-  elim: n1 n2 tau => [| n1 ihn1] [ | n2] /= ; intros tau H1 H2.
-  all: destruct tau ; inversion H1 ; inversion H2 ; subst ; auto.
-  eapply ihn1 ; eauto.
+  elim: n1 n2 tau => [| n1 ihn1] [| n2] /= [q | r i] // [] e1 [] e2; subst => //.
+  by apply: ihn1; eauto.
 Qed.
 
 Definition seq_cont_interaction F :=
@@ -353,17 +354,17 @@ http://jonsterling.github.io/agda-effectful-forcing/Dialogue.Normalize.html *)
 
 (* norm1 and norm2 specify when a dialogue tree is normalizable into a Brouwerian one *)
 Inductive norm1 : list A -> dialogue -> Type :=
-| normret : forall l a, norm1 l (eta a)
+| normret : forall l (r : R), norm1 l (eta r)
 | normask : forall l i k, norm2 l i k l -> norm1 l (beta i k)
 with
   norm2 : list A -> nat -> (A -> dialogue) -> list A -> Type :=
 | normzerocons : forall l k l' j,  norm1 l (k j) -> norm2 l 0 k (cons j l')
 | normsucccons : forall l i k l' j, norm2 l i k l' -> norm2 l (S i) k (cons j l')
 | normzeronil : forall l k,
-    (forall o, norm1 (cons o l) (k o)) ->
+    (forall a : A, norm1 (cons a l) (k a)) ->
     norm2 l 0 k nil
 | normsuccnil : forall l i k,
-    (forall o, norm2 (cons o l) i k nil) ->
+    (forall a : A, norm2 (cons a l) i k nil) ->
     norm2 l (S i) k nil.
 
 
@@ -381,30 +382,28 @@ Proof.
       eassumption.
     + exact IH.
     + eapply bite.
-      exact (fun o => reify _ _ (ke o)).
+      exact (fun r => reify _ _ (ke r)).
     + eapply bite.
-      exact (fun o => reify2 _ _ _ _ (ke o)).
+      exact (fun r => reify2 _ _ _ _ (ke r)).
 Defined.
-
-    
 
 (*Then Sterling shows that any dialogue tree is normalizable.
 Unfortunately the following code is not accepted by Coq.*)
 (* TODO see whether we can patch this *)
-Fail Equations reflect (l : list O) (d : dialogue) : norm1 l d:=
-  reflect l (eta a) := @normret l a ;
-  reflect l (beta n q) := normask (@reflect2 l n q l)
-where reflect2 l1 i k l2 : norm2 l1 i k l2 :=
-  reflect2 l1 0 k nil := normzeronil (fun o => reflect (cons o l1) (k o)) ;
-  reflect2 l1 (S j) k nil := normsuccnil (fun o => reflect2 (cons o l1) j k nil) ;
-  reflect2 l1 0 k (cons o l2) := normzerocons l2 (reflect l1 (k o)) ;
-  reflect2 l1 (S j) k (cons o l2) := normsucccons o (reflect2 l1 j k l2) .
+Fail Equations reflect (l : list A) (d : dialogue) : norm1 l d :=
+  reflect l (eta r) := normret l r ;
+  reflect l (beta n q) := normask (reflect2 l n q l)
+where reflect2 (l1 : list A) (i : nat) (k : A -> dialogue) (l2 : list A) : norm2 l1 i k l2 :=
+  reflect2 l1 0 k nil := normzeronil (fun a : A => reflect (cons a l1) (k a)) ;
+  reflect2 l1 (S j) k nil := normsuccnil (fun a => reflect2 (cons a l1) j k nil) ;
+  reflect2 l1 0 k (cons r l2) := normzerocons l2 (reflect l1 (k r)) ;
+  reflect2 l1 (S j) k (cons r l2) := normsucccons r (reflect2 l1 j k l2) .
 
 Section reflect.
 
-  Variable (reflect2 : forall l1 i k l2, norm2 l1 i k l2).
+Variable (reflect2 : forall l1 i k l2, norm2 l1 i k l2).
 
-  Equations reflect  (l : list A) (d : dialogue) : norm1 l d:=
+Equations reflect  (l : list A) (d : dialogue) : norm1 l d:=
     reflect l (eta a) := @normret l a ;
     reflect l (beta n q) := normask (@reflect2 l n q l).
 
@@ -412,21 +411,21 @@ End reflect.
 
 Derive Subterm for list.
 
-Fail Equations reflect2 (l1 : list O) (i : nat) (k : O -> dialogue) (l2 : list O) : norm2 l1 i k l2 by wf (length l2, k) (lexprod (lt, lt)) :=
-  reflect2 l1 0 k nil := normzeronil (fun o => reflect reflect2 (cons o l1) (k o)) ;
-  reflect2 l1 (S j) k nil := normsuccnil (fun o => reflect2 (cons o l1) j k nil) ;
-  reflect2 l1 0 k (cons o l2) := normzerocons l2 (reflect reflect2 l1 (k o)) ;
-  reflect2 l1 (S j) k (cons o l2) := normsucccons o (reflect2 l1 j k l2) .
+Fail Equations reflect2 (l1 : list A) (i : nat) (k : A -> dialogue) (l2 : list A) : norm2 l1 i k l2 by wf (length l2, k) (lexprod (lt, lt)) :=
+  reflect2 l1 0 k nil := normzeronil (fun a => reflect reflect2 (cons a l1) (k a)) ;
+  reflect2 l1 (S j) k nil := normsuccnil (fun a => reflect2 (cons a l1) j k nil) ;
+  reflect2 l1 0 k (cons a l2) := normzerocons l2 (reflect reflect2 l1 (k a)) ;
+  reflect2 l1 (S j) k (cons a l2) := normsucccons o (reflect2 l1 j k l2) .
 
 (* This is the proof by Escardó and Oliva:
   https://www.cs.bham.ac.uk//~mhe/dialogue/dialogue-to-brouwer.agda *)
 
 (* (follow n b) is the immediate subtree of b selected when alpha 0 = n,
    for any alpha *)
-Definition follow (o : A) (b : Brouwer) : Brouwer :=
+Definition follow (a : A) (b : Brouwer) : Brouwer :=
   match b with
-  |spit a => b (* reached answer *)
-  |bite k => k o (* select the nth child tree *)
+  |spit _ => b (* reached answer *)
+  |bite k => k a (* select the nth child tree *)
   end.
 
 (* Resulting spec wrt to beval. Note the composition with successor, so
@@ -529,7 +528,7 @@ Qed.
 Lemma eval_ext_tree_map tau f n :
   eval_ext_tree tau f n = tau (map f (eval_ext_tree_trace tau f n)).
 Proof.
-rewrite /eval_ext_tree_trace /eval_ext_tree; exact: eval_ext_tree_map_aux.
+exact: eval_ext_tree_map_aux.
 Qed.
 
 Lemma eval_ext_tree_monotone tau f n k a l :
@@ -641,7 +640,7 @@ Qed.
 Lemma dialogue_to_ext_tree_for d :
   ext_tree_for (deval d) (dialogue_to_ext_tree d).
 Proof.
-  rewrite /ext_tree_for /eval_ext_tree => f.
+  rewrite /ext_tree_for => f.
   elim: d => [o | q k ihd].
   - by exists 0.
   - have {ihd} [n ihn] := ihd (f q).
@@ -707,11 +706,12 @@ Qed.
 (** HERE **)
 
 Lemma interrogation_ext τ τ' a f :
-  (forall l, τ l = τ' l) ->
-  interrogation f a τ <-> interrogation f a τ'.
+  τ =1 τ' ->
+  interrogation f a τ -> interrogation f a τ'.
 Proof.
-  intros. split; induction 1; econstructor; eauto; congruence.
+  intro; induction 1; econstructor; eauto; congruence.
 Qed.
+
 
 Lemma interrogation_app a1 a2 τ f :
   interrogation f a1 τ ->
@@ -720,50 +720,42 @@ Lemma interrogation_app a1 a2 τ f :
 Proof.
   induction 1 in a2 |- *; cbn.
   - eauto.
-  - intros. rewrite cat_rcons.
+  - intros. subst. rewrite cat_rcons.
     eapply IHinterrogation.
     eapply interrogation_cons.
-    + rewrite cats0. eassumption.
-    + eauto.
-    + eapply interrogation_ext; eauto. cbn. intros. now rewrite cat_rcons.
+    + by rewrite cats0.
+    + eapply interrogation_ext; eauto => ?. cbn. by rewrite cat_rcons.
 Qed.
 
-Lemma eval_ext_tree_to_interrogation τ f n o :
-  eval_ext_tree τ f n = output o ->
-  exists ans, size ans <= n /\ interrogation f ans τ /\ τ ans = output o.
+Hint Resolve NoQuestions.
+
+Lemma eval_ext_tree_to_interrogation τ f n r :
+  eval_ext_tree τ f n = output r ->
+  exists ans : list A, [/\ size ans <= n, interrogation f ans τ & τ ans = output r].
 Proof.
-  unfold eval_ext_tree.
-  change ( eval_ext_tree_aux τ f n [::] = output o ->
-           exists ans : seq A, size ans <= n /\ interrogation f ans (fun l => τ ([::] ++ l)) /\ τ ([::] ++ ans) = output o).
-  generalize (@nil A). intros l H. 
-  induction n in l, H |- *.
-  - exists nil. repeat split. 1: econstructor. now rewrite cats0.
-  - cbn in H. destruct τ eqn:E; try congruence.
-    + eapply IHn in H as (ans & H3 & H1 & H2).
-      exists (f q :: ans). repeat split.
-      * simpl. lia.
-      * eapply interrogation_cons; eauto.
-        1: now rewrite cats0.
-        eapply interrogation_ext. 2: eassumption.
-        intros. cbn. now rewrite cat_rcons.
-      * now rewrite <- H2, cat_rcons.
-    + inversion H. subst.
-      edestruct IHn with (l := l).
-      1: eapply eval_ext_tree_constant; eauto.
-      firstorder.
+rewrite /eval_ext_tree -[τ in X in _ -> X]/((fun l => τ ([::] ++ l))).
+elim: n (@nil A) => [|n ihn] l /=.
+- by exists [::]; split => //; rewrite cats0.
+- case e : (τ l) => [q | r'] /=. 
+  + case/ihn => ans [hs hi ha]; exists (f q :: ans).
+    rewrite -cat_rcons; split => //.
+    apply: interrogation_cons; first by rewrite cats0. 
+    apply: interrogation_ext hi => ?. by rewrite cat_rcons.
+  + case=> ero. subst.
+    have : eval_ext_tree_aux τ f n l = output r by exact: eval_ext_tree_constant.
+    case/ihn=> ans [].
+    firstorder.
 Qed.
 
-Lemma interrogation_equiv_eval_ext_tree τ f o :
-    (exists (ans : list A), interrogation f ans τ /\ τ ans = output o) <-> (exists n : nat, eval_ext_tree τ f n = output o).
+Lemma interrogation_equiv_eval_ext_tree τ f r :
+    (exists (ans : list A), interrogation f ans τ /\ τ ans = output r) <-> 
+    (exists n : nat, eval_ext_tree τ f n = output r).
 Proof.
   split.
-  - intros (ans & Hi & Hout).
-    exists (length ans + 1).
-    unfold eval_ext_tree.
-    rewrite interrogation_plus => //.
-    simpl.
-    now rewrite Hout.
-  - intros [n H]. eapply eval_ext_tree_to_interrogation in H as (? & ? & ? & ?); eauto.
+  - case=> ans [Hi Hout].
+    exists (size ans).+1.
+    by rewrite /eval_ext_tree -addn1 interrogation_plus //= Hout.
+  - case=> n /eval_ext_tree_to_interrogation. firstorder.
 Qed.
 
 Lemma continuous_via_interrogations_iff (F : (Q -> A) -> R) :
@@ -781,38 +773,28 @@ Qed.
 CoFixpoint ext_tree_to_int_tree (e : @ext_tree Q A R) (l : list A) : Itree :=
   match e l with
   | ask q => vis q (fun a => ext_tree_to_int_tree e (rcons l a))
-  | output o => ret o
+  | output r => ret r
   end.
 
 Lemma seq_cont_to_seq_cont_interaction (F : (Q -> A) -> R) :
   seq_cont F -> seq_cont_interaction F.
 Proof.
-  intros [e He].
-  exists (ext_tree_to_int_tree e nil).
-  intros f ; specialize (He f).
-  destruct He as [n Heq] ; exists n.
-  rewrite <- Heq ; clear Heq.
-  revert e.
-  unfold eval_ext_tree.
-  generalize (@nil A).
-  induction n as [ | n IHn] ; intros l e.
-  - cbn in *.
-    destruct (e l) ; reflexivity.
-  - cbn in *.
-    destruct  (e l).
-    + eapply IHn.
-    + reflexivity.
+  case=> e He.
+  exists (ext_tree_to_int_tree e nil) => f.
+  have {He} [n <-] := He f.
+  exists n. rewrite /eval_ext_tree.
+  by elim: n (@nil A) e => [| n ihn] l e /=; case: (e l).
 Qed.
 
 Fixpoint int_tree_to_ext_tree (i : Itree) (l : list A) : @result Q R :=
   match l with
   | nil => match i with
            | vis q k => ask q
-           | ret o => output o
+           | ret a => output a
            end
   | cons a l' => match i with
                  | vis q k => int_tree_to_ext_tree (k a) l'
-                 | ret o => output o
+                 | ret a => output a
                  end
   end.
 
@@ -820,124 +802,89 @@ Lemma int_tree_to_ext_tree_one_step : forall n q k f l,
     eval_ext_tree_aux (int_tree_to_ext_tree (vis q k)) f n ((f q) :: l) =
       eval_ext_tree_aux (int_tree_to_ext_tree (k (f q))) f n l.
 Proof.
-  intro n.
-  induction n as [ | n IHn] ; intros.
-  - reflexivity.
-  - cbn.
-    destruct (int_tree_to_ext_tree (k (f q)) l).
-    + apply IHn.
-    + reflexivity.
+elim=> [| n ihn] // q k f l /=.
+by case: (int_tree_to_ext_tree _ _).
 Qed.
 
 Lemma seq_cont_interaction_to_seq_cont (F : (Q -> A) -> R) :
   seq_cont_interaction F -> seq_cont F.
 Proof.
-  intros [i Hi].
-  exists (int_tree_to_ext_tree i).
-  intros f ; specialize (Hi f) as [n Heq].
+  case=> i hi.
+  exists (int_tree_to_ext_tree i) => f.
+  have {hi} [n <-] := hi f.
   exists n.
-  rewrite <- Heq ; clear Heq ; revert i.
-  induction n as [ | n IHn] ; intro i.
-  - cbn in *.
-    now destruct i.
-  - cbn in *.
-    destruct i ; [reflexivity |].
-    erewrite int_tree_to_ext_tree_one_step.
-    now apply IHn.
+  elim: n i => [| n ihn] [r | q] // i.
+  rewrite [LHS]int_tree_to_ext_tree_one_step.
+  exact: ihn.
 Qed.
 
 Theorem seq_cont_iff_seq_cont_interaction (F : (Q -> A) -> R) :
   seq_cont F <-> seq_cont_interaction F.
 Proof.
   split.
-  - apply seq_cont_to_seq_cont_interaction.
-  - apply seq_cont_interaction_to_seq_cont.
+  - exact: seq_cont_to_seq_cont_interaction.
+  - exact: seq_cont_interaction_to_seq_cont.
 Qed.
 
 (** Results about wf and valid trees  *)
 
-Fixpoint ext_tree_valid_aux
-  (tau : _) (l l' : list A) : @result Q R := 
+Fixpoint ext_tree_valid_aux tau (l l' : list A) : @result Q R := 
   match l, tau l' with
   |cons a u, ask q => ext_tree_valid_aux tau u (rcons l' a)
   |_, _ => tau l'
   end.
 
-Definition ext_tree_valid
-  (tau : _) (l : list A) : @result Q R :=
+Definition ext_tree_valid tau (l : list A) : @result Q R :=
   ext_tree_valid_aux tau l nil.
 
 Lemma ext_tree_valid_valid tau l l' l'' a:
   ext_tree_valid_aux tau l l' = output a ->
   ext_tree_valid_aux tau (l ++ l'') l' = output a.
 Proof.
-  revert l' l'' ; induction l as [ | u q IHq] ; cbn ; intros * Heq.
-  { destruct l'' ; cbn ; [ assumption | now rewrite Heq]. }
-  case_eq (tau l') ; intros i Heqi ; rewrite Heqi in Heq ; [ | assumption].
-  now apply IHq.
-Qed.  
-
-Lemma ext_tree_valid_eqtau_ask
-  (tau : _) (l l' : list A) i o :
-  ext_tree_valid_aux tau l l' = ask i ->
-  ext_tree_valid_aux tau (rcons l o) l' = tau (rcons (l' ++ l) o).
-Proof.
-  revert l'.
-  induction l as [ | u q IHq].
-  { cbn ; intros l' Heq.
-    rewrite Heq.
-    now rewrite cats0. }
-  cbn ; intros l' Heq.
-  case_eq (tau l').
-  all: intros a eqtau ; rewrite eqtau in Heq.
-  2: now inversion Heq.
-  rewrite <- cat_rcons.
-  now apply IHq.  
+  elim: l l' l'' => [| u ans ihl] /= l' l''.
+  - by case: l'' =>> //= ->.
+  - by case e : (tau l') => [q | r] // /ihl.
 Qed.
-  
-Lemma eval_ext_tree_valid_eqtau
-  (tau : _) (n : nat) (f : Q -> A) a :
+
+Lemma ext_tree_valid_eqtau_ask tau (l l' : list A) q a :
+  ext_tree_valid_aux tau l l' = ask q ->
+  ext_tree_valid_aux tau (rcons l a) l' = tau (rcons (l' ++ l) a).
+Proof.
+  elim: l l' => [| a' ans ihl] /= l' e.
+  - by rewrite e cats0.
+  - case: (tau l') e => [q' | a''] //= /ihl.
+    by rewrite -cat_rcons.
+Qed.
+
+Lemma eval_ext_tree_valid_eqtau tau (n : nat) (f : Q -> A) a :
   eval_ext_tree_aux tau f n nil = output a ->
   eval_ext_tree_aux (ext_tree_valid tau) f n nil = output a.
 Proof.
-  assert (forall j,
-             ext_tree_valid tau (take j nil) = tau (take j nil)) as Hyp.
-  { induction j ; cbn ; now reflexivity. }
-  revert Hyp.
-  generalize (@nil A).
-  induction n ; cbn ; intros ; erewrite <- (take_size l) ; erewrite Hyp.
-  { now rewrite take_size. }
-  rewrite (take_size l).
-  case_eq (tau l) ; intros j eqj ; rewrite eqj in H ; [ | assumption]. 
-  apply IHn ; [ | assumption ].
-  intros k.
-  case: (leqP (S (size l)) k).
-  { intros inf ; rewrite <- (size_rcons l (f j)) in inf.
-    erewrite take_oversize ; [ | assumption].
-    unfold ext_tree_valid.
-    erewrite ext_tree_valid_eqtau_ask ; [reflexivity |].
-    erewrite <- eqj ; erewrite <- take_size at 1 2.
-    now apply Hyp. }
-  intros sup ; erewrite <- cats1.
-  erewrite takel_cat ; [ | now eapply ltnSE].
-  now apply Hyp.
+have: forall j, ext_tree_valid tau (take j nil) = tau (take j nil) by [].
+elim: n (@nil A) => [| n ihn] l h /= e.
+- by rewrite -[l]take_size [LHS]h take_size.
+- rewrite -[l]take_size h take_size.
+  case e: (tau l) e => [q | r] //.
+  apply: ihn=> k.
+  case: (leqP (size l).+1 k) => hsize.
+  + rewrite take_oversize ?size_rcons //.
+    suff /ext_tree_valid_eqtau_ask <- : ext_tree_valid_aux tau l [::] = ask q by [].
+    by rewrite -[l]take_size [LHS]h take_size.
+  + by rewrite -cats1 takel_cat.
 Qed.
 
 Proposition seq_cont_to_seq_cont_valid F :
-  seq_cont F ->
-  seq_cont_valid F.
+  seq_cont F -> seq_cont_valid F.
 Proof.
-  intros [tau Htau].
-  exists (ext_tree_valid tau).
-  split.
-  { intros alpha.
-    specialize (Htau alpha) as [n Hn].
-    exists n.
-    now apply eval_ext_tree_valid_eqtau.
-  }
-  intros l a Heq o.
-  unfold ext_tree_valid in * ; rewrite - cats1.
-  now apply ext_tree_valid_valid.
+case=> tau htau.
+exists (ext_tree_valid tau); split.
+- move=> alpha.
+  have [n hn] := htau alpha.
+  exists n.
+  exact: eval_ext_tree_valid_eqtau.
+- move=> l r e a.
+  rewrite /ext_tree_valid -cats1.
+  exact: ext_tree_valid_valid.
 Qed.
 
 End Sequential.
