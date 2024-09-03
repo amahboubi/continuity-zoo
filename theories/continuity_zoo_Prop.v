@@ -43,7 +43,7 @@ Implicit Type (d : dialogue).
 
 Fixpoint deval d (f : Q -> A) : R :=
   match d with
-  | eta o => o
+  | eta r => r
   | beta q k => deval (k (f q)) f
   end.
 
@@ -117,8 +117,6 @@ Fixpoint eval_ext_tree_aux (tau : ext_tree) (f : Q -> A) (n : nat) (l : list A) 
   end.
 
 Definition eval_ext_tree tau f n := eval_ext_tree_aux tau f n [::].
-
-Arguments eval_ext_tree {Q A R} tau f / n.
 
 (* TODO: as this is the one seq_cont we care about, may be change its name *)
 Definition seq_cont F :=
@@ -415,7 +413,7 @@ Fail Equations reflect2 (l1 : list A) (i : nat) (k : A -> dialogue) (l2 : list A
   reflect2 l1 0 k nil := normzeronil (fun a => reflect reflect2 (cons a l1) (k a)) ;
   reflect2 l1 (S j) k nil := normsuccnil (fun a => reflect2 (cons a l1) j k nil) ;
   reflect2 l1 0 k (cons a l2) := normzerocons l2 (reflect reflect2 l1 (k a)) ;
-  reflect2 l1 (S j) k (cons a l2) := normsucccons o (reflect2 l1 j k l2) .
+  reflect2 l1 (S j) k (cons a l2) := normsucccons r (reflect2 l1 j k l2) .
 
 (* This is the proof by Escardó and Oliva:
   https://www.cs.bham.ac.uk//~mhe/dialogue/dialogue-to-brouwer.agda *)
@@ -453,7 +451,7 @@ Qed.
 (* Conversion from dialogue to Brouwer trees *)
 Fixpoint dialogue_to_Btree (d : dialogue) : Brouwer :=
   match d with
-  | eta o => spit o
+  | eta r=> spit r
   | beta n k => Bbeta (dialogue_to_Btree \o k) n
   end.
 
@@ -501,7 +499,7 @@ Lemma eval_ext_tree_output_unique tau f l n1 n2 o1 o2 :
 Proof.
   elim: n1 n2 l=> [| n1 ihn1] [| n2] l /=.
   1, 2: by move=> -> [].
-  1, 2: case: (tau l) => [q // | o -> [] //]; exact: ihn1.
+  1, 2: case: (tau l) => [q // | r -> [] //]; exact: ihn1.
 Qed.
 
 (* Sequence of questions asked while step-index evaluating tau via f at depth n *)
@@ -577,7 +575,7 @@ Definition seq_cont_wf F :=
   exists tau, wf_ext_tree tau /\ ext_tree_for F tau.
 
 Definition valid_ext_tree tau :=
-  forall l o, tau l = output o -> forall a, tau (rcons l a) = output o.
+  forall l r, tau l = output r -> forall a, tau (rcons l a) = output r.
   
 Definition seq_cont_valid (F : (Q -> A) -> R) :=
   exists tau, ext_tree_for F tau /\ valid_ext_tree tau.
@@ -588,8 +586,8 @@ Proof.
   firstorder.
 Qed.
 
-Lemma valid_cat (tau : ext_tree) l l' o :
-  valid_ext_tree tau -> tau l = output o -> tau (l ++ l') = output o.
+Lemma valid_cat (tau : ext_tree) l l' r :
+  valid_ext_tree tau -> tau l = output r -> tau (l ++ l') = output r.
 Proof.
   move=> vtau.
   elim/last_ind: l' => [| l' s ihl'] ho; first by rewrite -ho cats0.
@@ -604,49 +602,36 @@ Qed.
 
 Fixpoint dialogue_to_ext_tree d (l : seq A) : @result Q R :=
   match d with
-   | eta o => output o
+   | eta r => output r
    | beta q k => if l is a :: l then dialogue_to_ext_tree (k a) l else ask q
   end.
   
-(*Fixpoint dialogue_to_ext_tree d (l : seq A) : @result Q R :=
-    match l, d with
-     | _ , eta o => output o
-     | [::], beta q _ => ask q
-     | a :: l, beta _ k => dialogue_to_ext_tree (k a) l
-     end.
- *)
-
 (* Dialogue continuity implies any form of sequential continuity *)
 
 Lemma dialogue_to_ext_tree_wf d : 
   wf_ext_tree (dialogue_to_ext_tree d).
 Proof.
-  elim: d => [ o| n k ihd] f.
-  - by exists 0; exists o.
-  - have [m [o mP]] := ihd (f 0) (f \o S).
-    exists m.+1; exists o.
+  elim: d => [r | n k ihd] f.
+  - by exists 0; exists r.
+  - have [m [r mP]] := ihd (f 0) (f \o S).
+    exists m.+1; exists r.
     suff -> : [seq f i | i <- iota 0 m.+1] =
                                 f 0 :: [seq (f \o succn) i | i <- iota 0 m] by [].
     by rewrite /=; congr (_ :: _); rewrite -[1]/(1 + 0) iotaDl -map_comp.
 Qed.
 
-Lemma dialogue_to_ext_tree_valid d : 
-  valid_ext_tree (dialogue_to_ext_tree d).
-Proof.
-  elim: d => [ o| n k ihd]; first by case.
-  case=> [| hd tl] //=; exact: ihd.
-Qed.
+Arguments eval_ext_tree {Q A R} tau f /.
 
 Lemma dialogue_to_ext_tree_for d :
   ext_tree_for (deval d) (dialogue_to_ext_tree d).
 Proof.
-  rewrite /ext_tree_for => f.
-  elim: d => [o | q k ihd].
+  elim: d => [o | q k ihd] f.
   - by exists 0.
-  - have {ihd} [n ihn] := ihd (f q).
+  - have {ihd} [n hn] := ihd (f q) f.
     exists n.+1 => /=.
-    elim: n (@nil A) ihn => [| n ihn] l //=.
-    case: (dialogue_to_ext_tree (k (f q))) => [qq | rr] he //.
+    move: hn; rewrite /eval_ext_tree.
+    elim: n (@nil A) => [| n ihn] l //=.
+    case: (dialogue_to_ext_tree (k (f q)) l) => * //.
     exact: ihn.
 Qed.
 
@@ -790,11 +775,11 @@ Fixpoint int_tree_to_ext_tree (i : Itree) (l : list A) : @result Q R :=
   match l with
   | nil => match i with
            | vis q k => ask q
-           | ret a => output a
+           | ret r => output r
            end
   | cons a l' => match i with
                  | vis q k => int_tree_to_ext_tree (k a) l'
-                 | ret a => output a
+                 | ret r => output r
                  end
   end.
 
@@ -1237,7 +1222,7 @@ Fixpoint list_to_cantor (l : list (prod nat bool)) (n : nat) : bool :=
 Fixpoint list_to_dialogue F (l : list nat) (acc : list (prod nat bool)) :=
   match l with
   | nil => eta (F (list_to_cantor acc))
-  | cons i q => beta i (fun o => list_to_dialogue F q ((i,o) :: acc))
+  | cons i q => beta i (fun r => list_to_dialogue F q ((i, r) :: acc))
   end.
 
 (*The trace of an evaluation of a dialogue tree*)
