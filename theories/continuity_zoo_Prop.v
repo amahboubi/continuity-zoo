@@ -45,7 +45,7 @@ Fixpoint deval d (f : Q -> A) : R :=
   match d with
   | eta r => r
   | beta q k => deval (k (f q)) f
-  end.
+  end. 
 
 (* Escardó's eloquence *)
 Definition dialogue_cont F := exists d : dialogue, F =1 deval d.
@@ -353,7 +353,7 @@ http://jonsterling.github.io/agda-effectful-forcing/Dialogue.Normalize.html *)
 (* norm1 and norm2 specify when a dialogue tree is normalizable into a Brouwerian one *)
 Inductive norm1 : list A -> dialogue -> Type :=
 | normret : forall l (r : R), norm1 l (eta r)
-| normask : forall l i k, norm2 l i k l -> norm1 l (beta i k)
+| normask : forall l q k, norm2 l q k l -> norm1 l (beta q k)
 with
   norm2 : list A -> nat -> (A -> dialogue) -> list A -> Type :=
 | normzerocons : forall l k l' j,  norm1 l (k j) -> norm2 l 0 k (cons j l')
@@ -368,7 +368,7 @@ with
 
 (* If a dialogue tree is normalizable, we can indeed retrieve a Brouwer tree *)
 Lemma reify : forall l d, norm1 l d -> Brouwer
-with reify2 : forall l i k l', norm2 l i k l' -> Brouwer.
+   with reify2 : forall l i k l', norm2 l i k l' -> Brouwer.
 Proof.
   - intros * H.
     induction H as [ l a | l i k IH].
@@ -385,35 +385,33 @@ Proof.
       exact (fun r => reify2 _ _ _ _ (ke r)).
 Defined.
 
-(*Then Sterling shows that any dialogue tree is normalizable.
-Unfortunately the following code is not accepted by Coq.*)
-(* TODO see whether we can patch this *)
-Fail Equations reflect (l : list A) (d : dialogue) : norm1 l d :=
-  reflect l (eta r) := normret l r ;
-  reflect l (beta n q) := normask (reflect2 l n q l)
-where reflect2 (l1 : list A) (i : nat) (k : A -> dialogue) (l2 : list A) : norm2 l1 i k l2 :=
-  reflect2 l1 0 k nil := normzeronil (fun a : A => reflect (cons a l1) (k a)) ;
-  reflect2 l1 (S j) k nil := normsuccnil (fun a => reflect2 (cons a l1) j k nil) ;
-  reflect2 l1 0 k (cons r l2) := normzerocons l2 (reflect l1 (k r)) ;
-  reflect2 l1 (S j) k (cons r l2) := normsucccons r (reflect2 l1 j k l2) .
+  (* rr is fun l a => reflect l (k a) *)
 
-Section reflect.
+Fixpoint reflect2 (l1 : list A) (i : nat) (k : A -> dialogue) (l2 : list A) (rr : forall l a, norm1 l (k a)): norm2 l1 i k l2 :=
+  match i, l2 with
+  | 0, nil => normzeronil (fun a : A => rr (cons a l1) a) 
+  |(S j), nil => normsuccnil (fun a => @reflect2 (cons a l1) j k nil rr) 
+  | 0, (cons r l2) => normzerocons l2 (rr l1 r) 
+  | (S j), (cons r l2) => normsucccons r (@reflect2 l1 j k l2 rr) 
+  end.
 
-Variable (reflect2 : forall l1 i k l2, norm2 l1 i k l2).
+(* Now all dialogue trees are normalizable *)
+Fixpoint reflect1 (l : list A) (d : dialogue) : norm1 l d :=
+  match d with
+    |eta r => normret l r
+    |beta n q => normask (@reflect2 l n q l (fun l2 a => @reflect1 l2 (q a)))
+    end.  
 
-Equations reflect  (l : list A) (d : dialogue) : norm1 l d:=
-    reflect l (eta a) := @normret l a ;
-    reflect l (beta n q) := normask (@reflect2 l n q l).
+Definition dialogue_to_Brouwer (d : dialogue) : Brouwer := reify (reflect1 (@nil A) d).
 
-End reflect.
+(* TODO: prove that they d and its image under dialogue_to_Brouwer evaluated the same. *)
+Lemma dialogue_to_BrouwerP_sterling d alpha :
+  deval d alpha = beval (dialogue_to_Brouwer d) alpha.
+Proof.
+rewrite /dialogue_to_Brouwer.
+elim: d (@nil A) => [r | n k ihk] l //=.
+Admitted.
 
-Derive Subterm for list.
-
-Fail Equations reflect2 (l1 : list A) (i : nat) (k : A -> dialogue) (l2 : list A) : norm2 l1 i k l2 by wf (length l2, k) (lexprod (lt, lt)) :=
-  reflect2 l1 0 k nil := normzeronil (fun a => reflect reflect2 (cons a l1) (k a)) ;
-  reflect2 l1 (S j) k nil := normsuccnil (fun a => reflect2 (cons a l1) j k nil) ;
-  reflect2 l1 0 k (cons a l2) := normzerocons l2 (reflect reflect2 l1 (k a)) ;
-  reflect2 l1 (S j) k (cons a l2) := normsucccons r (reflect2 l1 j k l2) .
 
 (* This is the proof by Escardó and Oliva:
   https://www.cs.bham.ac.uk//~mhe/dialogue/dialogue-to-brouwer.agda *)
