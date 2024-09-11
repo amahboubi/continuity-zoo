@@ -10,14 +10,21 @@ Section Ord.
   Variables A B : Type.
 Implicit Type (T : seq (nat * B) -> Type).
 
-
+(* TODO : rephrase with zip and iota ? *)
 Fixpoint ord_aux {C} (u : list C) (n : nat) : list (nat * C) :=
   match u with
   | nil => nil
   | a :: q => (n, a) :: (ord_aux q (S n))
   end.
 
-Definition ord {C} u := ord_aux (C := C) u 0.
+Definition ord {C} (u : seq C) := ord_aux u 0.
+
+Lemma ordP {C} (u : seq C) : ord u = zip (iota 0 (size u)) u.
+Proof.
+suff : forall n, ord_aux u n = zip (iota n (size u)) u by exact.
+elim: u => [| c u ihu] //= n. 
+by rewrite ihu.
+Qed.
 
 Lemma ord_map_snd {C} n (u : list C) : map snd (ord_aux u n) = u.
 Proof.
@@ -410,6 +417,16 @@ Notation " ↓⁻ T " := (Downarborification T) (at level 80).
 CoInductive pruning (P : list B -> Prop) : list B -> Prop :=
   prune a u : P u -> pruning P (rcons u a) -> pruning P u.
 
+Lemma pruning_cat P u n : pruning P u -> exists v, size v = n /\ pruning P (u ++ v).
+Proof.
+elim: n u => [| n ihn] u pru.
+- by exists [::]; rewrite cats0.
+- inversion pru as [b v Pu prub e].
+  have {ihn} [w [sw pruw]] := ihn _ prub.
+  exists (b :: w).
+  by rewrite -sw -cat_rcons.
+Qed.
+
 Definition choicefun (P : list B -> Prop) :=
   exists alpha : nat -> B,  forall n : nat, P [seq (alpha i) | i <- iota 0 n].
 
@@ -450,9 +467,7 @@ Notation " ⇓⁺ T " := (ABDownmonotonisation T) (at level 80).
 Lemma Upmonot_monotone {C} P : @monotone C (↑⁺ P).
 Proof.
   intros _ w [u v Hu].
-  destruct (Monoid_isLaw__to__SemiGroup_isLaw C) as [opA].
-  erewrite <- opA.
-  now econstructor.
+  by rewrite -catA.
 Qed.
 
 
@@ -670,7 +685,7 @@ Lemma ABapprox_pruning_TtoP : DCProp12.
 Proof.
   intros T u Htree.
   generalize (@erefl _ (ord u)).
-  generalize (ord u) at 2 3 ; intros l Heq Happ. revert l Happ u Heq.
+  generalize (ord u) at 2 3 ; intros l Heq Happ. revert l Happ u Heq. 
   refine (cofix aux l Happ := match Happ as H in ABapprox _ u0 return
                             forall u : seq B, ord u = u0 -> pruning (TtoP T) u with
                             | approx l Harb Hyp => _
@@ -685,14 +700,13 @@ Proof.
   unfold ord ; now rewrite -> ord_rcons, <- plus_n_O.
 Qed.
 
-
 Lemma pruning_TtoP_ABapprox : DCProp12_rev.
 Proof.
   suff: forall T u v,
       ABis_tree T ->
       pruning (TtoP T) u ->
       List.incl v (ord u) ->
-      ABapprox T v.
+      ABapprox T v. 
   { intros Hyp T u Htree Hprun.
     eapply Hyp ; [eassumption | eassumption | now apply List.incl_refl].
   }
@@ -703,70 +717,32 @@ Proof.
                                      return forall w, List.incl w (ord v0) -> ABapprox T w
                              with
                              | prune c u Hu Hprun' => _
-                               end).
+                               end). (* so far so good with prod *)
   clear u0 Hprun ; intros w Hincl ; subst.
   econstructor.
   { intros x Hincl'.
     eapply Htree ; [ | eassumption].
     eapply List.incl_tran ; eassumption.
   }
-  intros n _.
-  unshelve refine ((fix aux2 m :=
-            match m as m0 return
-                  forall (n : nat) (u : seq B) (c : B) (w : seq (nat * B)),
-                    T (ord u) ->
-                    pruning (fun l : seq B => T (ord l)) (rcons u c) ->
-                    List.incl w (ord u) -> n.+1 - size u = m0 ->
-                    exists b : B, ABapprox T (rcons w (n, b))
-            with
-              | 0 => _
-            | S m => _
-            end) (n.+1 - size u) _ u c _ _ _ _ _). 
-  { clear - aux ; intros n u c v Hu Hprun Hincl Heq.
-    destruct u as [ | u b IHu] using last_ind ; [now inversion Heq | ] ; clear IHu.
-    exists (nth b (rcons u b) n).
-    eapply aux ; [ exact Hprun | ].
-    rewrite - cats1.
-    apply List.incl_app.
-    { unfold ord ; rewrite ord_rcons - cats1 ; now apply List.incl_appl. }
-    clear v Hincl.
-    unfold ord ; rewrite -> ord_rcons, nth_rcons, <- plus_n_O.
-    rewrite size_rcons in Heq ; change (n - size u = 0) in Heq.
-    case: (leqP (size u) n) ; intros Hinf.
-    { suff: n = size u.
-      { intros Heq' ; subst.
-        rewrite -> eq_refl, <- cats1 ; cbn.
-        rewrite -> ord_rcons, <- plus_n_O, <- cats1.
-        now apply List.incl_appl, List.incl_appr, List.incl_refl.
-      }
-      suff: (n == size u) by now move/eqP.
-      now rewrite -> eqn_leq, -> Hinf, <- subn_eq0, Heq.
-    }
-    rewrite (@ord_nth _ b u 0 n) ; cbn.
-    eapply List.incl_tran.
-    2:{ rewrite <- cats1 ; apply List.incl_appl ; now apply List.incl_refl. }
-    rewrite -> ord_rcons, <- plus_n_O, <- cats1 ; apply List.incl_appl.
-    apply List.incl_cons ; [ | now apply List.incl_nil_l].
-    erewrite (plus_n_O n) at 1.
-    now eapply ord_nth_in.
-  }
-  clear - aux aux2 ; intros n u c v Hu Hprun Hincl Heq.
-  inversion Hprun ; subst.
-  eapply (aux2 _ _ (rcons u c)).
-  assumption.
-  eassumption.
-  { eapply List.incl_tran ; [eassumption | clear Hincl].
-    unfold ord ; rewrite <- cats1, ord_cat, <- plus_n_O.
-    apply List.incl_appl ; now apply List.incl_refl.
-  }
-  rewrite -> size_rcons, subnS, Heq.
-  reflexivity.
-  all: try assumption.
-  reflexivity.
-  (*Coq does not recognize this proof as productive, probably because of
-   interaction between coinduction and induction. *)
-Admitted.
-
+intros n _.
+case: (leqP (size u) n)=> hns; last first.
+- have [b hb] : {b : B & List.In (n, b) (ord u)} by apply: ord_inf_size. 
+  exists b; apply: (aux _ Hprun').
+  rewrite /ord ord_rcons addn0 -!cats1.
+  apply: List.incl_appl => //.
+  apply: List.incl_app=> //.
+  exact: List.incl_cons.
+- have [v [sv pruv]] := pruning_cat (n - size u) Hprun'.
+  have [b hb] :  {b : B & List.In (n, b) (ord (rcons u c ++ v))}.
+    apply: ord_inf_size.
+    by rewrite size_cat size_rcons sv addSn subnKC.
+  exists b; apply: (aux _ pruv).
+  rewrite -cats1.
+  apply: List.incl_app; last by apply: List.incl_cons.
+  rewrite cat_rcons /ord ord_cat.
+  exact: List.incl_appl.
+Qed.
+ 
 
 Lemma pruning_ABapprox_PtoT : DCProp12_sym.
 Proof.
