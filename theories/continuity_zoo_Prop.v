@@ -968,15 +968,16 @@ Definition modulus_to_ext_tree F (M : (nat -> A) -> seq nat) (l : seq A) :
   @result nat R :=
   match l with
   | nil => ask 0
-  | x :: q => let g := from_pref x l in
+  | x :: _ => let g := from_pref x l in
               if \max_(i <- M g) i < size l
               then output (F g)
               else ask (size l)
   end.
 
-Lemma eval_modulus_to_ext F M f m :  modulus M M ->
-                                       eval_ext_tree_trace (modulus_to_ext_tree F M) f m =
-                                         iota 0 (minn m (\max_(i <- M f) i).+1).
+Lemma eval_modulus_to_ext F M f m :  
+  modulus M M ->
+     eval_ext_tree_trace (modulus_to_ext_tree F M) f m =
+     iota 0 (minn m (\max_(i <- M f) i).+1).
 Proof.
   move=> MmodM; rewrite /eval_ext_tree_trace.
   suff aux : forall i,
@@ -1002,10 +1003,10 @@ Proof.
   - rewrite -/(modulus_to_ext_tree F M) -cat_rcons.
     have -> : rcons (iota 0 i.+1) i.+1 = iota 0 (i.+2).
     + rewrite -cats1 ; change [:: i.+1] with (iota i.+1 1).
-      now rewrite - iotaD addn1.
+      now rewrite -iotaD addn1.
     + have -> : rcons [seq f i | i <- iota 0 i.+1] (f i.+1) = [seq f i | i <- iota 0 i.+2].
-      * rewrite -cats1 ; change [:: f i.+1] with (map f (iota i.+1 1)).
-        now rewrite - map_cat - iotaD addn1.
+      * rewrite -cats1. change [:: f i.+1] with (map f (iota i.+1 1)). (* ? change rewrite pattern is broken *)
+        now rewrite -map_cat -iotaD addn1.
       * rewrite addnS -addSn; apply: ihm.
         move: hi1; rewrite leq_eqVlt; case/orP=> // /eqP ei.
         suff : \max_(i <- M (from_pref (f 0) [seq f i | i <- iota 0 i.+1])) i < i.+1 by rewrite hi2.
@@ -1031,16 +1032,12 @@ Proof.
     apply/eq_in_map=> x hx.
     have {hx} hx : x < m.+1 by rewrite ltnS /m; apply: leq_bigmax_seq.
     by rewrite /from_pref (nth_map 0) ?size_iota // nth_iota. }
-  rewrite minnSS.
-  change ((if
-       \max_(i <- M (from_pref (f 0) [seq f i | i <- iota 0 (minn m (\max_(i <- M f) i)).+1])) i <
-       (minn m (\max_(i <- M f) i)).+1
-      then output (F (from_pref (f 0) [seq f i | i <- iota 0 (minn m (\max_(i <- M f) i)).+1]))
-      else ask (minn m (\max_(i <- M f) i)).+1) = output (F f)).
-  rewrite minnn -eqM leqnn; congr output; apply: MmodF.
+  rewrite minnSS /= minnn -eqM leqnn; congr output; apply: MmodF.
   apply/eq_in_map=> x hx.
-  have {hx} hx : x < m.+1 by rewrite ltnS /m eqM; apply: leq_bigmax_seq.
-  by rewrite /from_pref; rewrite (nth_map 0) ?size_iota // nth_iota // size_iota.
+  have {}hx : x < m.+1 by rewrite ltnS /m eqM; apply: leq_bigmax_seq.
+  rewrite /from_pref -map_cons.
+  have -> : 0 :: iota 1 m = iota 0 m.+1 by rewrite -[m.+1]add1n iotaD.
+  by rewrite (nth_map 0) ?size_iota // nth_iota.
 Qed.
 
 End Modulus.
@@ -1107,8 +1104,6 @@ Proof.
   rewrite (nth_map 0) ?nth_iota ?add0n ?size_iota //; lia.
 Qed.
 
-
-
 (* Name from Yannick + Fujiwara - Kawai *)
 Lemma T14 Y :
   continuous_modulus_cont_nat Y -> exists N, modulus_nat Y N /\ modulus_nat N N.
@@ -1139,7 +1134,7 @@ have good_prefP α n : good_pref α n -> forall β, pref α n = pref β n -> Y �
   apply: ModYN.
   rewrite pref_padded_prefix //. 
   exact: (pref_le_eq _ eqpref). }
-(* The definition of M uses the constructive epsilon *)
+(* The definition of M uses the constructive epsilon, i.e., large elimination *)
 pose M α : nat := ex_minn (ex_good_pref α).
 have good_prefM α : good_pref α (M α) by rewrite /M; case: ex_minnP=> *.
 have minM α n : good_pref α n -> (M α) <= n.
@@ -1206,18 +1201,15 @@ Implicit Type (d : @dialogue nat bool R).
 (*From a proof of uniform continuity, we build a dialogue tree*)
 
 (*A way to interpret lists of pairs as functions*)
-Fixpoint list_to_cantor (l : list (prod nat bool)) (n : nat) : bool :=
+Fixpoint list_to_cantor (l : list (nat * bool)) (n : nat) : bool :=
   match l with
   | nil => true
-  | (m, b) :: q => match (PeanoNat.Nat.eq_dec) n m with
-                   | left e => b
-                   | right e => list_to_cantor q n
-                   end
+  | (m, b) :: q => if n == m then b else list_to_cantor q n
   end.
 
-(*A dialogue tree built from a list. Crucially, we apply l to the function
+(* A dialogue tree built from a list. Crucially, we apply l to the function
  derived using acc and list_to_cantor*)
-Fixpoint list_to_dialogue F (l : list nat) (acc : list (prod nat bool)) :=
+Fixpoint list_to_dialogue F (l : list nat) (acc : list (nat * bool)) :=
   match l with
   | nil => eta (F (list_to_cantor acc))
   | cons i q => beta i (fun r => list_to_dialogue F q ((i, r) :: acc))
@@ -1235,16 +1227,11 @@ Lemma list_to_cantor_swap l acc1 acc2 f a1 a2 n :
   list_to_cantor (deval_list_to_dialogue_trace l f (acc1 ++ ((a1, f a1) :: ((a2, f a2) :: acc2)))) n =
     list_to_cantor (deval_list_to_dialogue_trace l f (acc1 ++ ((a2, f a2) :: ((a1, f a1) :: acc2)))) n.
 Proof.
-  revert acc1 acc2 a1 a2 n f ; induction l ; intros ; cbn.
-  { induction acc1 ; cbn.
-    { destruct (PeanoNat.Nat.eq_dec n a1) as [e |] ; [ | reflexivity].
-      rewrite e.
-      destruct (PeanoNat.Nat.eq_dec a1 a2) as [e' | ne'] ; [now rewrite e' | reflexivity].
-    }
-    now rewrite IHacc1.
-  }
-  erewrite <- cat_cons.
-  exact (IHl ((a, f a) :: acc1) acc2 a1 a2 n f).
+  elim: l acc1 acc2 a1 a2 f => [ | m l ihl] /= acc1 acc2 a1 a2 f.
+  - elim: acc1 => [ | s acc1 ihacc1] //=; last by rewrite ihacc1.
+    case: (n =P a1) => [-> | //].
+    by case: (a1 =P a2) => [-> | //].
+  - rewrite -!cat_cons; exact: ihl. 
 Qed.
 
 (*f is equal on l to the function derived from the trace of execution of the dialogue tree built
@@ -1252,18 +1239,12 @@ Qed.
 Lemma list_to_dialogue_deval_eq (l : list nat) (f : nat -> bool) (acc: list (prod nat bool)) :
   map f l = map (list_to_cantor (deval_list_to_dialogue_trace l f acc)) l.
 Proof.
-  revert acc.
-  induction l ; intros ; [reflexivity |].
-  cbn.
-  f_equal.
-  { clear IHl ; revert acc ; induction l ; cbn ; intros.
-    { destruct (PeanoNat.Nat.eq_dec a a) ; [reflexivity |].
-      exfalso ; exact (n Logic.eq_refl).
-    }
-    rewrite (list_to_cantor_swap l nil acc f a0 a a) ; cbn in *.
-    now eapply IHl.
-  }
-  eapply IHl.
+  elim: l acc => [ | m l ihl] acc //=.
+  rewrite -{}ihl.
+  elim: l acc => [ | k ll ihll] acc //=; first by rewrite eqxx.
+  rewrite (list_to_cantor_swap ll nil acc f) /=.
+  set x1 := (X in deval_list_to_dialogue_trace _ _ ((m, f m) :: X)).
+  by case: (ihll x1) => <-.
 Qed.
 
 (*dialogue trees are continuous*)
@@ -1294,12 +1275,9 @@ Proof.
   erewrite IHl.
   do 4 f_equal.
   clear.
-  revert acc; induction l ; intros ; cbn.
-  { destruct (PeanoNat.Nat.eq_dec a a) as [e | ne] ; [reflexivity |].
-    exfalso ; exact (ne Logic.eq_refl).
-  }
-  rewrite (list_to_cantor_swap l nil acc f a0 a a).
-  eapply IHl.
+  elim: l acc => [ | n l ihl] acc //=; first by rewrite eqxx.
+  rewrite (list_to_cantor_swap l nil acc f _ a a).
+  eapply ihl.
 Qed.
 
 (*We now go the other way around.*)
