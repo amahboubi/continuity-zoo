@@ -5,6 +5,16 @@ Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
+Declare Scope bh_scope.
+Delimit Scope bh_scope with BH.
+Open Scope bh_scope.
+
+
+(* Auxiliary lemma that I could not find... *)
+Lemma decidable_iff P Q : (P <-> Q) ->  decidable P -> decidable Q.
+Proof.
+by move=> h [hP | hQ]; [left | right]; apply/h.
+Qed.
 
 Section Ord.
   Variables A B : Type.
@@ -19,10 +29,9 @@ Fixpoint ord_aux {C} (u : list C) (n : nat) : list (nat * C) :=
 
 Definition ord {C} (u : seq C) := ord_aux u 0.
 
-Lemma ordP {C} (u : seq C) : ord u = zip (iota 0 (size u)) u.
+Lemma ordP {C} (u : seq C) n : ord_aux u n = zip (iota n (size u)) u.
 Proof.
-suff : forall n, ord_aux u n = zip (iota n (size u)) u by exact.
-elim: u => [| c u ihu] //= n. 
+elim: u n => [| c u ihu] //= n. 
 by rewrite ihu.
 Qed.
 
@@ -292,6 +301,23 @@ Proof.
   now apply Hnoteq.
 Qed.
 
+
+Lemma unzip1_ord {T : Type} (u : list T) n : unzip1 (ord_aux u n) = iota n (size u).
+Proof.
+elim: u n => [ |t u ihu] n //=.
+by rewrite -ihu.
+Qed.
+
+Lemma unzip2_ord {T : Type} (u : list T) n : unzip2 (ord_aux u n) = u.
+Proof.
+elim: u n => [ |t u ihu] n //=.
+by rewrite ihu.
+Qed.
+
+Lemma size_ord  {T : Type} (u : list T) n : size (ord_aux u n) = size u.
+Proof.
+by rewrite ordP size_zip size_iota minnn.
+Qed.
       
 End Ord.
 
@@ -361,9 +387,9 @@ Inductive ABUparborification T : list (A * B) -> Prop :=
 Definition ABDownarborification T u : Prop :=
   forall v, List.incl v u -> T v.
 
-Notation " ⇑⁻ T " := (ABUparborification T) (at level 80).
+Notation " ⇑⁻ T " := (ABUparborification T) (at level 80) : bh_scope.
 
-Notation " ⇓⁻ T " := (ABDownarborification T) (at level 80).
+Notation " ⇓⁻ T " := (ABDownarborification T) (at level 80) : bh_scope.
   
 Definition ABchoicefun T :=
   exists alpha : A -> B, forall u : list A, T [seq (i, alpha i) | i <- u].
@@ -401,9 +427,9 @@ Section DC_GDC_BI_GBI.
   Variables B : Type.
   Implicit Type (T : seq (nat * B) -> Prop).
 
-  Notation " ⇑⁻ T " := (ABUparborification T) (at level 80).
+Notation " ⇑⁻ T " := (ABUparborification T) (at level 80) : bh_scope.
 
-Notation " ⇓⁻ T " := (ABDownarborification T) (at level 80).
+Notation " ⇓⁻ T " := (ABDownarborification T) (at level 80) : bh_scope.
 
 Definition is_tree (P : list B -> Prop) :=
   forall u n, P u -> P (take n u).
@@ -411,7 +437,7 @@ Definition is_tree (P : list B -> Prop) :=
 Definition Downarborification (P : list B -> Prop) (u : list B) : Prop :=
   forall n, P (take n u).
 
-Notation " ↓⁻ T " := (Downarborification T) (at level 80).
+Notation " ↓⁻ T " := (Downarborification T) (at level 80) : bh_scope.
 
 
 CoInductive pruning (P : list B -> Prop) : list B -> Prop :=
@@ -435,8 +461,6 @@ Definition DC := forall (P : list B -> Prop), pruning P nil -> choicefun P.
 Definition ABis_tree T :=
   forall u v, List.incl v u -> T u -> T v.
 
-
-
 Definition monotone {C} (P : list C -> Prop) :=
   forall l l', P l -> P (l ++ l').
 
@@ -446,10 +470,19 @@ Inductive Upmonotonisation {C} (T : list C -> Prop) : list C -> Prop :=
 Definition Downmonotonisation {C} (T : list C -> Prop) : list C -> Prop :=
   fun u => forall v, T (u ++ v).
 
-Notation " ↑⁺ T " := (Upmonotonisation T) (at level 80).
+Lemma UpmonotonisationP {C} (T : list C -> Prop) u :
+  Upmonotonisation T u <->
+  exists v, exists w, T v /\ u = v ++ w.
+Proof.
+split=> h.  
+- case: h => v1 v2 Tv1.
+  by exists v1; exists v2.
+- by case: h => [w1 [w2 [Tw1 ->]]].
+Qed.
 
-Notation " ↓⁺ T " := (Downmonotonisation T) (at level 80).
+Notation " ↑⁺ T " := (Upmonotonisation T) (at level 80) : bh_scope.
 
+Notation " ↓⁺ T " := (Downmonotonisation T) (at level 80) : bh_scope.
 
 Definition ABmonotone {C} (P : list C -> Prop) :=
   forall l l', List.incl l l' -> P l -> P l'.
@@ -460,9 +493,9 @@ Inductive ABUpmonotonisation {C} (T : list C -> Prop) : list C -> Prop :=
 Definition ABDownmonotonisation {C} (T : list C -> Prop) : list C -> Prop :=
   fun u => forall v, List.incl u v -> T v.
 
-Notation " ⇑⁺ T " := (ABUpmonotonisation T) (at level 80).
+Notation " ⇑⁺ T " := (ABUpmonotonisation T) (at level 80) : bh_scope.
 
-Notation " ⇓⁺ T " := (ABDownmonotonisation T) (at level 80).
+Notation " ⇓⁺ T " := (ABDownmonotonisation T) (at level 80) : bh_scope. 
 
 Lemma Upmonot_monotone {C} P : @monotone C (↑⁺ P).
 Proof.
@@ -538,7 +571,8 @@ Qed.
 Definition TtoP (T : list (nat * B) -> Prop) (l : list B) : Prop :=
   T (ord l).
 
-Notation " [| T |] " := (TtoP T) (at level 8).
+Notation " [| T |] " := (TtoP T) (at level 0) : bh_scope.
+
 
 Inductive PtoT (P : list B -> Prop) : list (nat * B) -> Prop :=
 | ptot : forall l, P l -> PtoT P (ord l).
@@ -546,8 +580,9 @@ Inductive PtoT (P : list B -> Prop) : list (nat * B) -> Prop :=
 Definition PtoT_dual (P : list B -> Prop) : list (nat * B) -> Prop :=
   fun u => forall v, u = ord v -> P v.
 
-Notation " [ P ]ₐ " := (PtoT P) (at level 8).
-Notation " [ P ]ₑ " := (PtoT_dual P) (at level 8).
+Notation " [ P ]ₐ " := (PtoT P) (at level 0) : bh_scope.
+Notation " [ P ]ₑ " := (PtoT_dual P) (at level 0) : bh_scope.
+
 
 Definition TtoP_PtoT_ret (P : list B -> Prop) : forall l, P l -> [| [ P ]ₐ |] l :=
   fun l Hl => ptot Hl.
@@ -1183,24 +1218,26 @@ Section Additional_Lemmas.
 
   Variable B : Type.
 
-  Notation " ⇑⁺ T " := (ABUpmonotonisation T) (at level 80).
+  Notation " ⇑⁺ T " := (ABUpmonotonisation T) (at level 80) : bh_scope.
 
-  Notation " ⇓⁺ T " := (ABDownmonotonisation T) (at level 80).
+  Notation " ⇓⁺ T " := (ABDownmonotonisation T) (at level 80) : bh_scope.
   
-  Notation " ↑⁺ T " := (Upmonotonisation T) (at level 80).
+  Notation " ↑⁺ T " := (Upmonotonisation T) (at level 80) : bh_scope.
   
-  Notation " ↓⁺ T " := (Downmonotonisation T) (at level 80).
+  Notation " ↓⁺ T " := (Downmonotonisation T) (at level 80) : bh_scope.
   
-  Notation " [| T |] " := (TtoP T) (at level 8).
+  Notation " [| T |] " := (TtoP T) (at level 0) : bh_scope.
   
-  Notation " [ P ]ₐ " := (PtoT P) (at level 8).
+  Notation " [ P ]ₐ " := (PtoT P) (at level 0) : bh_scope.
   
-  Notation " [ P ]ₑ " := (PtoT_dual P) (at level 8).
+  Notation " [ P ]ₑ " := (PtoT_dual P) (at level 0) : bh_scope.
+
   
 (*These lemmas with Upmonotonisation are true, even though they do not appear
   in the proof of equivalence between GBI and BI in Brede-Herbelin's paper.*)
 Definition BIProp11Up :=
   forall (P : list B -> Prop) l, P l -> [| ⇑⁺  [ P ]ₐ |] l.
+
 
 Definition BIProp11Up_rev :=
   forall (P : list B -> Prop) l, monotone P -> [| ⇑⁺  [ P ]ₐ |] l -> P l.
@@ -1282,33 +1319,19 @@ Section GBI_dec.
   Variables B : eqType.
   Implicit Type (T : seq (nat * B) -> Prop).
 
-Notation " ⇑⁺ T " := (ABUpmonotonisation T) (at level 80).
+Notation " ⇑⁺ T " := (ABUpmonotonisation T) (at level 80) : bh_scope.
 
-Notation " ⇓⁺ T " := (ABDownmonotonisation T) (at level 80).
+Notation " ⇓⁺ T " := (ABDownmonotonisation T) (at level 80) : bh_scope.
 
-Notation " ↑⁺ T " := (Upmonotonisation T) (at level 80).
+Notation " ↑⁺ T " := (Upmonotonisation T) (at level 80) : bh_scope.
 
-Notation " ↓⁺ T " := (Downmonotonisation T) (at level 80).
+Notation " ↓⁺ T " := (Downmonotonisation T) (at level 80) : bh_scope.
 
-Notation " [| T |] " := (TtoP T) (at level 8).
+Notation " [| T |] " := (TtoP T) (at level 0) : bh_scope.
 
-Notation " [ P ]ₐ " := (PtoT P) (at level 8).
+Notation " [ P ]ₐ " := (PtoT P) (at level 0) : bh_scope.
 
-Notation " [ P ]ₑ " := (PtoT_dual P) (at level 8).
-
-
-
-(*We assume existence of a function that spits out a list l : seq (seq X) of all possible lists 
- included in a given list s : seq X. *)  
-Definition MagicFunction {X : eqType} (s : seq X) : seq (seq X).
-Proof.
-Admitted.
-
-Lemma MagicFunction_incl {X : eqType} (u v : seq X) :
-  List.In u (MagicFunction v) <->
-  List.incl u v.
-Admitted.
-
+Notation " [ P ]ₑ " := (PtoT_dual P) (at level 0) : bh_scope.
 
 (*We first prove that monotonisation preserves decidability. *)
 
@@ -1348,31 +1371,6 @@ Proof.
   exact Heq.
 Qed.
 
-
-(*Then, making use of MagicFunction, we show that ABUpmonotonisation also preserves
- decidability.*)
-Lemma ABUpmono_dec (P : list (nat * B) -> Prop) :
-  (forall u,  {P u} + {~ P u}) ->
-  (forall u, { (⇑⁺ P) u } + {~ (⇑⁺ P) u }).
-Proof.
-  intros Hdec u.
-  suff: {List.Exists P (MagicFunction u) } +
-          {~ List.Exists P (MagicFunction u)}.
-  { intros [Htrue | Hfalse] ; [left | right].
-    { apply List.Exists_exists in Htrue as [x [Hin Hx]].
-      exists x ; [assumption | ].
-      now apply MagicFunction_incl.
-    }
-    intros Hyp ; inversion Hyp as [v w Hv Heq] ; subst.
-    apply Hfalse ; apply List.Exists_exists.
-    exists v ; split ; [ | assumption].
-    now apply MagicFunction_incl.
-  }
-  now apply List.Exists_dec.
-Qed.
-  
-(*Now, we prove that PtoT preserves decidability. *)  
-  
 Lemma PtoT_dec (P : list B -> Prop) :
   (forall u, {P u} + {~ P u}) ->
   (forall u, {[P ]ₐ u} + {~ [P ]ₐ u}).
@@ -1403,22 +1401,133 @@ Qed.
 (*Finally, we conclude that GBI for decidable predicates implies
  BI for decidable predicates.*)
 
+Lemma upP T u : (↑⁺ T) u -> (⇑⁺ T) u.
+Proof.
+case => l l' Tl.
+apply: (Tmon Tl).
+exact: List.incl_appl.
+Qed.
+
+(* Boolean analogues of List predicates when the carrier type has a decidable eq *)
+Lemma InP {X : eqType} (u : seq X) x : reflect (List.In x u) (x \in u).
+Proof.
+elim: u => [ |y u ihu]; apply: (iffP idP)=> //=.
+- rewrite in_cons; case/orP=> h.
+  + by rewrite (eqP h); left.
+  + by right; apply/ihu.
+- case=> [-> | /ihu]; rewrite in_cons.
+  + by rewrite eqxx.
+  + by move->; rewrite orbT.
+Qed.
+
+Lemma NoDupP {X : eqType} (u : seq X) : reflect (List.NoDup u) (uniq u).
+Proof.
+elim: u => [ |x u ihu]; apply: (iffP idP)=> //=.
+- move=> _; constructor.
+- case/andP=> nxu uu.
+  constructor; last by apply/ihu.
+  by apply/InP.
+- move=> h; inversion h as [ |y w niyu uu hh].
+  move/InP: niyu->. exact/ihu.
+Qed.
+
+Lemma inclP  {X : eqType} (u v : seq X) : (List.incl u v) <-> {subset u <= v}.
+Proof.
+by split=> h x /InP /h /InP.
+Qed.
+
+(* This is the crucial decidability argument for the next result *)
+Lemma ABUp_Up_dec (P : list B -> Prop) u : 
+  (forall v, decidable (P v)) -> decidable ((⇑⁺ [↑⁺ P ]ₐ) u).
+Proof.
+  move=> Hdec.
+  set Q := (X in (X u)).
+  pose Q1 w := exists v1, exists v2, P v1 /\ List.incl (ord (v1 ++ v2)) w.
+  have Q1P w : Q1 w <-> Q w.
+    split; last first.
+    - by case=> w1 w2 [w3 [w4 w5 Pw5]] hi12; exists w4; exists w5.
+    - case=> [w1 [w2 [Pw1 hi]]].
+      econstructor; last by eassumption.
+      constructor.
+      by constructor.
+  suffices {Q1P Q} : decidable (Q1 u) by apply: decidable_iff. 
+  (* Q2 describes a decision algorithm for Q1 *)
+  pose Q2 w := exists n :'I_(size w).+1, (* size of v1 ++ v2 *)
+               exists m : (size w).-tuple bool, (* selecting the elements of ord (v1 ++ v2) in w *)
+               exists v : seq (nat * B), 
+               [/\ (v \in permutations (mask m w)), (* the actual ord (v1 ++ v2) *)
+               (unzip1 v = iota 0 n) & (* unzip1 v1 ++ v2 should form a iota *)
+               (exists k : 'I_n.+1, P (unzip2 (take k v)))]. (* a prefix v is in P *)
+  have Q2P w : Q2 w <-> Q1 w.
+  split; last first.
+  - case=> v1 [v2 [Pv1 hi]].
+    have p1 : size (v1 ++ v2) < (size w).+1.
+      rewrite - (size_ord _ 0) ltnS. 
+      apply: uniq_leq_size; last exact/inclP.
+      by have /NoDupP := ord_NoDup 0 (v1 ++ v2). (* apply/NoDuP does not work ? *)
+    exists (Ordinal p1) => /=.
+    have /count_subseqP [vw [/subseqP[m sm em] evw]]: 
+      forall x : nat * B, count_mem x (ord (v1 ++ v2)) <= count_mem x w.
+       move=> x /=; apply: leq_uniq_count; last exact/inclP.
+       apply/NoDupP; exact: ord_NoDup.
+    have pm : size m == size w by apply/eqP.
+    exists (Tuple pm).
+    exists (ord (v1 ++ v2)).
+    rewrite unzip1_ord mem_permutations -em; split=> //.
+    have p2 : size v1 < (size (v1 ++ v2)).+1 by rewrite size_cat ltnS leq_addr.
+    exists (Ordinal p2) => /=.
+    by rewrite /ord ord_cat take_cat size_ord ltnn subnn take0 cats0 unzip2_ord.
+  - case=> n [m [vw [pvw ivw [k hP]]]].
+    exists (unzip2 (take k vw)).
+    exists (unzip2 (drop k vw)).
+    split=> //.
+    have -> : unzip2 (take k vw) ++ unzip2 (drop k vw) = unzip2 vw.
+      by rewrite -[LHS]map_cat cat_take_drop.
+    apply/inclP=> /= x.
+    rewrite /ord ordP size_map.
+    have -> : size vw = n.
+      by rewrite -[RHS](size_iota 0) -ivw size_map.
+    rewrite -ivw zip_unzip.
+    have /perm_mem-> : perm_eq vw (mask m w) by rewrite -mem_permutations.
+    by move/mem_mask.
+  suffices {Q2P Q1} : decidable (Q2 u) by apply: decidable_iff.
+  (* Now really turn Q3 into a boolean test, using mathcomp's reflection infrastructure *)
+  pose test n v : bool := 
+    (unzip1 v == iota 0 n) && [exists k : 'I_n.+1, Hdec (unzip2 (take k v))].
+  have testP n v: reflect (unzip1 v = iota 0 n /\ exists k: 'I_n.+1, P (unzip2 (take k v))) (test n v).
+    apply: (iffP idP).
+    - case/andP=> /eqP-> /existsP [k hP]; split=> //; exists k. 
+      move: hP; case: (Hdec _)=> //.
+    - rewrite /test; case=> -> [k Pk]; rewrite eqxx /=; apply/existsP; exists k. 
+      by case: (Hdec _).
+  pose Q3 w : bool := 
+  [exists n : 'I_(size w).+1, [exists m : (size w).-tuple bool,
+    has (test n) (permutations (mask m w))]]. 
+  (* Should be a syntax directed proof, but no automation really works here *)
+  suffices : reflect (Q2 u) (Q3 u) by exact: decP.
+    apply: (iffP idP).
+    - case/existsP=> /= n /existsP /= [m /hasP /= [v permv /testP [zip1v [k Pk]]]].
+      by exists n; exists m; exists v; split=> //; exists k.
+    - case=> n [m [vw [pvw ivw [k hP]]]].
+      apply/existsP; exists n; apply/existsP; exists m; apply/hasP=> /=.
+      exists vw => //.
+      apply/testP; split=> //.
+      by exists k.
+Qed.
+
 Lemma GBI_BI_dec :
-  (forall (T : list (nat * B) -> Prop), (forall u, {T u} + {~ T u}) -> GBI T) ->
-  forall P : list B -> Prop, (forall u, {P u} + {~ P u}) -> BI_ind P.
+  (forall (T : list (nat * B) -> Prop), (forall u, decidable (T u)) -> GBI T) ->
+  forall P : list B -> Prop, (forall u, decidable (P u)) -> BI_ind P.
 Proof.
   intros HGBI P Hdec Hbar.
   destruct (Hdec nil) as [Hnil | Hnotnil] ; [now econstructor | ].
-  apply hered_Upmon_hered_dec ; [assumption | | intros n ; cbn ; eassumption ].
+  apply hered_Upmon_hered_dec ; [assumption | | intros n ; cbn ; eassumption ]. Print ABbarred.
   apply indbarred_inductively_barred_dual ; [now apply Upmonot_monotone | ].
-  apply HGBI.
-  2:{ apply  barred_ABbarred_PtoT_Up ; [now apply Upmonot_monotone | ].
-      now apply monot_barred.
-  }
-  clear - Hdec.
-  apply ABUpmono_dec, PtoT_dec, Upmono_dec ; assumption.
+  apply HGBI; first by move=> u; apply: ABUp_Up_dec.
+  apply barred_ABbarred_PtoT_Up ; [now apply Upmonot_monotone | ].
+now apply monot_barred.
 Qed.
-  
+
 End GBI_dec.
 
 
