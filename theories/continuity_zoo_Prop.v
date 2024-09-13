@@ -346,7 +346,7 @@ Qed.
 
 (* From dialogue trees to Brouwer trees, in two different ways. *)
 
-(* First, the proof by Sterling:
+(* First attempt, the proof by Sterling:
 http://jonsterling.github.io/agda-effectful-forcing/Dialogue.Normalize.html *)
 
 
@@ -413,7 +413,7 @@ elim: d (@nil A) => [r | n k ihk] l //=.
 Admitted.
 
 
-(* This is the proof by Escardó and Oliva:
+(* Second attempt: the proof by Escardó and Oliva:
   https://www.cs.bham.ac.uk//~mhe/dialogue/dialogue-to-brouwer.agda *)
 
 (* (follow n b) is the immediate subtree of b selected when alpha 0 = n,
