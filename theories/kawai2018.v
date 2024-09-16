@@ -163,6 +163,7 @@ Proof.
     now exists n.
 Qed.
 
+
 (*We now get to Result 1.*)
 
 Theorem neigh_cont_Bseq_cont F :
