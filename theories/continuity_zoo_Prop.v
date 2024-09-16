@@ -1195,29 +1195,38 @@ End sec.
 
 Section Cantor.
 
-Variable R : Type.
-Implicit Type (F : (nat -> bool) -> R).
-Implicit Type (d : @dialogue nat bool R).
-(*From a proof of uniform continuity, we build a dialogue tree*)
+Section fix_types.
+
+Context {Q A R : Type}.
+Variable E : forall q1 q2 : Q, {q1 = q2} + {q1 <> q2}.
+
+Implicit Type (F : (Q -> A) -> R).
+Implicit Type (d : @dialogue Q A R).
+    (*From a proof of uniform continuity, we build a dialogue tree*)
+
+Variable a0: A.
 
 (*A way to interpret lists of pairs as functions*)
-Fixpoint list_to_cantor (l : list (nat * bool)) (n : nat) : bool :=
+Fixpoint list_to_cantor (l : list (prod Q A)) (n : Q) : A :=
   match l with
-  | nil => true
-  | (m, b) :: q => if n == m then b else list_to_cantor q n
+  | nil => a0
+  | (m, b) :: q => match E n m with
+                   | left e => b
+                   | right e => list_to_cantor q n
+                   end
   end.
 
 (* A dialogue tree built from a list. Crucially, we apply l to the function
  derived using acc and list_to_cantor*)
-Fixpoint list_to_dialogue F (l : list nat) (acc : list (nat * bool)) :=
+Fixpoint list_to_dialogue F (l : list Q) (acc : list (prod Q A)) :=
   match l with
   | nil => eta (F (list_to_cantor acc))
   | cons i q => beta i (fun r => list_to_dialogue F q ((i, r) :: acc))
   end.
 
 (*The trace of an evaluation of a dialogue tree*)
-Fixpoint deval_list_to_dialogue_trace  (l : list nat) (f : nat -> bool) (acc: list (prod nat bool)) :
-  list (prod nat bool) :=
+Fixpoint deval_list_to_dialogue_trace  (l : list Q) (f : Q -> A) (acc: list (prod Q A)) :
+  list (prod Q A) :=
   match l with
   | nil => acc
   | cons i q =>  deval_list_to_dialogue_trace q f ((i, f i) :: acc)
@@ -1227,24 +1236,35 @@ Lemma list_to_cantor_swap l acc1 acc2 f a1 a2 n :
   list_to_cantor (deval_list_to_dialogue_trace l f (acc1 ++ ((a1, f a1) :: ((a2, f a2) :: acc2)))) n =
     list_to_cantor (deval_list_to_dialogue_trace l f (acc1 ++ ((a2, f a2) :: ((a1, f a1) :: acc2)))) n.
 Proof.
-  elim: l acc1 acc2 a1 a2 f => [ | m l ihl] /= acc1 acc2 a1 a2 f.
-  - elim: acc1 => [ | s acc1 ihacc1] //=; last by rewrite ihacc1.
-    case: (n =P a1) => [-> | //].
-    by case: (a1 =P a2) => [-> | //].
-  - rewrite -!cat_cons; exact: ihl. 
+  revert acc1 acc2 a1 a2 n f ; induction l ; intros ; cbn.
+  { induction acc1 ; cbn.
+    { destruct (E n a1) as [e |] ; [ | reflexivity].
+      rewrite e.
+      destruct (E a1 a2) as [e' | ne'] ; [now rewrite e' | reflexivity].
+    }
+    now rewrite IHacc1.
+  }
+  erewrite <- cat_cons.
+  exact (IHl ((a, f a) :: acc1) acc2 a1 a2 n f).
 Qed.
 
 (*f is equal on l to the function derived from the trace of execution of the dialogue tree built
  using l.*)
-Lemma list_to_dialogue_deval_eq (l : list nat) (f : nat -> bool) (acc: list (prod nat bool)) :
+Lemma list_to_dialogue_deval_eq (l : list Q) (f : Q -> A) (acc: list (prod Q A)) :
   map f l = map (list_to_cantor (deval_list_to_dialogue_trace l f acc)) l.
 Proof.
-  elim: l acc => [ | m l ihl] acc //=.
-  rewrite -{}ihl.
-  elim: l acc => [ | k ll ihll] acc //=; first by rewrite eqxx.
-  rewrite (list_to_cantor_swap ll nil acc f) /=.
-  set x1 := (X in deval_list_to_dialogue_trace _ _ ((m, f m) :: X)).
-  by case: (ihll x1) => <-.
+  revert acc.
+  induction l ; intros ; [reflexivity |].
+  cbn.
+  f_equal.
+  { clear IHl ; revert acc ; induction l ; cbn ; intros.
+    { destruct (E a a) ; [reflexivity |].
+      exfalso ; exact (n Logic.eq_refl).
+    }
+    rewrite (list_to_cantor_swap l nil acc f a1 a a) ; cbn in *.
+    now eapply IHl.
+  }
+  eapply IHl.
 Qed.
 
 (*dialogue trees are continuous*)
@@ -1269,26 +1289,33 @@ Proof.
   2: exact nil.
   specialize (H f (list_to_cantor (deval_list_to_dialogue_trace l f nil)) (list_to_dialogue_deval_eq _ _ _)).
   rewrite H ; clear H.
-  generalize (@nil (prod nat bool)).
+  generalize (@nil (prod Q A)).
   induction l ; intros acc ; [reflexivity |].
   cbn.
   erewrite IHl.
   do 4 f_equal.
   clear.
-  elim: l acc => [ | n l ihl] acc //=; first by rewrite eqxx.
-  rewrite (list_to_cantor_swap l nil acc f _ a a).
-  eapply ihl.
+  revert acc; induction l ; intros ; cbn.
+  { destruct (E a a) as [e | ne] ; [reflexivity |].
+    congruence.
+  }
+  rewrite (list_to_cantor_swap l nil acc f a1 a a).
+  eapply IHl.
 Qed.
 
 (*We now go the other way around.*)
 
-Fixpoint dialogue_to_list d : list nat :=
+End fix_types.
+
+Variable R : Type.
+
+Fixpoint dialogue_to_list (d : @dialogue nat bool R) : list nat :=
   match d with
   | eta a => nil
   | beta i k => i :: (dialogue_to_list (k true)) ++ (dialogue_to_list (k false))
   end.
 
-Lemma dialogue_is_uniform F : dialogue_cont F -> uni_cont F.
+Lemma dialogue_is_uniform F : dialogue_cont F -> @uni_cont nat bool R F.
 Proof.
   intros [d H].
   exists (dialogue_to_list d) ; intros f g Hfg.
