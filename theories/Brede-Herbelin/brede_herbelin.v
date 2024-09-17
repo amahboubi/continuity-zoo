@@ -1599,18 +1599,42 @@ Section GDC_gen.
     now apply leqW.
   Qed.
 
+
+  Lemma ABbarred_choicefun {A B}
+    (DNE : forall P : Prop, ~ ~ P -> P)
+    (T : seq (A * B) -> Prop) :
+    ~ ABchoicefun (fun l => ~ T l) -> ABbarred T .
+  Proof.
+    intros Hyp.
+    intros alpha ; unfold ABchoicefun in Hyp.
+    apply DNE.
+    intros H ; apply Hyp.
+    exists alpha ; intros u Hu ; apply H ; now exists u.
+  Qed.
+
+
+  
   (*For GBI we need more, probably DNE.*)
-  Proposition GBI_inconsistent :
+  Proposition GBI_inconsistent
+    (DNE : forall P : Prop, ~ ~ P -> P) :
     (forall T, @GBI (nat -> Prop) nat T) -> False.
   Proof.
     unfold GBI ; intros HGBI.
     pose (T:= fun (u : seq ((nat -> Prop) * nat)) =>
-                ~ ~ (exists f f' n, ~ (f = f') /\ List.In (f, n) u /\ List.In (f', n) u)).
+                (exists f f' n, ~ (f = f') /\ List.In (f, n) u /\ List.In (f', n) u)).
     have H1: ABbarred T.
-    { intros alpha.
-      unfold T.
-      (*This is where DNE is needed.*)
-      admit.
+    { apply ABbarred_choicefun ; auto.
+      intros [F HF].
+      have Heq : forall alpha beta, F alpha = F beta -> alpha = beta.
+      { unfold T in HF.
+        intros alpha beta Heq.
+        eapply DNE ; intros Hneq ; eapply (HF (alpha :: beta :: nil)).
+        exists alpha, beta, (F alpha) ; split ; [auto | split] ; cbn.
+        + now left.
+        + now right ; left ; rewrite Heq.
+      }
+      eapply Cantor_Prop.
+      exact Heq.
     }
     pose (T' := fun (u : seq ((nat -> Prop) * nat)) =>
                  forall f f' n, List.In (f, n) u ->
@@ -1624,17 +1648,38 @@ Section GDC_gen.
     }
     clear H1 ; unfold T, T' ;clear T T'.
     intros u Hu Hind.
-    revert Hu ; induction Hind ; intros Hu.
-    { apply H.
-      intros [f [f' [n [Hnoteq [Hinf Hinf']]]]].
-      apply Hnoteq ; eapply Hu ; apply H0 ; eassumption.
+    revert Hu ; induction Hind as [u v [f [f' [m [Hneq [Hinf Hinf']]]]] | ]; intros Hu.
+    { eapply Hneq, Hu, H ; eauto. }
+    suff: exists n : nat,  ~ List.In n [seq i.2 | i <- v].
+    { intros [n Hn].
+      apply (H1 n).
+      intros f f' m Hf Hf'.
+      apply List.in_app_or in Hf, Hf'.
+      destruct Hf as [Hf | Hf], Hf' as [Hf' | Hf'].
+      + eapply Hu ; eauto.
+      + exfalso ; cbn in Hf' ; destruct Hf' as [Hf' | Hf'] ; auto.
+        inversion Hf' ; subst.
+        now apply Hn, (in_map (fun x => x.2) Hf).
+      + exfalso ; cbn in Hf ; destruct Hf as [Hf | Hf] ; auto.
+        inversion Hf ; subst.
+        now apply Hn, (in_map (fun x => x.2) Hf').
+      + cbn in Hf, Hf'.
+        destruct Hf as [Hf | ], Hf' as [Hf' | ] ; try now exfalso.
+        now inversion Hf ; inversion Hf' ; subst.
     }
-    apply (H1 0).
-    intros f f' n Hf Hf'.
-    apply List.in_app_or in Hf, Hf'.
-    
-    
-  Abort.
+    generalize [seq i.2 | i <- v] ; clear ; intros l.
+    suff: exists n : nat, List.Forall (lt^~ n) l.
+    { intros [n Hn] ; exists n ; intros Hin.
+      induction l ; [now inversion Hin | ].
+      destruct Hin as [Heq | Hin] ; subst ; cbn in *.
+      + inversion Hn as [ | ? ? Hinf ?] ; subst ; eapply PeanoNat.Nat.lt_irrefl ; eauto.
+      + inversion Hn as [ | ? ? ? Hinf] ; subst.
+        exact (IHl Hinf Hin).
+    }
+    destruct l as [ | n l] ; [exists 0 ; auto | ].
+    exists ((List.list_max (n :: l)).+1).
+    eapply List.list_max_lt ; eauto ; intros Heq ; inversion Heq.
+Qed.    
     
     
 

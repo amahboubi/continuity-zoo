@@ -48,7 +48,7 @@ Variant 3 : in "Principles of bar induction and continuity on Baire space",
             - assuming Kawai's c_BI, we cannot prove the converse, we would need
             stronger choice axioms. Kawai manages to prove it, using AC^{0,1} and
             AC^{1,0}_{!}.
-            If we replaced existantials in Prop by existentials in Type,
+            If we replaced existence in Prop by existence in Type,
             we would be able to prove their equivalence.
 *)
 
@@ -145,6 +145,14 @@ Variable CI : forall F, Bseq_cont_interaction F -> dialogue_cont_Brouwer F.
 
 CoFixpoint pred_to_Bitree_aux (P : seq O -> bool) (l : seq O) : @Bitree O A :=
   if (P l) then Bret _ l else Bvis (fun o => pred_to_Bitree_aux P (rcons l o)).
+
+Fixpoint beval_trace {X Y} (b : @Btree X Y) (f : nat -> X) : list X :=
+  match b with
+  | spit _ => nil
+  | bite k => f 0 :: (beval_trace (k (f 0)) (f \o succn))
+  end.
+
+  
 
 Lemma Bieval_pred_to_Bitree_spec (P : seq O -> bool) (l : seq O) alpha n u :
   Bieval (pred_to_Bitree_aux P l) alpha n = Some u ->
@@ -294,7 +302,7 @@ Proof.
   revert m n ; induction b as [ | ? IH] ; intros * Hinf alpha ; [reflexivity |].
   cbn.
   do 2 (rewrite n_comp_n_plus addn0) ; rewrite pref_o_alpha ; [ | assumption].
-  specialize (IH (alpha n) m n.+1 (ltnW Hinf)) ; cbn in *;  eapply IH ; eauto.  
+  specialize (IH (alpha n) m n.+1 (ltnW Hinf)) ; cbn in * ; erewrite IH ; eauto.  
 Qed.  
 
 
@@ -856,7 +864,7 @@ Abort.
       itree_indbarredP tau nil,
   which completes our proof.
 *)
-
+Print indbarred.
 
 (*As explained, let us start by itree_indbarred. 
   It is an inductive predicate that describes a tree of computations
