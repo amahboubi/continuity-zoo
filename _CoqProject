@@ -1,4 +1,4 @@
--R theories ""
+-R theories "Continuity"
 
 -arg -w -arg -notation-overridden 
 COQDOCFLAGS = "--charset utf-8 --parse-comments -s --with-header ./website/resources/header.html --with-footer ./website/resources/footer.html --index indexpage"
@@ -6,12 +6,13 @@ COQDOCFLAGS = "--charset utf-8 --parse-comments -s --with-header ./website/resou
 theories/extra_principles.v
 theories/continuity_zoo_Prop.v
 theories/Brouwer_ext.v
-theories/Brede-Herbelin/cantor.v
-theories/Brede-Herbelin/brede_herbelin.v
+theories/BredeHerbelin/cantor.v
+theories/BredeHerbelin/brede_herbelin.v
 theories/BI.v
 theories/kawai2018.v
 
 
 # theories/continuity_zoo.v
 # theories/fujiwara_kawai.v
-theories/Brede-Herbelin/minimal_example.v
+theories/BredeHerbelin/minimal_example.v
+theories/Classical.v
