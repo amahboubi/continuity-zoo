@@ -31,9 +31,7 @@ Context {Q A R : Type}.
 
 Implicit Type (F : (Q -> A) -> R).
 
-(* Dialogue trees are from von Oosten, but the inductive type presentation is
-   probably from Escardó, TODO let's ask him.
-   Inductive dialogue trees. See, e.g., Escardó
+(* Inductive dialogue trees. See, e.g., Escardó
    https://www.cs.bham.ac.uk//~mhe/dialogue/dialogue-to-brouwer.agda *)
 Inductive dialogue :=
   | eta : R -> dialogue
@@ -62,12 +60,7 @@ Definition int_dialogue_cont F := inhabited (is_dialogue F).
 
 (** *** Brouwer continuity, Baire space variant of dialogue continuity  *)
 
-(* TODO : trace the literature for Brouwer trees
-TODO: have a look at CPP24 paper by Eremondi. See also may be Coq files by F. Pottier
-
-
-Jon Sterling's Brouwer trees, i.e. Escardó's dialogue normalized by giving
-queries in order. *)
+(* Brouwer trees *)
 Inductive Btree : Type :=
   | spit : R -> Btree
   | bite : (A -> Btree) -> Btree.
@@ -88,20 +81,11 @@ Inductive Btree_dep (P : nat -> Type) : nat -> Type :=
 | Bbeta_dep : forall n,
     (P n -> Btree_dep P (S n)) -> Btree_dep P n.
 
-(* TODO: move *)
 (* Escardó and Oliva : conversion Btree <-> dialogue : see below
 https://www.cs.bham.ac.uk//~mhe/dialogue/dialogue-to-brouwer.agda *)
 
-(* Sterling in Agda:  Btree-continous <-> dialogue-continuous
- Currently the exact transposition in Coq does not work
- TODO : see whether we can patch this *)
 
-(** ** Sequential continuity  *)
-
-(* Forster et al.'s sequential continuity, for which they credit van Oosten. We skip the
-   reject constructor *)
-(* Forster et al.: https://arxiv.org/pdf/2307.15543.pdf *)
-(* Van Oosten: https://projecteuclid.org/journals/notre-dame-journal-of-formal-logic/volume-52/issue-4/Partial-Combinatory-Algebras-of-Functions/10.1215/00294527-1499381.full *)
+(** ** Tree function continuity  *)
 
 Inductive result : Type :=
 |ask : Q -> result
@@ -118,18 +102,11 @@ Fixpoint eval_ext_tree_aux (tau : ext_tree) (f : Q -> A) (n : nat) (l : list A) 
 
 Definition eval_ext_tree tau f n := eval_ext_tree_aux tau f n [::].
 
-(* TODO: as this is the one seq_cont we care about, may be change its name *)
 Definition seq_cont F :=
   exists τ : ext_tree, forall f : Q -> A, exists n : nat, eval_ext_tree τ f n = output (F f).
 
 Definition wf_ext_tree (tau : ext_tree) :=
   forall f : nat -> A,  exists n o, tau (map f (iota 0 n)) = output o.
-
-(* Conjectures: TODO: move
-- seq_contW F tau -> well_founded tau when I = nat ? have a section about Baire spaces
-TODO (longer term) : think about PCA results we could obtain from these definitions. In this context,
-the latter conjecture might play a role, otherwise, probably not.
- *)
 
 (** *** Sequential continuity via interrogations  *)
 
@@ -403,15 +380,6 @@ Fixpoint reflect1 (l : list A) (d : dialogue) : norm1 l d :=
     end.  
 
 Definition dialogue_to_Brouwer (d : dialogue) : Brouwer := reify (reflect1 (@nil A) d).
-
-(* TODO: prove that they d and its image under dialogue_to_Brouwer evaluated the same. *)
-Lemma dialogue_to_BrouwerP_sterling d alpha :
-  deval d alpha = beval (dialogue_to_Brouwer d) alpha.
-Proof.
-rewrite /dialogue_to_Brouwer.
-elim: d (@nil A) => [r | n k ihk] l //=.
-Admitted.
-
 
 (* Second attempt: the proof by Escardó and Oliva:
   https://www.cs.bham.ac.uk//~mhe/dialogue/dialogue-to-brouwer.agda *)
@@ -1340,8 +1308,5 @@ Proof.
     now do 2 erewrite size_map.
   }
 Qed.
-
-(* TODO : following Andrej's comments, say something about compactness, this could be generalized to
-   more compacts*)
 
 End Cantor.
