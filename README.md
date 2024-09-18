@@ -1,14 +1,19 @@
 # continuity-zoo
 
-Welcome to the continuity-zoo repository.
-
-To build all Coq files, do
+Putting the pdf of the paper in this directory will make the links to the coqdoc html files work.
+The html files are pre-build.
+To rebuild all Coq files, do
 
 ```bash
 opam switch create continuity --packages="ocaml-variants.4.14.1+options,ocaml-option-flambda"
 opam repo add coq-released https://coq.inria.fr/opam/released
 opam install  coq.8.19.1 coq-mathcomp-ssreflect coq-mathcomp-zify coq-equations 
 make
+```
+
+To rebuild all html files, do
+```bash
+make html
 ```
 
 The main file is theories/continuity_zoo_Prop.v. It contains several different definitions of continuity as well as proofs regarding how they relate with each other.
