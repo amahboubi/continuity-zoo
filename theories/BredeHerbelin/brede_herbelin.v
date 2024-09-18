@@ -20,7 +20,6 @@ Section Ord.
   Variables A B : Type.
 Implicit Type (T : seq (nat * B) -> Type).
 
-(* TODO : rephrase with zip and iota ? *)
 Fixpoint ord_aux {C} (u : list C) (n : nat) : list (nat * C) :=
   match u with
   | nil => nil

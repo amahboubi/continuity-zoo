@@ -24,7 +24,8 @@ Lemma MP (f : nat -> bool) :
   (forall P, retract_of P nat -> Cont P False False) -> ~~ (exists n, f n = true) -> exists n, f n = true.
 Proof.
   cbn. intros HC H.
-  unshelve specialize (HC ({ n| f n = true})) as [d Hd].
+  specialize (HC ({ n| f n = true})).
+  unshelve edestruct HC as [d Hd].
   2:{ red. repeat unshelve eexists.
       - apply proj1_sig.
       - intros n. destruct (f n) eqn:E.

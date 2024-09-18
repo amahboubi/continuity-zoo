@@ -19,9 +19,6 @@ Set Default Goal Selector "!".
    vs dialogue trees.
  *)
 
-(*TODO : in the other files we never use Brouwer extensional trees, only Brouwer
- interaction trees, maybe remove the former altogether? *)
-
 Section Brouwer_ext_tree.
 
   (*The goal of this Section is to provide an extensional tree equivalent to Brouwer
@@ -31,7 +28,6 @@ Variable O A : Type.
 Notation I := nat.
 Implicit Type (F : (I -> O) -> A).
 
-(* TODO : move this elsewhere or streamline it *)
 Lemma nth_map_iota  (f : nat -> O) m n k o : (n <= m) ->
                                nth o (map f (iota k (S m))) n = f (k + n).
 Proof.
@@ -40,7 +36,6 @@ have -> : k + n = nth k (iota k m.+1) n by rewrite nth_iota.
 rewrite (nth_map k) // size_iota //.
 Qed.
 
-(* TODO : move this elsewhere or streamline it *)
 Lemma iota_rcons (i j : nat) : rcons (iota i j) (i + j) = iota i j.+1.
 Proof.
 have -> : iota i j.+1 = iota i (j + 1) by rewrite addn1.
@@ -48,7 +43,6 @@ by rewrite -cats1 iotaD.
 Qed.
 
 
-(* TODO : move this elsewhere or streamline it *)
 Lemma from_pref_finite_equal l (alpha : I -> O) o :
   forall n, le (List.list_max l) n ->
   map (from_pref o (map alpha (iota 0 (S n)))) l = map alpha l.
@@ -70,7 +64,6 @@ Proof.
 Qed.
 
 
-(* TODO : move this elsewhere or streamline it *)
 Lemma leq_le i j : i <= j -> le i j.
 Proof. by move/leP. Qed.
 
