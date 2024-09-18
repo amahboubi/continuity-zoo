@@ -409,7 +409,7 @@ Section GeneralisedBarInduction.
 Variable I : eqType.
 Variables O A : Type.
 Implicit Type (F : (I -> O) -> A).
-Variable HGBI : forall T, @GBI I O T.
+Variable HGBI : forall (T : list (I * O) -> Prop), (forall u, decidable (T u)) -> GBI T.
 Notation Itree := (@Itree I O A).
 
 (*We start with two small lemmas about Add that will be useful later on.*)
@@ -783,7 +783,7 @@ Fixpoint ieval_trace (i : Itree) (f : I -> O) (n : nat) : list I :=
 
 Lemma ieval_finapp_trace tau f n a :
   ieval tau f n = output a ->
-  ieval_finapp tau [seq (i, f i) | i <- ieval_trace tau f n] n =
+  ieval_finapp tau [seq (i, f i) | i <- ieval_trace tau f n] (size (ieval_trace tau f n)) =
     output a.
 Proof.
   assert (aux := @is_fun_map (ieval_trace tau f n) f) ; revert aux.
@@ -793,7 +793,7 @@ Proof.
   - cbn in * ; destruct tau ; now inversion Heq.
   - cbn in * ; destruct tau as [ | q k] ; [now inversion Heq | ].
     suff : eval_list [seq (i, f i) | i <- u ++ q :: ieval_trace (k (f q)) f n] q = Some (f q).
-    + intros Hyp ; rewrite Hyp - cat1s catA cats1.
+    + intros Hyp ; cbn ; rewrite Hyp - cat1s catA cats1.
       apply IHn ; auto.
       now rewrite -cats1 -catA cat1s.
     + apply In_eval_list ; auto ; eapply (in_map (fun i => (i, f i))).
@@ -812,19 +812,20 @@ Proof.
   eapply Delta0_choice in HF as [HF].
   2:{ intros α n.
       destruct ieval eqn:E.
-      - firstorder congruence.
+      - right ; intros Heq ; inversion Heq.
       - left. destruct (HF α) as [m].
         f_equal. 
         eapply ieval_output_unique; eauto. 
   }
   pose (T:= fun (l : seq (I * O)) =>
-              exists n a, ieval_finapp tau l n = output a).
+              exists a, ieval_finapp tau l (size l) = output a).
   have Help : ABbarred T.
   { intros alpha.
     destruct (HF alpha) as [n Hn].
     exists (ieval_trace tau alpha n).
     unfold T.
-    exists n, (F alpha).
+    exists (F alpha).
+    rewrite size_map.
     now eapply ieval_finapp_trace.
   }
   apply HGBI in Help.
@@ -1321,13 +1322,13 @@ Qed.
 Lemma indbarred_fun_list_itree_indbarredP_aux
   tau (l : seq (I * O)) (o : O) :
   indbarred
-    (fun u => exists n a, ieval_finapp tau u n = output a) l ->
+    (fun u => exists a, ieval_finapp tau u (size u) = output a) l ->
   is_fun_list l ->
   itree_indbarredP tau l 0.
 Proof.
   intros Hyp.
-  induction Hyp as [u v [n [r Hr]] Hincl | q v Hnotin _ IHk]; intros Hfun.
-  - eapply itree_indbarredP_change_fuel with n ; eauto.
+  induction Hyp as [u v [r Hr] Hincl | q v Hnotin _ IHk]; intros Hfun.
+  - eapply itree_indbarredP_change_fuel with (size v) ; eauto.
     econstructor ; [eassumption | right ; left ; exists r].
     now eapply ieval_finapp_monotone_output_list ; eauto.
   - unshelve eapply Add_induction_step with (v ++ [::(q,o)]) q o.
@@ -1356,7 +1357,7 @@ Qed.
 
 Lemma indbarred_fun_list_itree_indbarredP tau (l : seq (I * O)) :
   indbarred
-    (fun u => exists n a, ieval_finapp tau u n = output a) l ->
+    (fun u => exists a, ieval_finapp tau u (size u) = output a) l ->
   is_fun_list l ->
   itree_indbarredP tau l 0.
 Proof.
@@ -1381,15 +1382,22 @@ Theorem GBI_GCI F :
 Proof.
   intros [tau HF].
   pose (T:= fun (l : seq (I * O)) =>
-              exists n a, ieval_finapp tau l n = output a).
+              exists a, ieval_finapp tau l (size l) = output a).
   have Help : ABbarred T.
   { intros alpha.
     destruct (HF alpha) as [n Hn].
-    exists (ieval_trace tau alpha n), n, (F alpha).
+    exists (ieval_trace tau alpha n), (F alpha).
+    rewrite size_map.
     now eapply ieval_finapp_trace.
   }
   have fun_nil : is_fun_list (@nil (I * O)) by (intros i j j' Hinj ; inversion Hinj).
-  apply HGBI, indbarred_fun_list_itree_indbarredP
+  apply HGBI in Help. 
+  2:{ unfold T ; clear.
+      intros u ; destruct (ieval_finapp tau u (size u)) ; [right | left] ; eauto.
+      intros [a Ha] ; now inversion Ha.
+  }
+  About indbarred_fun_list_itree_indbarredP.
+  eapply indbarred_fun_list_itree_indbarredP
     in Help ; auto.
   eapply itree_indbarred_spec, (itree_indbarred_dialogue) in Help ; auto.
   destruct Help as [d Hd].
