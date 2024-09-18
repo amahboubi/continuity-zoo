@@ -1624,10 +1624,9 @@ Section GDC_gen.
                 (exists f f' n, ~ (f = f') /\ List.In (f, n) u /\ List.In (f', n) u)).
     have H1: ABbarred T.
     { apply ABbarred_choicefun ; auto.
-      intros [F HF].
+      intros [F HF] ; unfold T in HF.
       have Heq : forall alpha beta, F alpha = F beta -> alpha = beta.
-      { unfold T in HF.
-        intros alpha beta Heq.
+      { intros alpha beta Heq.
         eapply DNE ; intros Hneq ; eapply (HF (alpha :: beta :: nil)).
         exists alpha, beta, (F alpha) ; split ; [auto | split] ; cbn.
         + now left.
@@ -1636,27 +1635,24 @@ Section GDC_gen.
       eapply Cantor_Prop.
       exact Heq.
     }
-    pose (T' := fun (u : seq ((nat -> Prop) * nat)) =>
-                 forall f f' n, List.In (f, n) u ->
-                                   List.In (f', n) u ->
-                                   f = f').
     apply (HGBI _) in H1.
-    suff: forall u, T' u -> indbarred T u -> False.
+    suff: forall u, ~ T u -> indbarred T u -> False.
     { intros Hyp.
       apply (Hyp nil) ; [ | assumption].
-      unfold T' ; cbn ; intros f f' n Hinf Hinf' ; now inversion Hinf.
+      intros [f [f' [m [Hneq [Hinf Hinf']]]]] ; inversion Hinf.
     }
-    clear H1 ; unfold T, T' ;clear T T'.
+    clear H1 ; unfold T ;clear T.
     intros u Hu Hind.
     revert Hu ; induction Hind as [u v [f [f' [m [Hneq [Hinf Hinf']]]]] | ]; intros Hu.
-    { eapply Hneq, Hu, H ; eauto. }
+    { eapply Hu ; exists f, f', m ; split ; [trivial | split ; now apply H]. }
     suff: exists n : nat,  ~ List.In n [seq i.2 | i <- v].
     { intros [n Hn].
       apply (H1 n).
-      intros f f' m Hf Hf'.
-      apply List.in_app_or in Hf, Hf'.
-      destruct Hf as [Hf | Hf], Hf' as [Hf' | Hf'].
+      intros [f [f' [m [Hneq [Hinf Hinf']]]]].
+      apply List.in_app_or in Hinf, Hinf'.
+      destruct Hinf as [Hf | Hf], Hinf' as [Hf' | Hf'].
       + eapply Hu ; eauto.
+        exists f, f', m ; split ; now auto.
       + exfalso ; cbn in Hf' ; destruct Hf' as [Hf' | Hf'] ; auto.
         inversion Hf' ; subst.
         now apply Hn, (in_map (fun x => x.2) Hf).

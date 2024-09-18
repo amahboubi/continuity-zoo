@@ -1104,7 +1104,7 @@ Proof.
   rewrite (nth_map 0) ?nth_iota ?add0n ?size_iota //; lia.
 Qed.
 
-(* Name from Yannick + Fujiwara - Kawai *)
+(* Name from Fujiwara - Kawai *)
 Lemma T14 Y :
   continuous_modulus_cont_nat Y -> exists N, modulus_nat Y N /\ modulus_nat N N.
 Proof.
