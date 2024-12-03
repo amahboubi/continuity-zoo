@@ -41,3 +41,27 @@ Proof.
   - destruct s. eauto.
 Qed.
 
+Require Import Lia.
+
+Lemma inconsistent :
+  Cont nat bool Prop ->  False.
+Proof.
+  intros HC. red in HC.
+  specialize (HC (fun f => forall n, f n = true)). 
+  apply dialogue_to_seq_cont in HC.
+  apply seq_cont_to_self_modulus_cont in HC as (m & Hm & _).
+  specialize (Hm (fun n => true)).
+  cbn in Hm.
+  specialize (Hm (fun n => if List.in_dec PeanoNat.Nat.eq_dec n (m (fun _ => true)) then true else false)).
+  cbn in Hm.
+  assert ( (forall n : nat, (if List.in_dec PeanoNat.Nat.eq_dec n (m (fun _ : nat => true)) then true else false) = true)) as H.
+  - rewrite <- Hm.
+    1: reflexivity.
+    admit.
+  - specialize (H (1+ List.list_max (m (fun _ : nat => true)))).
+    destruct List.in_dec.
+    + destruct (List.list_max_le (m (fun _ : nat => true)) (List.list_max (m (fun _ : nat => true)))) as [Hmax _].
+      eapply List.Forall_forall in i. 2: { eapply Hmax. lia. }
+      cbn in *. lia.
+    + congruence.
+Admitted.

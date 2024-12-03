@@ -1276,14 +1276,19 @@ Qed.
 End fix_types.
 
 Variable R : Type.
+Variable Q : Type.
+Variable A : Type.
 
-Fixpoint dialogue_to_list (d : @dialogue nat bool R) : list nat :=
+Variable L : list A.
+Hypothesis L_spec : forall a : A, List.In a L.
+
+Fixpoint dialogue_to_list (d : @dialogue Q A R) : list Q :=
   match d with
   | eta a => nil
-  | beta i k => i :: (dialogue_to_list (k true)) ++ (dialogue_to_list (k false))
+  | beta q k => q :: flatten (map (fun a => dialogue_to_list (k a)) L)
   end.
 
-Lemma dialogue_is_uniform F : dialogue_cont F -> @uni_cont nat bool R F.
+Lemma dialogue_is_uniform F : dialogue_cont F -> @uni_cont Q A R F.
 Proof.
   intros [d H].
   exists (dialogue_to_list d) ; intros f g Hfg.
@@ -1292,21 +1297,22 @@ Proof.
   induction d as [ | i k ke] ; [reflexivity |] ; cbn in *.
   injection Hfg ; intros Hfgl Hfgi ; clear Hfg ; rewrite Hfgi.
   specialize (ke (g i)).
-  destruct (g i).
-  { apply ke.
-    do 2 erewrite map_cat in Hfgl.
-    apply (f_equal (take (size [seq f i | i <- dialogue_to_list (k true)]))) in Hfgl.
-    do 2 erewrite take_size_cat in Hfgl ; try reflexivity.
-    1: exact Hfgl.
-    now do 2 erewrite size_map.
-  }
-  { apply ke.
-    do 2 erewrite map_cat in Hfgl.
-    apply (f_equal (drop (size [seq f i | i <- dialogue_to_list (k true)]))) in Hfgl.
-    do 2 erewrite drop_size_cat in Hfgl ; try reflexivity.
-    1: exact Hfgl.
-    now do 2 erewrite size_map.
-  }
+  apply ke.
+  rewrite !map_flatten in Hfgl.
+  rewrite <- !map_comp in Hfgl.
+  generalize (g i). intros a.
+  specialize (L_spec a).
+  clear - Hfgl L_spec. induction L.
+  - cbn in *. firstorder.
+  - cbn in *. destruct L_spec as [-> | ].
+    + eapply (f_equal (take (size [seq f i | i <- dialogue_to_list _]))) in Hfgl.
+      do 2 erewrite take_size_cat in Hfgl ; try reflexivity.
+      1: exact Hfgl.
+      now do 2 erewrite size_map.
+    + eapply (f_equal (drop (size [seq f i | i <- dialogue_to_list _]))) in Hfgl.
+      do 2 erewrite drop_size_cat in Hfgl ; try reflexivity.
+      1: eauto.
+      now do 2 erewrite size_map.
 Qed.
 
 End Cantor.
