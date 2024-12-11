@@ -865,7 +865,6 @@ Abort.
       itree_indbarredP tau nil,
   which completes our proof.
 *)
-Print indbarred.
 
 (*As explained, let us start by itree_indbarred. 
   It is an inductive predicate that describes a tree of computations
@@ -1396,7 +1395,6 @@ Proof.
       intros u ; destruct (ieval_finapp tau u (size u)) ; [right | left] ; eauto.
       intros [a Ha] ; now inversion Ha.
   }
-  About indbarred_fun_list_itree_indbarredP.
   eapply indbarred_fun_list_itree_indbarredP
     in Help ; auto.
   eapply itree_indbarred_spec, (itree_indbarred_dialogue) in Help ; auto.
@@ -1408,9 +1406,6 @@ Qed.
 
 
 End GeneralisedBarInduction.
-
-
-
 
 Section ContinuousBarInduction.
   
