@@ -1332,9 +1332,35 @@ Notation " [ P ]ₐ " := (PtoT P) (at level 0) : bh_scope.
 
 Notation " [ P ]ₑ " := (PtoT_dual P) (at level 0) : bh_scope.
 
+Definition ABmonotone_size T :=
+  (forall l l' : seq (nat * B), List.incl l l' -> size l <= size l' -> T l -> T l').
+
+Inductive ABUpmonotonisation_size (C : Type) (T : seq C -> Prop) : seq C -> Prop :=
+  Tmon_size : forall l l' : seq C, T l ->
+                              List.incl l l' ->
+                              size l <= size l' ->
+                              (ABUpmonotonisation_size T) l'.
+
+Notation " ⇑⁺s T " := (ABUpmonotonisation_size T) (at level 80) : bh_scope.
+
+Lemma ABUpsize_monotone_size T :
+  ABmonotone_size (⇑⁺s T).
+Proof.
+  intros u w Hincl Hsize HT ; destruct HT as [u v HT Hincl' Hsize'].
+  econstructor ; [eassumption | | ].
+  + eapply List.incl_tran ; eassumption.
+  + eapply leq_trans ; eassumption.
+Qed.
+
+Lemma included_size {X : eqType} (v : seq X) :
+  { L : seq (seq X) | forall (u : seq X),
+      (List.incl u v /\ size u <= size v) <->
+        u \in L}.
+Admitted.
+
 (*We first prove that monotonisation preserves decidability. *)
 
-Lemma Upmono_dec (P : list B -> Prop) :
+Lemma Upmono_dec {X} (P : list X -> Prop) :
   (forall u, {P u} + {~ P u}) ->
   (forall u, {(↑⁺ P) u} + {~ (↑⁺ P) u}).
 Proof.
@@ -1434,6 +1460,28 @@ Lemma inclP  {X : eqType} (u v : seq X) : (List.incl u v) <-> {subset u <= v}.
 Proof.
 by split=> h x /InP /h /InP.
 Qed.
+  
+
+Lemma ABUpmono_size_dec T :
+  (forall u, {T u} + {~ T u}) ->
+  forall u, {(⇑⁺s T) u} + {~ (⇑⁺s T) u}.
+Proof.
+  intros Hdec u.
+  destruct (included_size u) as [L HL].
+  suff: decidable (exists2 v : seq (nat * B), v \in L & T v).
+  { intros [Hyp | Hnot]; [left | right].
+    - destruct Hyp as [v Hin HT].
+      apply HL in Hin as [Hincl Hsize].
+      exists v ; easy.
+    - intros HT ; destruct HT as [u v HT Hincl Hsize].
+      apply Hnot.
+      exists u ; auto.
+      apply HL ; now split.
+  }
+  unshelve eapply decP ; [exact (has Hdec L) | ].
+  apply hasPP ; intros x.
+  now eapply sumboolP.
+Qed.  
 
 (* This is the crucial decidability argument for the next result *)
 Lemma ABUp_Up_dec (P : list B -> Prop) u : 
@@ -1520,15 +1568,104 @@ Lemma GBI_BI_dec :
 Proof.
   intros HGBI P Hdec Hbar.
   destruct (Hdec nil) as [Hnil | Hnotnil] ; [now econstructor | ].
-  apply hered_Upmon_hered_dec ; [assumption | | intros n ; cbn ; eassumption ]. Print ABbarred.
+  apply hered_Upmon_hered_dec ; [assumption | | intros n ; cbn ; eassumption ].
   apply indbarred_inductively_barred_dual ; [now apply Upmonot_monotone | ].
   apply HGBI; first by move=> u; apply: ABUp_Up_dec.
   apply barred_ABbarred_PtoT_Up ; [now apply Upmonot_monotone | ].
 now apply monot_barred.
 Qed.
 
-End GBI_dec.
+Print GBI_monot.
+(*
+Lemma ABUpmono_dec T : (forall u, decidable (T u)) ->
+                       forall u : seq (nat * B), decidable ((⇑⁺ T) u).
+Proof.
+  intros Hdec u.
+  set Q := (X in (X u)).
+  Print ABUpmonotonisation.
+  pose Q1 w := exists v, T v /\ List.incl v w.
+  have Q1P w : Q1 w <-> Q w.
+    split; last first.
+    - by case=> w1 w2 hi12 ; exists w1.
+    - case=> [w1 [Pw1 hi]].
+      now econstructor; last by eassumption.
+  suffices {Q1P Q} : decidable (Q1 u) by apply: decidable_iff. 
+  (* Q2 describes a decision algorithm for Q1 *)
+  pose Q2 w := exists n :'I_(size w).+1, (* size of v1 ++ v2 *)
+               exists m : (size w).-tuple bool, (* selecting the elements of ord (v1 ++ v2) in w *)
+               exists v : seq (nat * B), 
+                 [/\ (v \in permutations (mask m w)) & (* the actual ord (v1 ++ v2) *)
+                   T v].
+  have Q2P w : Q2 w <-> Q1 w.
+  split; last first. *)
 
+Lemma GBI_monot_dec :
+  (forall T : seq (nat * B) -> Prop, ABmonotone_size T -> (forall u, decidable (T u)) -> GBI T) ->
+  forall T : seq (nat * B) -> Prop, (forall u, decidable (T u)) -> GBI T.
+Proof.
+  intros HBI T Hdec Hbar.
+  suff: forall l,
+      indbarred (ABUpmonotonisation_size T) l ->
+      indbarred T l. 
+  { intros Hyp.
+    apply Hyp.
+    apply HBI ; [now eapply ABUpsize_monotone_size | | ].
+    1: now eapply ABUpmono_size_dec.
+    intros alpha ; specialize (Hbar alpha) as [u Hu].
+    exists u ; econstructor ; [eassumption | | ].
+    1: now eapply List.incl_refl.
+    now eapply leqnn.
+  }
+  clear HBI ; intros l Hl.
+  induction Hl.
+  { inversion H as [v w Hv Hincl Hsize Heq] ; subst.
+    econstructor ; [eassumption | ].
+    now eapply List.incl_tran ; eassumption.
+  }
+  econstructor 2. eassumption.
+  eassumption.
+Qed.
+
+
+Lemma ABbarred_barred_TtoP_size_inf :
+  forall T,
+    ABmonotone_size T ->
+    ABbarred T ->
+    barred [|T|].
+Proof.
+  intros T Hmon HTbar alpha.
+  specialize (HTbar alpha) as [u Hu].
+  exists (map alpha (iota 0 (addn (List.list_max u).+1 (size u)))).
+  split ; [ unfold prefix ; now rewrite -> size_map, size_iota | ].
+  unfold TtoP, ord.
+  erewrite ord_map_aux, ord_iota_aux, <- map_comp.
+  unshelve erewrite (eq_map (g:= fun i => (i, alpha i))) ; [ | intros ? ; reflexivity].
+  eapply Hmon ; [ | | eassumption].
+  + intros [n b] Hin.
+    eapply map_incl ; [ | eassumption ].
+    eapply List.incl_tran ; [ now eapply incl_iota_max | ].
+    rewrite iotaD.
+    now eapply List.incl_appl, List.incl_refl.
+  + rewrite size_map size_map size_iota.
+    now eapply leq_addl.
+Qed.
+
+Lemma BI_GBI_dec :
+  (forall P : list B -> Prop, (forall u, decidable (P u)) -> BI_ind P) ->
+  forall (T : list (nat * B) -> Prop), (forall u, decidable (T u)) -> GBI T.
+Proof.
+  intros HBI ; eapply GBI_monot_dec.
+  intros T Hmon Hdec Hbar.  
+  destruct (Hdec nil) as [Hnil | Hnotnil].
+  1:{ econstructor ; [eassumption | now eapply List.incl_refl]. }
+  change (@nil (nat * B)) with (ord (@nil B)).
+  eapply inductively_barred_indbarred.
+  apply HBI ; unfold TtoP.
+  1: intros u ; now eapply Hdec.
+  eapply ABbarred_barred_TtoP_size_inf ; eauto.
+Qed.
+
+End GBI_dec.
 
 Section GDC_gen.
 
@@ -1569,7 +1706,7 @@ Section GDC_gen.
     intros u Hu Hinf ; econstructor.
     { unfold ABDownarborification.
       intros v Hincl f f' n n' Hin Hin' Heqn.
-      eapply Hu ; [ apply Hincl | apply Hincl |] ; eassumption.
+      eapply Hu ; [ apply Hincl | apply Hincl | ] ; eassumption.
     }
     intros f Hnotin.
     exists (size u).
