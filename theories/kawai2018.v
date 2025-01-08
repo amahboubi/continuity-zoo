@@ -11,9 +11,10 @@ Require Import continuity_zoo_Prop.
 Require Import Brouwer_ext.
 Require Import BI.
 
-
-Set Bullet Behavior "Strict Subproofs".
+(*
+Set Bullet Behavior "None".
 Set Default Goal Selector "!".
+*)
 
 (** Kawai's "Principles of bar induction and continuity on Baire space" has the notions of
     neighborhood function and Brouwer operation, and derives continuity notions based on them.
@@ -37,6 +38,7 @@ Result 2: a Brouwer operation can be turned into the existence of a Brouwer tree
 
 (*We first define neighborhood functions and what it means to be
  continuous with respect to them.*)
+Section Kawai.
 
 Variables A R : Type.
 
@@ -82,11 +84,10 @@ Proof.
     + apply IHm ; auto ; rewrite Heqr - Hm - addn1 iotaD map_cat.
       apply Hneigh ; rewrite - Heqr ; intros H ; now inversion H.
     + remember (tau [seq alpha i | i <- iota 0 z]) as r' ; destruct r' as [r' | ] ; [ | auto].
-      cbn in Hz ; rewrite Heqr' Heqr - (subnKC Hz) iotaD map_cat ; cbn.
+      rewrite ltnS in Hz ; rewrite Heqr' Heqr -(subnKC Hz) iotaD map_cat /=.
       apply Hneigh ; rewrite - Heqr' ; intros H ; now inversion H.
 Qed.
   
-
 (*A first result is that neighborhood functions are well-founded, valid
  Brouwer extensional trees.*)
 Lemma neighborhood_wf_valid_Bext_tree (tau : list A -> option R) :
@@ -292,13 +293,9 @@ Proof.
   - split. 
     + intros α. destruct (H1 (α 0)) as [H1' H2'].
       * destruct (H1' (fun n => α (S n))) as [n].
+        move: H2; rewrite cat_rcons. (* display bug n0 should be n! *)
         exists (1 + n).
-        rewrite iotaD.
-        cbn.
-        replace 1 with (1 + 0). 
-        1: rewrite iotaDl.
-        2: now rewrite addn0.
-        now rewrite - map_comp - cat_rcons .
+        by rewrite iotaD /= addnC iotaDl -map_comp.
     + intros a b Ha.
       destruct a as [ | x a ]. 1: rewrite cats0 in Ha ; congruence.
       destruct (H1 x) as [H1' H2'].
@@ -306,6 +303,7 @@ Proof.
       eapply H2'.
       rewrite cat_rcons ; congruence.
 Qed.
+
 
 Lemma K0K γ :
   Brouwer_operation_at γ nil ->
@@ -526,3 +524,4 @@ Proof.
   - apply Bseq_cont_interaction_to_neigh_cont.
 Qed.
 
+End Kawai.

@@ -1,4 +1,5 @@
 From mathcomp Require Import all_ssreflect.
+From mathcomp Require Import zify.
 Require Import Program.
 From Equations Require Import Equations.
 Set Implicit Arguments.
@@ -10,8 +11,8 @@ Require Import continuity_zoo_Prop.
 Require Import Brouwer_ext.
 Require Import brede_herbelin.
 
-Set Bullet Behavior "Strict Subproofs".
-Set Default Goal Selector "!".
+(* Set Bullet Behavior "Strict Subproofs".
+Set Default Goal Selector "!". *)
 
 
 Arguments ext_tree {_ _ _}, _ _ _.
@@ -353,15 +354,13 @@ Proof.
       have Help := Bieval_trace_spec Hu.
       rewrite size_cat addnC size_map size_iota ; cbn ; now apply Bieval_monotone_plus.
     }
-    clear Heq aux ; revert l Hyp.
-    induction n as [ | n IHn] ; cbn ; intros l Hyp.
-    all: case_eq (P l) ; intros Heq ; [now econstructor | rewrite Heq in Hyp].
-    all:  eapply hereditary_sons ; intros o.
-    { specialize (Hyp (fun=> o)) ; now inversion Hyp. }
-    eapply IHn.
-    intros alpha.
-    rewrite <- (Hyp (pref_o (size l) o alpha)), n_comp_n_plus, addn0, pref_o_eq.
-    rewrite size_rcons ; erewrite <- (@pref_o_Bieval _ (size l) o (S (size l)) n) ; eauto.
+    elim: n l Hyp {Heq aux} => [| n ihn] l /=. 
+    1, 2: case: ifP => hPl Hyp; first exact: hereditary_self. 
+    1, 2: apply: hereditary_sons=> aa.
+    + by move/(_ (fun _ => aa)): Hyp => Hyp //.
+    apply: ihn => alpha.
+    rewrite -(Hyp (pref_o (size l) aa alpha)) n_comp_n_plus addn0 pref_o_eq.
+    rewrite size_rcons -(@pref_o_Bieval _ (size l) aa (S (size l)) n) //.
   - cbn in * ; intros l aux Heq.
     case_eq (P l) ; intros eqP ; [ econstructor ; assumption | ].
     apply hereditary_sons ; intros o.
@@ -396,6 +395,7 @@ Proof.
       rewrite n_comp_n_plus addn0 pref_o_eq in Hv.
       exists v ; now rewrite size_rcons.
 Qed.
+
 
 End ContinuousInduction.
 
@@ -704,14 +704,10 @@ Lemma ieval_finapp_monotone_output_fuel
   ieval_finapp tau u n = output a ->
   ieval_finapp tau u (n + m) = output a.
 Proof.
-  revert tau ; induction n as [ | n IHn] ; cbn in * ; intros tau H.
-  - destruct m ; cbn ; [assumption | destruct tau ; now rewrite H].
-  - destruct tau as [ | q k] ; [assumption | ].
-    destruct (eval_list u q) ; [ | now inversion H].
-    now eapply IHn.
+  elim: n tau => [ | n ihn] [aa <- | q k] //=; first by case: m.
+  by case: (eval_list u q) => // o /ihn.
 Qed.
-
-
+  
 Lemma ieval_finapp_monotone_ask_list
   (tau : Itree) (u v: seq (I * O)) (n : nat) (q : I) :
   is_fun_list v ->
@@ -740,11 +736,9 @@ Lemma ieval_finapp_monotone_ask_fuel
   ieval_finapp tau u n = ask q ->
   ieval_finapp tau u (n + m) = ask q.
 Proof.
-  revert u n tau q.
-  induction n as [| n IHn] ; intros * Hfun Hnotin Heq ; cbn in *.
-  - destruct m ; cbn ; [ assumption | destruct tau ; inversion Heq ; subst ; now rewrite Hnotin ].
-  - destruct tau as [ r | q' k] ; cbn in * ; [ now inversion Heq | ].
-    destruct (eval_list u q') ; cbn in * ; [ now apply IHn | assumption].
+  elim: n u tau q => [ | n ihn] u [r | qq k] q Hfun Hnotin //=.
+  - by case=> ->; case: m => //= m; rewrite Hnotin.
+  - case (eval_list u qq) => // o; exact: ihn.
 Qed.
 
 Lemma ieval_finapp_monotone_ask_list_nomorefuel
@@ -992,8 +986,8 @@ Proof.
   remember (ieval_finapp tau l n) as aux.
   destruct aux as [q | r].
   - remember (eval_list l q) as aux2 ; destruct aux2 as [a | ].
-    + suff: itree_indbarredP tau l n.+1.
-      { intros Hyp ; eapply Hsucc ; eauto. 
+    + assert (Hyp : itree_indbarredP tau l n.+1); last first.
+      { eapply Hsucc ; eauto. 
         now apply (itree_indbarredP_rect tau P Hout Hsucc Hask).
       }
       destruct Hq as [[q' [Heq [Hnone Hq']]] | [[r Hr] | [q' [a' [Heq' [Hq' IH]]]]]] ;
@@ -1002,9 +996,8 @@ Proof.
         rewrite Hnone in Heqaux2 ; now inversion Heqaux2.
       * inversion Heq' ; subst.
         rewrite Hq' in Heqaux2 ; inversion Heqaux2 ; now subst.
-    + suff: forall a : O, itree_indbarredP tau (l ++ [:: (q, a)]) n.
-      { intros Hyp.
-        eapply (Hask l n q Hnodup) ; [now auto | now symmetry | assumption | ] ; intros a.
+    + assert (Hyp : forall a : O, itree_indbarredP tau (l ++ [:: (q, a)]) n); last first.
+      { eapply (Hask l n q Hnodup) ; [now auto | now symmetry | assumption | ] ; intros a.
         apply (itree_indbarredP_rect tau P Hout Hsucc Hask) ; now apply Hyp.
       }
       destruct Hq as [[q' [Heq' Ho]]| [[r Hr] | [q' [a' [Heval [Hsome Hsuc]]]]]] ;
@@ -1099,40 +1092,44 @@ Proof.
   revert m ; induction Hu as [u n a Hnodup Heqa | u n q o Hfunu Heq Hsome _ IHu |
                                u n q Hfunu Heq Hnoneu _ IHu] ; intros m.
   - econstructor ; [ assumption | ].
-    case: (leqP n m) ; intros Hinf ; [ | apply leqW in Hinf ; cbn in Hinf] ;
+    case: (leqP n m) ; intros Hinf ; [ | apply leqW in Hinf ; cbn in Hinf];
       apply subnKC in Hinf.
     + rewrite - Hinf; right ; left ; exists a.
       now eapply ieval_finapp_monotone_output_fuel.
-    + revert Hinf ; generalize (n - m) as k.
+    + revert Hinf; rewrite subSS; generalize (n - m) as k.
       intros k; revert m n Heqa ; induction k ; intros m n Heqa Hinf.
-      * rewrite addn0 in Hinf ; subst ; now eauto.
-      * remember (ieval_finapp tau u m) as aux.
+      * suff -> : m = n by eauto.
+        lia.
+      * remember (ieval_finapp tau u m) as aux eqn: Heqaux.
         destruct aux as [q | r] ; [ | now eauto].
         right ; right.
-        remember (eval_list u q) as aux2 ; destruct aux2 as [o | ].
+        remember (eval_list u q) as aux2 eqn: Heqaux2; destruct aux2 as [o | ].
         -- exists q, o ; split ; [auto | split ; [auto | ] ].
            econstructor ; [ assumption | ].
            eapply (IHk m.+1) ; [eauto | now rewrite addSn - addnS].
-        -- symmetry in Heqaux ; rewrite - Hinf in Heqa.
-           erewrite ieval_finapp_monotone_ask_fuel in Heqa ; eauto.
-           now inversion Heqa.
+        -- symmetry in Heqaux2. 
+            have {Hinf} Hinf : n = m + k.+1 by lia.
+            by move: Heqa; rewrite Hinf (ieval_finapp_monotone_ask_fuel _ _ Heqaux2).
   - now eapply IHu.
   - econstructor ; [ assumption | ].
     case: (leqP n m) ; intros Hinf ; [ | apply leqW in Hinf ; cbn in Hinf] ;
       apply subnKC in Hinf.
     + rewrite - Hinf; left ; exists q ; split ; [ | split ; eauto].
       now eapply ieval_finapp_monotone_ask_fuel ; eauto.
-    + revert Hinf ; generalize (n - m) as k.
+    + revert Hinf ; rewrite subSS; generalize (n - m) as k.
       intros k; revert m n Heq ; induction k ; intros m n Heq Hinf.
-      * rewrite addn0 in Hinf ; subst ; now eauto.
-      * remember (ieval_finapp tau u m) as aux.
+      * suff -> : m = n by eauto.
+        lia. 
+      * remember (ieval_finapp tau u m) as aux eqn: Heqaux.
         destruct aux as [q' | r] ; [ | now eauto].
-        remember (eval_list u q') as aux2 ; destruct aux2 as [o | ].
+        remember (eval_list u q') as aux2 eqn: Heqaux2; destruct aux2 as [o | ].
         -- right ; right ; exists q', o ; split ; [auto | split ; [auto | ] ].
            econstructor ; [ assumption | ].
            eapply (IHk m.+1) ; [eauto | now rewrite addSn - addnS].
-        -- symmetry in Heqaux ; rewrite - Hinf in Heq.
-           erewrite ieval_finapp_monotone_ask_fuel in Heq ; eauto.
+        -- symmetry in Heqaux2.
+           have {Hinf} Hinf : n = m + k.+1 by lia.
+           move: Heq; rewrite Hinf (ieval_finapp_monotone_ask_fuel _ _ Heqaux2) //.
+           by eauto.
 Qed.
 
 

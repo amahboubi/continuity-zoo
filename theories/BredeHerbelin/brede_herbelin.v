@@ -1,5 +1,5 @@
 From mathcomp Require Import all_ssreflect.
-Require Import extra_principles.
+Require Import extra_principles Util.
 Require Import cantor.
 Set Implicit Arguments.
 Unset Strict Implicit.
@@ -9,12 +9,6 @@ Declare Scope bh_scope.
 Delimit Scope bh_scope with BH.
 Open Scope bh_scope.
 
-
-(* Auxiliary lemma that I could not find... *)
-Lemma decidable_iff P Q : (P <-> Q) ->  decidable P -> decidable Q.
-Proof.
-by move=> h [hP | hQ]; [left | right]; apply/h.
-Qed.
 
 Section Ord.
   Variables A B : Type.
@@ -34,13 +28,9 @@ elim: u n => [| c u ihu] //= n.
 by rewrite ihu.
 Qed.
 
-Lemma ord_map_snd {C} n (u : list C) : map snd (ord_aux u n) = u.
-Proof.
-  revert n ; induction u as [ | c q IHq] ; intros n ; [reflexivity |].
-  cbn ; f_equal.
-  now apply IHq.
-Qed.
 
+Lemma ord_map_snd {C} n (u : list C) : map snd (ord_aux u n) = u.
+Proof. by rewrite ordP -/unzip2 unzip2_zip // size_iota. Qed.
 
 Lemma ord_inj {C} n (u u' : list C) : ord_aux u n = ord_aux u' n -> u = u'.
 Proof.
@@ -53,13 +43,10 @@ Proof.
   eapply IHu ; eassumption.
 Qed.
 
-
 Lemma ord_cat {C} n (u u' : list C) : ord_aux (u ++ u') n = ord_aux u n ++ (ord_aux u' (size u + n)).
 Proof.
-  revert n ; induction u ; intros ; cbn ;  [reflexivity |].
-  f_equal.
-  erewrite plus_n_Sm.
-  exact (IHu n.+1).
+  elim: u n => [| c u ihu] n //=.
+  by rewrite -[_ + n]addnS ihu.
 Qed.
 
 Lemma ord_take {C} n m (u : list C) : ord_aux (take n u) m = take n (ord_aux u m).
@@ -73,10 +60,8 @@ Qed.
 
 Lemma ord_drop {C} n m (u : list C) : ord_aux (drop n u) (n + m) = drop n (ord_aux u m).
 Proof.
-  revert n m ; induction u ; intros ; cbn ; [reflexivity |].
-  destruct n ; [reflexivity |] ; cbn.
-  erewrite plus_n_Sm.
-  now apply IHu.
+elim: u n m => [| c u ihu] [| n] m //=.
+by rewrite -[_ + m]addnS ihu.
 Qed.
 
 
@@ -89,21 +74,15 @@ Qed.
 
 Lemma ord_rcons {C} n (u : list C) a : ord_aux (rcons u a) n = rcons (ord_aux u n) (size u + n, a).
 Proof.
-  revert n ; induction u ; intros ; cbn ; [reflexivity |].
-  f_equal.
-  now erewrite IHu, plus_n_Sm.
+  elim: u n => [| c u ihu] n //=.
+  by rewrite ihu addnS.
 Qed.
 
 Lemma ord_nth {C} b (u : list C) n m : (n + m, nth b u m) = nth (n + m, b) (ord_aux u n) m.
 Proof.
-  revert n m ; induction u ; intros.
-  { now do 2 rewrite nth_nil. }
-  cbn.
-  destruct m.
-  { cbn ; now rewrite <- plus_n_O. }
-  cbn.
-  rewrite <- plus_n_Sm, <- plus_Sn_m.
-  now apply (IHu n.+1 m).
+  rewrite ordP nth_zip ?size_iota //.
+  case: (ltnP m (size u)) => hs; first by rewrite nth_iota.
+  by rewrite [in RHS]nth_default // size_iota.
 Qed.  
 
 
@@ -123,14 +102,12 @@ Lemma ord_nth_in {C} n m b (u : list C) :
   n < size u ->
   List.In (nth (n + m, b) (ord_aux u m) n) (ord_aux u m).
 Proof.
-  revert n m b ; induction u ; intros n m b Hyp ; [now inversion Hyp |].
-  cbn.
-  destruct n.
-  { cbn in * ; now left. }
-  right ; cbn in *.
-  rewrite plus_n_Sm.
-  now apply IHu.
+  elim: u n m b => [| c u ihu] [| n] m b h //=; first by left.
+  right. 
+  rewrite -[n.+1 + m]addnS. 
+  exact: ihu.
 Qed.
+
 
 Lemma ord_incl {C} n m (u u' : list C) : List.incl (ord_aux u n) (ord_aux u' m) -> List.incl u u'.
 Proof.
@@ -760,14 +737,19 @@ Proof.
   }
 intros n _.
 case: (leqP (size u) n)=> hns; last first.
-- have [b hb] : {b : B & List.In (n, b) (ord u)} by apply: ord_inf_size. 
+- (* have [b hb] : {b : B & List.In (n, b) (ord u)} by apply: ord_inf_size.  *)
+  assert ({b : B & List.In (n, b) (ord u)}) as [b hb].
+    by apply: ord_inf_size.
   exists b; apply: (aux _ Hprun').
   rewrite /ord ord_rcons addn0 -!cats1.
   apply: List.incl_appl => //.
   apply: List.incl_app=> //.
   exact: List.incl_cons.
-- have [v [sv pruv]] := pruning_cat (n - size u) Hprun'.
-  have [b hb] :  {b : B & List.In (n, b) (ord (rcons u c ++ v))}.
+- (* have [v [sv pruv]] := pruning_cat (n - size u) Hprun'. *)
+  pose v_etc := pruning_cat (n - size u) Hprun'.
+  case v_etc => v [sv pruv].
+(*  have [b hb] :  {b : B & List.In (n, b) (ord (rcons u c ++ v))}.*)
+  assert ({b : B & List.In (n, b) (ord (rcons u c ++ v))}) as [b hb].
     apply: ord_inf_size.
     by rewrite size_cat size_rcons sv addSn subnKC.
   exists b; apply: (aux _ pruv).
@@ -776,7 +758,6 @@ case: (leqP (size u) n)=> hns; last first.
   rewrite cat_rcons /ord ord_cat.
   exact: List.incl_appl.
 Qed.
- 
 
 Lemma pruning_ABapprox_PtoT : DCProp12_sym.
 Proof.
@@ -1432,34 +1413,6 @@ case => l l' Tl.
 apply: (Tmon Tl).
 exact: List.incl_appl.
 Qed.
-
-(* Boolean analogues of List predicates when the carrier type has a decidable eq *)
-Lemma InP {X : eqType} (u : seq X) x : reflect (List.In x u) (x \in u).
-Proof.
-elim: u => [ |y u ihu]; apply: (iffP idP)=> //=.
-- rewrite in_cons; case/orP=> h.
-  + by rewrite (eqP h); left.
-  + by right; apply/ihu.
-- case=> [-> | /ihu]; rewrite in_cons.
-  + by rewrite eqxx.
-  + by move->; rewrite orbT.
-Qed.
-
-Lemma NoDupP {X : eqType} (u : seq X) : reflect (List.NoDup u) (uniq u).
-Proof.
-elim: u => [ |x u ihu]; apply: (iffP idP)=> //=.
-- move=> _; constructor.
-- case/andP=> nxu uu.
-  constructor; last by apply/ihu.
-  by apply/InP.
-- move=> h; inversion h as [ |y w niyu uu hh].
-  move/InP: niyu->. exact/ihu.
-Qed.
-
-Lemma inclP  {X : eqType} (u v : seq X) : (List.incl u v) <-> {subset u <= v}.
-Proof.
-by split=> h x /InP /h /InP.
-Qed.
   
 
 Lemma ABUpmono_size_dec T :
@@ -1513,7 +1466,7 @@ Proof.
       apply: uniq_leq_size; last exact/inclP.
       by have /NoDupP := ord_NoDup 0 (v1 ++ v2). (* apply/NoDuP does not work ? *)
     exists (Ordinal p1) => /=.
-    have /count_subseqP [vw [/subseqP[m sm em] evw]]: 
+    have /count_subseqP [vw /subseqP [m sm em] evw]: 
       forall x : nat * B, count_mem x (ord (v1 ++ v2)) <= count_mem x w.
        move=> x /=; apply: leq_uniq_count; last exact/inclP.
        apply/NoDupP; exact: ord_NoDup.

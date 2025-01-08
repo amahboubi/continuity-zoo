@@ -1,8 +1,9 @@
 
-From mathcomp Require Import all_ssreflect.
 Require Import Program.
 From Equations Require Import Equations.
-Require Import extra_principles.
+Require Import extra_principles Util.
+From mathcomp Require Import all_ssreflect.
+
 Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
@@ -11,8 +12,7 @@ Require Import continuity_zoo_Prop.
 Require Import Lia.
 
 Arguments ext_tree {_ _ _}, _ _ _.
-Set Bullet Behavior "Strict Subproofs".
-Set Default Goal Selector "!".
+(* Set Default Goal Selector "!".*)
 
 (* This file presents Brouwer-like equivalents of extensional trees and interaction,
    trees, i.e. trees that ask their questions "in order", much like Brouwer trees 
@@ -28,45 +28,27 @@ Variable O A : Type.
 Notation I := nat.
 Implicit Type (F : (I -> O) -> A).
 
-Lemma nth_map_iota  (f : nat -> O) m n k o : (n <= m) ->
-                               nth o (map f (iota k (S m))) n = f (k + n).
+Lemma from_pref_map_iota  (f : nat -> O) m n k o : (n <= m) ->
+    from_pref o (map f (iota k (S m))) n = f (k + n).
 Proof.
 move=> lenm.
 have -> : k + n = nth k (iota k m.+1) n by rewrite nth_iota.
-rewrite (nth_map k) // size_iota //.
+rewrite /from_pref (nth_map k) // size_iota //.
 Qed.
 
-Lemma iota_rcons (i j : nat) : rcons (iota i j) (i + j) = iota i j.+1.
+Lemma from_pref_finite_equal l (alpha : I -> O) o n :
+  \max_(i <- l) i <= n ->
+  map (from_pref o (map alpha (iota 0 n.+1))) l = map alpha l.
 Proof.
-have -> : iota i j.+1 = iota i (j + 1) by rewrite addn1.
-by rewrite -cats1 iotaD.
+  elim: l => [| k l ihl] //.
+  rewrite big_cons geq_max; case /andP=> lekn /ihl h /=.
+  by rewrite -h /= from_pref_map_iota.
 Qed.
 
-
-Lemma from_pref_finite_equal l (alpha : I -> O) o :
-  forall n, le (List.list_max l) n ->
-  map (from_pref o (map alpha (iota 0 (S n)))) l = map alpha l.
-Proof.
-  induction l ; cbn in * ; [reflexivity |] ; intros n Hle.
-  unfold from_pref in *.
-  f_equal.
-  2:{ eapply IHl.
-      unfold List.list_max.
-      etransitivity ; [ | eassumption].
-      now eapply PeanoNat.Nat.max_lub_r.
-  }
-  change (nth o ([seq alpha i | i <- iota 0 (S n)]) a = alpha a).
-  erewrite nth_map_iota ; [reflexivity |].
-  destruct (@leP a n)  as [ | notle] ; auto.
-  exfalso ; apply notle.
-  etransitivity ; [ | eassumption ].
-  now eapply PeanoNat.Nat.max_lub_l.
-Qed.
-
-
+(*
 Lemma leq_le i j : i <= j -> le i j.
 Proof. by move/leP. Qed.
-
+*)
 
 (*Brouwer extensional trees: they go to option A, and None is considered to be "next query".*)
 Definition Bext_tree := list O -> option A.
@@ -160,101 +142,61 @@ Lemma Beval_ext_tree_monotone (tau : Bext_tree ) f n k a l i :
   Beval_ext_tree_aux tau f n l i = Some a ->
   Beval_ext_tree_aux tau f (n + k) l i = Some a.
 Proof.
-  revert l i ; induction n as [ | n IHn] ; cbn in * ; intros l i H.
+  revert l i ; induction n as [ | n IHn] ; simpl in * ; intros l i H.
   1: now eapply Beval_ext_tree_constant.
   destruct (tau l) ; [ assumption |].
   now eapply IHn.
 Qed.
 
-Lemma eval_ext_tree_from_pref (tau : @ext_tree I O A) f n l o :
+Lemma eval_ext_tree_from_pref o (tau : @ext_tree I O A) f n l :
   eval_ext_tree_aux tau f n (map f l) =
-    eval_ext_tree_aux tau (from_pref o (map f (iota 0 (S (List.list_max (l ++ (eval_ext_tree_trace_aux tau f n (map f l)))))))) n (map f l).
+    eval_ext_tree_aux tau (from_pref o (map f (iota 0 (\max_(i <- l ++ (eval_ext_tree_trace_aux tau f n (map f l))) i).+1))) n (map f l).
 Proof.
-  revert l.
-  induction n ; intros ; [reflexivity |].
-  - cbn.
-    destruct (tau (map f l)) as [i |] ; [ | reflexivity].
-    unfold from_pref.
-    pose (help := @nth_map_iota f ((List.list_max
-                                      (l ++  (i :: eval_ext_tree_trace_aux tau f n (rcons (map f l) (f i)))))) i 0 o).
-    cbn in help.
-    erewrite help ; clear help.
-    2:{ erewrite List.list_max_app ; erewrite  PeanoNat.Nat.max_comm.
-        erewrite <- List.list_max_app ; cbn.
-        suff: forall n, eqn (i - (Nat.max i n)) 0 by auto.
-        clear.
-        induction i ; [reflexivity |] ; intros [ | n] ; [ | cbn ; auto].
-        now eapply leqnn.
-    }
-    erewrite <- map_rcons.
-    erewrite IHn ; unfold from_pref.
-    do 2 f_equal.
-    now erewrite cat_rcons.
+  elim: n l => [| n ihn l] //=.
+  case: (tau _) => [i |] //.
+  rewrite from_pref_map_iota; last first.
+    by rewrite big_cat /= maxnC leq_max leq_bigmax_seq ?mem_head.
+  - by rewrite -map_rcons ihn cat_rcons. 
 Qed.
 
 (*Same for the trace of eval_ext_tree*)
-Lemma eval_ext_tree_trace_from_pref (tau : ext_tree I O A) f n k l o :
-  le (List.list_max (l ++ (eval_ext_tree_trace_aux tau f n (map f l)))) k ->
+Lemma eval_ext_tree_trace_from_pref o (tau : ext_tree I O A) f n k l :
+  \max_(i <- l ++ (eval_ext_tree_trace_aux tau f n (map f l))) i <= k ->
   eval_ext_tree_trace_aux tau f n (map f l) =
     eval_ext_tree_trace_aux tau (from_pref o (map f (iota 0 (S k)))) n (map f l).
 Proof.
-  revert l.
-  induction n ; intros ; [reflexivity |].
-  - cbn in *.
-    destruct (tau (map f l)) as [i |] ; [ | reflexivity].
-    unfold from_pref.
-    f_equal.
-    pose (help := @nth_map_iota f k i 0 o).
-    cbn in help.
-    erewrite help ; clear help.
-    2:{ clear IHn. revert H.
-        set (p := List.list_max _).
-        suff: le i p.
-        2:{ unfold p ; clear p.
-            erewrite List.list_max_app ; erewrite  PeanoNat.Nat.max_comm.
-            erewrite <- List.list_max_app ; cbn.
-            now eapply PeanoNat.Nat.max_lub_l.
-        }
-        clear.
-        generalize p ; clear p ; intros p Hip Hpk.
-        have aux := PeanoNat.Nat.le_trans _ _ _ Hip Hpk ; clear Hip ; clear Hpk.
-        induction aux ; [now eapply leqnn |now eapply leqW].
-    }
-    erewrite <- map_rcons ; erewrite <- map_rcons in H.
-    eapply IHn.
-    now erewrite cat_rcons.
-Qed.
+  elim: n l => [| n ihn] l //=.
+  case: (tau _) => [i |] // h.
+  rewrite from_pref_map_iota; last first.
+  - by move/bigmax_leqP_seq: h; apply; rewrite // mem_cat mem_head orbT.
+  - by rewrite -map_rcons in h *; rewrite ihn // cat_rcons.
+Qed. 
+
 
 (*A technical lemma to prove that eval_ext_tree using lists as partial oracles
  is monotone*)
-Lemma eval_ext_tree_pref_monotone_aux (tau : ext_tree I O A) f n a o l :
-  eval_ext_tree_aux tau f n (map f l) = output a ->
-  eval_ext_tree_aux tau (from_pref o (map f (iota 0 (n + (S (List.list_max (l ++ (eval_ext_tree_trace_aux tau f n (map f l)))))))))
-    (n + (S (List.list_max (l ++ (eval_ext_tree_trace_aux tau f n (map f l))))))
-    (map f l) = output a.
+ Lemma eval_ext_tree_pref_monotone_aux o (tau : ext_tree I O A) f n a l (ll := eval_ext_tree_trace_aux tau f n [seq f i | i <- l] : seq I
+ ):
+ eval_ext_tree_aux tau f n (map f l) = output a ->
+ eval_ext_tree_aux tau (from_pref o (map f (iota 0 (n + (\max_(i <- l ++ ll) i).+1))))
+   (n + (\max_(i <- l ++ ll) i).+1) (map f l) = 
+   output a.
 Proof.
-  intros H.
-  eapply eval_ext_tree_monotone.
-  unshelve erewrite eval_ext_tree_from_pref in H ; [assumption |].
-  rewrite <- H ; clear H.
-  eapply eval_ext_tree_continuous.
-  erewrite from_pref_finite_equal ; erewrite <- plus_n_Sm .
-  1: erewrite from_pref_finite_equal ; [ reflexivity |].
-  all: set t:= eval_ext_tree_trace_aux _ _ _ _ ;
-    suff: t = eval_ext_tree_trace_aux tau f n [seq f i | i <- l] ;
-      [ | symmetry ;  eapply eval_ext_tree_trace_from_pref].
-  2,4: now eapply PeanoNat.Nat.le_add_l.
-  all: unfold t ; clear t ; intros Haux ; erewrite Haux.
-  1: etransitivity ; [ | now eapply PeanoNat.Nat.le_add_l].
-  all: erewrite List.list_max_app ; now eapply PeanoNat.Nat.max_lub_r.
-Qed.
+  move=> h.
+  apply: eval_ext_tree_monotone.
+  rewrite -h (eval_ext_tree_from_pref o).
+  apply: eval_ext_tree_continuous.
+  rewrite addnS -eval_ext_tree_trace_from_pref -/ll ?leq_addl // from_pref_finite_equal.
+  - by rewrite from_pref_finite_equal // big_cat /= leq_maxr.
+  - by apply: (leq_trans _ (leq_addl _ _)); rewrite big_cat leq_maxr.
+Qed.  
 
 Lemma eval_ext_tree_pref_monotone (tau : ext_tree I O A) f n a o :
   eval_ext_tree tau f n = output a ->
-  eval_ext_tree tau (from_pref o (map f (iota 0 (n + (S (List.list_max (eval_ext_tree_trace tau f n)))))))
-    (n + (S (List.list_max (eval_ext_tree_trace tau f n)))) = output a.
+  eval_ext_tree tau (from_pref o (map f (iota 0 (n + (\max_(i <- eval_ext_tree_trace tau f n) i).+1))))
+    (n + (\max_(i <- eval_ext_tree_trace tau f n) i).+1) = output a.
 Proof.
-  now apply: eval_ext_tree_pref_monotone_aux _ _ _ _ _ nil.
+  exact: eval_ext_tree_pref_monotone_aux _ _ _ _ _ nil.
 Qed.
 
 (*Turning ext_tree to Brouwer ext_tree*)
@@ -263,7 +205,7 @@ Definition extree_to_extree (tau : ext_tree I O A) (o : O) : ext_tree I O A :=
 
 Definition extree_to_Bextree (tau : ext_tree I O A) (o : O) : Bext_tree :=
   fun l =>
-    let m := (List.list_max (eval_ext_tree_trace tau (from_pref o l) (size l))).+1 in
+    let m := (\max_(i <- (eval_ext_tree_trace tau (from_pref o l) (size l))) i).+1 in
     if m <= size l then
       (match extree_to_extree tau o l with
             | output a => Some a
@@ -273,137 +215,74 @@ Definition extree_to_Bextree (tau : ext_tree I O A) (o : O) : Bext_tree :=
 
 Lemma extree_to_Bextree_spec tau alpha n a o :
   eval_ext_tree tau alpha n = output a ->
-  extree_to_Bextree tau o (map alpha (iota 0 (n + (S (List.list_max (eval_ext_tree_trace tau alpha n)))))) = Some a.
+  extree_to_Bextree tau o (map alpha (iota 0 (n + (\max_(i <- eval_ext_tree_trace tau alpha n) i).+1))) = Some a.
 Proof.
-  intros Heq.
-  unfold extree_to_Bextree.
-  unfold extree_to_extree.
-  erewrite size_map ; erewrite size_iota.
-  erewrite (eval_ext_tree_pref_monotone o Heq).
-  unfold eval_ext_tree_trace.
-  set m1 := List.list_max _.
-  set m2 := List.list_max _.
-  case: (ltnP m1 (n +m2.+1)) => hm //.
-  suff {hm}: m1 < n + m2.+1 by rewrite ltnNge hm.
-  rewrite {}/m1 {}/m2.
-  set m:= (X in (n + X)).
+  intros he.
+  rewrite /extree_to_Bextree /extree_to_extree size_map size_iota.
+  rewrite (eval_ext_tree_pref_monotone _ he) /eval_ext_tree_trace.
+  case: ifP => //.
   set x := eval_ext_tree_trace_aux _ _ _ _.
-  suff -> : x = eval_ext_tree_trace_aux tau alpha n [::]
-    by rewrite {}/x {}/m addnS ltnS leq_addl.
-  rewrite {}/x.
-  erewrite (eval_ext_tree_trace_monotone (n := n) m) ; [ | eassumption].
-  erewrite (eval_ext_tree_trace_from_pref (f := alpha) (l := nil)) ;
-    rewrite {}/m ; first by rewrite addnS.
-  set m1 := List.list_max _.
-  set m2 := List.list_max _.
-  suff: m1 = m2.
-  { rewrite {}/m1 {}/m2. intros H ; rewrite H ; apply PeanoNat.Nat.le_add_l. }
-  rewrite {}/m1 {}/m2.
-  f_equal.
-  cbn ; symmetry.
-  eapply eval_ext_tree_trace_monotone.
-  exact Heq.
+  suff -> : x = eval_ext_tree_trace_aux tau alpha n [::].
+  - by rewrite {}/x addnS ltnS leq_addl.
+  - rewrite {}/x.
+  set m1 := (X in n + X).
+  rewrite (eval_ext_tree_trace_monotone m1 he) /m1 addnS.
+  rewrite -[LHS](eval_ext_tree_trace_from_pref o (l := [::])) //.
+  by rewrite -addnS -(eval_ext_tree_trace_monotone _ he) leq_addl.
 Qed.
 
 
 Lemma ext_tree_to_Bext_tree_valid tau o:
   Bvalid_ext_tree (extree_to_Bextree tau o).
 Proof.
-  intros f k a.
-  unfold extree_to_Bextree in *.
-  unfold extree_to_extree in *.
-  repeat erewrite size_map.
-  repeat erewrite size_iota.
-  set fk := from_pref _ _.
-  set m := List.list_max _.
-  intros Heq.
-  have lem : m < k.
-  { destruct (m < k) ; [trivial |].
-    now inversion Heq.
-  }
-  rewrite lem in Heq.
-  have eval_aux : eval_ext_tree tau fk k = output a.
-  1: destruct (eval_ext_tree tau fk k) ;
-  now inversion Heq.
-  set fk1 := from_pref _ _.
-  set m' := List.list_max _.
-  suff: eval_ext_tree tau fk k = eval_ext_tree tau fk1 k.
-  2:{ eapply eval_ext_tree_continuous.
-      unfold fk1.
-      erewrite from_pref_finite_equal.
-      2: eapply leq_le ; now eapply ltnW.
-      unfold fk.
-      destruct k ; [reflexivity |].
-      erewrite from_pref_finite_equal ; [reflexivity |].
-      eapply leq_le.
-      now eapply ltnSE.
-  }
-  intros Heqfk.
-  suff: m' < k.+1.
-  { intros lem' ; rewrite lem' ; clear m' lem'.
-    suff: eval_ext_tree tau fk1 k.+1 = output a ;
-      first by intros h ; now rewrite h.
-    suff: eval_ext_tree tau fk1 k.+1 = eval_ext_tree tau fk1 k.
-    1: intros Haux ; now rewrite Haux -eval_aux.
-    rewrite Heqfk in eval_aux ; rewrite eval_aux.
-    erewrite <- PeanoNat.Nat.add_1_r ; unfold eval_ext_tree in *.
-    now eapply eval_ext_tree_monotone.
-  }
-  suff: m = m'.
-  1: intros H ; rewrite - H - (PeanoNat.Nat.add_1_r k) ;
-  now eapply ltn_addr.
-  unfold m ; unfold m'.
-  f_equal.
-  unfold eval_ext_tree_trace in *.
-  rewrite - (PeanoNat.Nat.add_1_r k).
-  erewrite <- eval_ext_tree_trace_monotone.
-  2: rewrite Heqfk in eval_aux ; eassumption.
-  eapply eval_ext_tree_trace_continuous.
-  unfold fk1.
-  erewrite from_pref_finite_equal.
-  2: eapply leq_le ; now eapply ltnW.
-  unfold fk.
-  destruct k ; [reflexivity |].
-  erewrite from_pref_finite_equal ; [reflexivity |].
-  eapply leq_le.
-  now eapply ltnSE.
-Qed.
+  move=> f k a.
+  rewrite /extree_to_Bextree /extree_to_extree !size_map !size_iota.
+  case: k => [| k] //.
+  set m1 := (X in X < _); set m2 := (X in X < k.+2).
+  case: ifP => // lem.
+  set fk := from_pref _ _; set fk1 := from_pref _ _.
+  case e : (eval_ext_tree tau fk k.+1) => [// | aa] [] ea.
+  rewrite ea in e => {ea aa}.
+  have e1 : eval_ext_tree tau fk k.+1 = eval_ext_tree tau fk1 k.+1.
+    apply: eval_ext_tree_continuous.
+    by rewrite from_pref_finite_equal ?from_pref_finite_equal // ltnW.
+  have e2 : eval_ext_tree tau fk1 k.+2 = eval_ext_tree tau fk1 k.+1.
+    by rewrite -e1 e -addn1; apply: eval_ext_tree_monotone; rewrite -[LHS]e1.
+  suff -> : m2 < k.+2 by rewrite e2 -e1 e. 
+  suff <- : m1 = m2 by rewrite ltnS; exact: ltnW.
+  rewrite /m1 /m2 -/fk -/fk1.
+  suff -> : eval_ext_tree_trace tau fk k.+1 = eval_ext_tree_trace tau fk1 k.+2 by [].
+  rewrite -[_.+2]addn1 /eval_ext_tree_trace. 
+  rewrite -[RHS](@eval_ext_tree_trace_monotone _ _ _ _ _ _ _ a); last by rewrite -[LHS]e1.
+  by apply: eval_ext_tree_trace_continuous; rewrite !from_pref_finite_equal // ltnW.
+  Qed.
+ 
+Hint Resolve ext_tree_to_Bext_tree_valid.
 
 (*Continuity via ext_trees implies continuity via Brouwer ext_trees*)
 Lemma seq_cont_to_Brouwer_aux F (o : O) tau alpha :
-  (exists n : I, eval_ext_tree tau alpha n = output (F alpha) ) ->
+  (exists n : I, eval_ext_tree tau alpha n = output (F alpha)) ->
   exists n : I, Beval_ext_tree (extree_to_Bextree tau o) alpha n = Some (F alpha).
 Proof.
-  intros [n Htau].
-  exists (n + (S (List.list_max (eval_ext_tree_trace tau alpha n)))).
-  unfold Beval_ext_tree.
-  change nil with (map alpha (iota 0 0)).
-  generalize 0 at 2 3 as k.
-  eapply (extree_to_Bextree_spec o) in Htau ; revert Htau.
-  set m:= n + _.
-  suff aux: forall tau m k f a,
-      tau (map f (iota 0 (m + k))) = Some a ->
-      (forall i j a', tau (map f (iota 0 j)) = Some a' ->
-                    tau (map f (iota 0 (i + j))) = Some a') ->
-      Beval_ext_tree_aux tau f m (map f (iota 0 k)) k = Some a.
-  1:{ intros ; eapply aux.
-      2:{ intros.
-          erewrite PeanoNat.Nat.add_comm.
-          eapply Bvalid_plus ; [ | assumption].
-          now eapply ext_tree_to_Bext_tree_valid.
-      }
-      eapply Bvalid_plus ; [ | assumption].
-      now eapply ext_tree_to_Bext_tree_valid.
-  }
-  clear ; intros * ; revert k.
-  induction m ; intros * Htau Hvalid ; [eassumption |].
-  cbn.
-  remember (tau [seq f i | i <- iota 0 k]) as r ; destruct r.
-  1: rewrite - Htau ; symmetry ; now eapply Hvalid.
-  rewrite - map_rcons iota_rcons.
-  apply IHm ; [now erewrite <- plus_n_Sm | assumption].
-Qed.
-
+  case=> n Htau.
+  exists (n + (\max_(i <- eval_ext_tree_trace tau alpha n) i).+1).
+  rewrite /Beval_ext_tree -[[::]]/(map alpha (iota 0 0)).
+  move: {3 4}0 => k.
+  move/(extree_to_Bextree_spec o): Htau.
+  set m := n + _.
+  suff aux ttau mm kk f a :
+    ttau (map f (iota 0 (mm + kk))) = Some a ->
+    (forall i j a', ttau (map f (iota 0 j)) = Some a' ->
+                    ttau (map f (iota 0 (j + i))) = Some a') ->
+                    Beval_ext_tree_aux ttau f mm (map f (iota 0 kk)) kk = Some a.
+    move=> h; apply: aux; last by move=> i j aa; apply: Bvalid_plus.
+    exact: Bvalid_plus.
+    clear => e h.
+    elim: mm kk e => [| m ihm] k e //=.
+    case er: (ttau [seq f i | i <- iota 0 k]) => [aa |].
+    symmetry; rewrite -e addnC; exact: h.
+  by rewrite -map_rcons iota_rcons; apply: ihm; rewrite addnS.
+  Qed.
 
 (*Getting rid of the o:O assumption*)
 Definition extree_to_Bextree_noo (tau : ext_tree I O A) : Bext_tree :=
@@ -590,88 +469,59 @@ Proof.
           else itree_to_Bitree (rcons l a) (vis n k)).
 Defined.  
 
+
 Lemma itree_to_Bitree_seq (n m : nat) (d : itree) (alpha : Q -> A) (r : R) :
   Bieval (itree_to_Bitree (map alpha (iota 0 m)) d) (n_comp alpha m) n = Some r ->
   Bieval (itree_to_Bitree (map alpha (iota 0 m.+1)) d) (n_comp alpha m.+1) n = Some r.
 Proof.
-  revert d alpha m ; induction n ; intros * Hyp.
-  - cbn in * ; destruct d ; now inversion Hyp.
-  - cbn in * ; destruct d as [ | q k] ; [now inversion Hyp | ].
-    destruct (leqP q.+1 m) as [H | H].
-    + have aux := ltn_addr 1 H ; rewrite addn1 in aux ; cbn in aux, H.
-      rewrite size_map size_iota H in Hyp.
-      rewrite size_map size_iota aux.
-      rewrite - cats1 n_comp_n_plus addn1 ; rewrite n_comp_n_plus addn0 in Hyp.
-      change [:: alpha m.+1] with (map alpha (iota m.+1 1)).
-      rewrite - map_cat - iotaD addn1.
-      change (n_comp alpha m \o succn) with (n_comp alpha m.+1).
-      apply IHn ; unfold itree_to_Bitree.
-      rewrite - cat1s ; change [:: alpha 0] with (map alpha (iota 0 1)).
-      rewrite - map_cat - iotaD add1n.
-      erewrite nth_map, (nth_iota q) ; [ | | rewrite size_iota] ; eauto ; cbn.
-      erewrite nth_map, (nth_iota q) in Hyp ; [ | | rewrite size_iota] ; eauto ; cbn in *.
-      rewrite - Hyp - cats1 ; change [:: alpha m] with (map alpha (iota m 1)).
-      now rewrite - map_cat - iotaD addn1.
-    + rewrite ltnNge - subn_eq0  in H ; rewrite size_map size_iota - if_neg in Hyp.
-      cbn in * ; rewrite H in Hyp.
-      rewrite size_map size_iota.
-      rewrite n_comp_n_plus addn0 - cats1 in Hyp.
-      rewrite - (map_cat alpha _ (iota m 1)) - iotaD in Hyp.
-      remember (eqn (q - m)%Nrec 0) as b ; destruct b.
-      * rewrite n_comp_n_plus addn1 - cats1 ; rewrite addn1 in Hyp.
-        apply Bieval_monotone in Hyp; cbn in Hyp.
-        rewrite size_map size_iota - Heqb - cats1 n_comp_n_plus addn1 in Hyp.
-        assumption.
-      * rewrite n_comp_n_plus addn1 - cats1 - (map_cat alpha _ (iota m.+1 1)) - iotaD addn1.
-        apply IHn.
-        rewrite addn1 in Hyp.
-        assumption.
+  elim: n d alpha m => [| n ihn] [| q k] alpha m //=.
+  rewrite !size_map !size_iota !n_comp_n_plus addn0 addn1.
+  rewrite -!map_rcons !iota_rcons -!map_cons.
+  have aux s : 0 :: iota 1 s = iota 0 s.+1 by rewrite -cat1s -(iotaD 0 1 s) add1n.
+  rewrite !aux.
+  case: (ltngtP q m) => H.
+  - have -> : q < m.+1 by rewrite ltnS ltnW.
+    move/ihn; set u1 := nth _ _ _. set u2 := nth _ _ _.
+    suff -> : u1 = u2 by [].
+   rewrite {}/u1 {}/u2 !(nth_map 0) ?size_iota //; last by rewrite ltnS ltnW.
+   rewrite !nth_iota //; last by rewrite ltnS ltnW.
+  - rewrite ltnS leqNgt H; exact: ihn.
+  - rewrite ltnS leq_eqVlt H eqxx /=. 
+     move/Bieval_monotone=> /=.
+     rewrite size_map size_iota ltnS leqnn n_comp_n_plus addn1 -map_rcons -map_cons.
+     by rewrite iota_rcons aux.
 Qed.
-    
+
 Lemma itree_to_BitreeP (n m : nat) (d : itree) (alpha : Q -> A) (r : R) :
   ieval d alpha n = output r ->
   exists k, Bieval (itree_to_Bitree (map alpha (iota 0 m)) d) (n_comp alpha m) k = Some r.
 Proof.
-  revert d m ; induction n ; intros d m Hyp.
-  - cbn in *.
-    exists 0 ; cbn.
-    destruct d ; now inversion Hyp.
-  - cbn in *.
-    destruct d as [ | q k ] ; [exists 0 ; now inversion Hyp | ] ; cbn.
-    specialize (IHn (k (alpha q)) m.+1 Hyp) as [i Hj].
+  elim: n d m => [| n ihn] [rr | q k] m //= [] Hyp.
+  - by exists 0; rewrite Hyp.
+  - by exists 0; rewrite Hyp.
+  - have {Hyp ihn} [i Hj] := ihn (k (alpha q)) m.+1 Hyp.
     exists (i.+1 + (q.+1 - m)).
-    remember (q.+1 - m) as x.
-    clear Hyp.
-    revert q m Heqx Hj.
-    induction x ; intros.
-    + rewrite addn0.
-      cbn in * ; rewrite size_map size_iota.
-      rewrite - Heqx ; cbn.
-      rewrite (nth_map 0) ; [ rewrite nth_iota | rewrite size_iota] ; cbn ; eauto.
-      rewrite n_comp_n_plus addn0 - cats1.
-      now change ([:: alpha m]) with (map alpha (iota m 1)) ; rewrite - map_cat - iotaD addn1.
-    + rewrite addnS ; cbn in *.
-      rewrite size_map size_iota.
-      rewrite - if_neg - Heqx ; cbn.
-      specialize (IHx q m.+1).
-      rewrite size_rcons size_map size_iota; rewrite size_map size_iota in IHx.
-      cbn in *.
-      have aux : x = q - m. 
-      { eapply (f_equal Nat.pred) in Heqx ; cbn in * ; now rewrite Heqx subSKn. }
-      cbn in aux ; rewrite - aux; rewrite - aux in IHx ; specialize (IHx erefl).
-      destruct x.
-      * cbn in * ; rewrite -> addn0 ; rewrite -> addn0 in IHx.
-        do 2 (rewrite n_comp_n_plus - cats1) ; rewrite addn0 addn1.
-        rewrite - (map_cat alpha _ (iota m 1)) - iotaD addn1.
-        rewrite n_comp_n_plus - cats1 in IHx ; rewrite addn1 in IHx.
-        now apply IHx, (itree_to_Bitree_seq (m := m.+1)).
-      * cbn in *.
-        rewrite - IHx ; [ | now apply  (itree_to_Bitree_seq (m := m.+1))].
-        repeat (rewrite n_comp_n_plus) ; rewrite addn0 addn1.
-        repeat (rewrite - cats1).
-        now change ([:: alpha m]) with (map alpha (iota m 1)) ; rewrite - map_cat - iotaD addn1.
+    case: (posnP (q.+1 - m)) => Heqx.
+    + rewrite Heqx addn0 /= size_map size_iota.
+      have ltqn : q < m by rewrite /leq -Heqx eqxx.
+      rewrite ltqn (nth_map 0) ?size_iota //.
+      by rewrite n_comp_n_plus -map_rcons addn0 iota_rcons nth_iota.
+    + have {Heqx} leqmq : m <= q by move: Heqx; rewrite subn_gt0 ltnS.
+      have e : q = m + (q - m) by rewrite (subnKC).
+      move: Hj. rewrite subSn // addSn -addnS. 
+      rewrite [in vis _ _]e [in alpha _]e {leqmq e}. move: (q - m) => x.
+      elim: x m => [| x ihx] m.
+      * rewrite addn0 addn2 /=.
+        rewrite size_map size_iota /= ltnn /= size_rcons size_map size_iota ltnSn.
+        rewrite !n_comp_n_plus -!map_rcons addn0 addn1 !iota_rcons.
+        rewrite (nth_map 0) ?size_iota // nth_iota // add0n => h.
+        exact: itree_to_Bitree_seq.
+      * rewrite [m + x.+1]addnS => h.
+        rewrite [i + _]addnS /= size_map size_iota -if_neg -leqNgt -addnS leq_addr.
+        rewrite n_comp_n_plus addn0 -map_rcons iota_rcons [m + _]addnS.
+        apply: ihx; exact: itree_to_Bitree_seq.
 Qed.
-    
+
 Lemma itree_to_Bitree_cont (F : (nat -> A) -> R) :
   seq_cont_interaction F -> Bseq_cont_interaction F.
 Proof.

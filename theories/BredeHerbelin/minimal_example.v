@@ -9,6 +9,8 @@ Unset Printing Implicit Defensive.
  This entails that Theorem 5 of Brede-Herbelin's paper does not hold
  in its dual version. *)
 
+Section MinEx.
+
 Variable B : Type.
 
 
@@ -89,3 +91,5 @@ Proof.
   intros Hn ; apply HP in Hn.
   (*There is no way to derive P (u ++ [:: b])) from the hypotheses.*)
 Abort.
+
+End MinEx.

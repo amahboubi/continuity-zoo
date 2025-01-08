@@ -1,8 +1,8 @@
-From mathcomp Require Import all_ssreflect.
 Require Import Program Lia ConstructiveEpsilon.
 From mathcomp Require Import zify.
 From Equations Require Import Equations.
 Require Import extra_principles.
+From mathcomp Require Import all_ssreflect.
 
 Set Implicit Arguments.
 Unset Strict Implicit.
