@@ -1333,11 +1333,75 @@ Proof.
   + eapply leq_trans ; eassumption.
 Qed.
 
-Lemma included_size {X : eqType} (v : seq X) :
+Section Magic.
+
+Variable X : eqType.
+
+(* sequence of sequences of the form x :: l for x \in v *)
+Definition top (v : seq X) (l : seq X) : seq (seq X) := 
+  map (fun x => x :: l) v.
+
+Lemma top_cons v u x : x \in v -> {subset u <= v} -> x :: u \in top v u.
+Proof.
+move=> vx subuv.
+by rewrite /top mem_map=> // a b [].
+Qed.
+
+(* (exhaustive) sequence of sequences u of length n such that 
+    List.incl u v *)
+Fixpoint fixed_magic (v : seq X) (n : nat) : seq (seq X) :=
+  match n with
+  |0 => [:: [::]]
+  |n.+1 => flatten (map (top v) (fixed_magic v n))
+  end.
+
+Lemma mem_fixed_magic v u n : 
+  List.incl u v -> size u = n -> u \in (fixed_magic v n).
+Proof.
+elim: n u v => [ | n ihn] [ | x u] v hincl //=.
+case=> sizeu.
+apply List.incl_cons_inv in hincl. (* bug of move/ ?*) 
+case: hincl => /InP hxv hincl.
+apply/flatten_mapP=> /=; exists u; first exact: ihn.
+apply: top_cons=> //; exact/inclP.
+Qed.
+
+Lemma fixed_magic_incl v u n : 
+  u \in (fixed_magic v n) -> List.incl u v.
+Proof.
+elim: n u v => [ | /= n ihn] u v /=.
+- rewrite inE => /eqP->; exact: List.incl_nil_l.
+- case/flattenP=> /= ss.
+  case/mapP=> /= s ins -> {ss} /mapP [x vx -> {u}].
+  apply: List.incl_cons; last exact: ihn.
+  exact/InP.
+Qed.
+
+Lemma fixed_magic_size v u n :
+  u \in (fixed_magic v n) -> size u = n.
+Proof.
+elim: n u => [ | n /= ihn] u /=.
+- by rewrite inE => /eqP->.
+- case/flatten_mapP=> /= w hw /mapP [x vx -> {u}] /=. 
+  by rewrite ihn.
+Qed.
+
+Lemma included_size (v : seq X) :
   { L : seq (seq X) | forall (u : seq X),
       (List.incl u v /\ size u <= size v) <->
         u \in L}.
-Admitted.
+Proof.
+pose magic := flatten (map (fixed_magic v) (iota 0 (size v).+1)).
+exists magic => u; split; last first.
+- case/flatten_mapP=> n iota_n fmagic_u.
+  split; first apply: (fixed_magic_incl fmagic_u).
+  by move: iota_n; rewrite mem_iota [size u](fixed_magic_size fmagic_u).
+- case=> incluv leqsize.
+  apply/flatten_mapP; exists (size u); first by rewrite mem_iota.
+  exact: mem_fixed_magic.
+Qed.
+
+End Magic.
 
 (*We first prove that monotonisation preserves decidability. *)
 
