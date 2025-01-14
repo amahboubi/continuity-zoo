@@ -24,21 +24,21 @@ Section Brouwer_ext_tree.
   (*The goal of this Section is to provide an extensional tree equivalent to Brouwer
     trees, and to prove that it is equivalent to seq_contW. *)
 
-Variable O A : Type.
-Notation I := nat.
-Implicit Type (F : (I -> O) -> A).
+Variable A R : Type.
+Notation Q := nat.
+Implicit Type (F : (Q -> A) -> R).
 
-Lemma from_pref_map_iota  (f : nat -> O) m n k o : (n <= m) ->
-    from_pref o (map f (iota k (S m))) n = f (k + n).
+Lemma from_pref_map_iota  (f : nat -> A) m n k a : (n <= m) ->
+    from_pref a (map f (iota k (S m))) n = f (k + n).
 Proof.
 move=> lenm.
 have -> : k + n = nth k (iota k m.+1) n by rewrite nth_iota.
 rewrite /from_pref (nth_map k) // size_iota //.
 Qed.
 
-Lemma from_pref_finite_equal l (alpha : I -> O) o n :
+Lemma from_pref_finite_equal l (alpha : Q -> A) a n :
   \max_(i <- l) i <= n ->
-  map (from_pref o (map alpha (iota 0 n.+1))) l = map alpha l.
+  map (from_pref a (map alpha (iota 0 n.+1))) l = map alpha l.
 Proof.
   elim: l => [| k l ihl] //.
   rewrite big_cons geq_max; case /andP=> lekn /ihl h /=.
@@ -50,13 +50,13 @@ Lemma leq_le i j : i <= j -> le i j.
 Proof. by move/leP. Qed.
 *)
 
-(*Brouwer extensional trees: they go to option A, and None is considered to be "next query".*)
-Definition Bext_tree := list O -> option A.
+(*Brouwer extensional trees: they go to option R, and None is considered to be "next query".*)
+Definition Bext_tree := list A -> option R.
 
-Fixpoint Beval_ext_tree_aux (tau : Bext_tree) (f : I -> O) (n : nat) (l : seq O) (i : I) :
-  option A :=
+Fixpoint Beval_ext_tree_aux (tau : Bext_tree) (f : Q -> A) (n : nat) (l : seq A) (q : Q) :
+  option R :=
   match n, tau l with
-  |S k, None => Beval_ext_tree_aux tau f k (rcons l (f i)) (S i)
+  |S k, None => Beval_ext_tree_aux tau f k (rcons l (f q)) (S q)
   |_, _ =>  tau l
   end.
 
@@ -71,11 +71,11 @@ Definition Bseq_cont F :=
  albeit for Brouwer extensional trees this time. *)
 
 Definition wf_Bext_tree (tau : Bext_tree) :=
-  forall f : I -> O,  exists n o, tau (map f (iota 0 n)) = Some o.
+  forall f : Q -> A,  exists n o, tau (map f (iota 0 n)) = Some o.
 
 Definition Bvalid_ext_tree (tau : Bext_tree) :=
-  forall (f : I -> O) (k : I) (a : A), tau (map f (iota 0 k)) = Some a ->
-                          tau (map f (iota 0 k.+1)) = Some a.
+  forall (f : Q -> A) (k : Q) (r : R), tau (map f (iota 0 k)) = Some r ->
+                          tau (map f (iota 0 k.+1)) = Some r.
 
 Definition Bseq_cont_valid F :=
   exists tau : Bext_tree,
@@ -83,90 +83,90 @@ Definition Bseq_cont_valid F :=
       (Bvalid_ext_tree tau).
 
 Lemma Bvalid_plus (tau : Bext_tree) :
-  Bvalid_ext_tree tau -> forall f k j a,
-      tau (map f (iota 0 k)) = Some a ->
-      tau (map f (iota 0 (k + j))) = Some a.
+  Bvalid_ext_tree tau -> forall f k j r,
+      tau (map f (iota 0 k)) = Some r ->
+      tau (map f (iota 0 (k + j))) = Some r.
 Proof.
-move=> H f k j; elim: j k => [| j ihj] k a e; first by rewrite addn0.
+move=> H f k j; elim: j k => [| j ihj] k r e; first by rewrite addn0.
 rewrite addnS; apply: (ihj k.+1).
 exact: H.
 Qed.
 
 Lemma Bvalid_every_list (tau : Bext_tree) :
   Bvalid_ext_tree tau ->
-  forall l l' a, tau l = Some a -> tau (l ++ l') = Some a.
+  forall l l' r, tau l = Some r -> tau (l ++ l') = Some r.
 Proof.
   unfold Bvalid_ext_tree ; intros Hvalid l l' r Heqr.
-  destruct l' as [ | o l'] ; [now rewrite cats0 | ].
-  rewrite - (take_size (l ++ o :: l')) - (map_nth_iota0 o) size_cat ; [ | lia].
+  destruct l' as [ | a l'] ; [now rewrite cats0 | ].
+  rewrite - (take_size (l ++ a :: l')) - (map_nth_iota0 a) size_cat ; [ | lia].
   apply Bvalid_plus ; auto.
   rewrite map_nth_iota0  ; [ | rewrite size_cat ; lia].
-  now rewrite (take_size_cat (o :: l') erefl).
+  now rewrite (take_size_cat (a :: l') erefl).
 Qed.
 
 Fixpoint Beval_ext_tree_trace_aux
-  (tau : Bext_tree) (f : I -> O) (n : nat) (l : seq O) (i : I) : I :=
+  (tau : Bext_tree) (f : Q -> A) (n : nat) (l : seq A) (q : Q) : Q :=
   match n, tau l with
-  | S k, None => S (Beval_ext_tree_trace_aux tau f k (rcons l (f i)) (S i))
+  | S k, None => S (Beval_ext_tree_trace_aux tau f k (rcons l (f q)) (S q))
   | _ , _ => 0
   end.
 
 Definition Beval_ext_tree_trace tau f n := Beval_ext_tree_trace_aux tau f n nil 0.
 
-Lemma Beval_ext_tree_map_aux tau f n l i :
-  Beval_ext_tree_aux tau f n l i =
-    tau (l ++ map f (iota i ((Beval_ext_tree_trace_aux tau f n l i)))).
+Lemma Beval_ext_tree_map_aux tau f n l q :
+  Beval_ext_tree_aux tau f n l q =
+    tau (l ++ map f (iota q ((Beval_ext_tree_trace_aux tau f n l q)))).
 Proof.
-elim: n l i =>[| n ihn] l i /=; first by rewrite cats0.
+elim: n l q =>[| n ihn] l q /=; first by rewrite cats0.
 case e: (tau l) => [a |] /=; first by rewrite cats0.
 by rewrite -cat_rcons.
 Qed.
 
-Lemma Beval_ext_tree_constant (tau : Bext_tree) (f : I -> O) n a l i :
-    tau l = Some a ->
-    Beval_ext_tree_aux tau f n l i = Some a.
-Proof. by elim: n l i => [| n ihn] l i //= ->. Qed.
+Lemma Beval_ext_tree_constant (tau : Bext_tree) (f : Q -> A) n r l q :
+    tau l = Some r ->
+    Beval_ext_tree_aux tau f n l q = Some r.
+Proof. by elim: n l q => [| n ihn] l q //= ->. Qed.
 
-Lemma Beval_ext_tree_output_unique tau f l n1 n2 o1 o2 i :
-  Beval_ext_tree_aux tau f n1 l i = Some o1 ->
-  Beval_ext_tree_aux tau f n2 l i = Some o2 ->
+Lemma Beval_ext_tree_output_unique tau f l n1 n2 o1 o2 q :
+  Beval_ext_tree_aux tau f n1 l q = Some o1 ->
+  Beval_ext_tree_aux tau f n2 l q = Some o2 ->
   o1 = o2.
 Proof.
-elim: n1 n2 l i => [| n1 ihn1] [ | n2] l i /=.
+elim: n1 n2 l q => [| n1 ihn1] [ | n2] l q /=.
 1, 2: by move=> -> [].
-1, 2: case: (tau l) => [ o -> [] // | q //].
+1, 2: case: (tau l) => [ a -> [] // | q' //].
 intros H. eapply ihn1 ; eassumption.
 Qed.
 
-Lemma Beval_ext_tree_monotone (tau : Bext_tree ) f n k a l i :
-  Beval_ext_tree_aux tau f n l i = Some a ->
-  Beval_ext_tree_aux tau f (n + k) l i = Some a.
+Lemma Beval_ext_tree_monotone (tau : Bext_tree ) f n k r l q :
+  Beval_ext_tree_aux tau f n l q = Some r ->
+  Beval_ext_tree_aux tau f (n + k) l q = Some r.
 Proof.
-  revert l i ; induction n as [ | n IHn] ; simpl in * ; intros l i H.
+  revert l q ; induction n as [ | n IHn] ; simpl in * ; intros l q H.
   1: now eapply Beval_ext_tree_constant.
   destruct (tau l) ; [ assumption |].
   now eapply IHn.
 Qed.
 
-Lemma eval_ext_tree_from_pref o (tau : @ext_tree I O A) f n l :
+Lemma eval_ext_tree_from_pref a (tau : @ext_tree Q A R) f n l :
   eval_ext_tree_aux tau f n (map f l) =
-    eval_ext_tree_aux tau (from_pref o (map f (iota 0 (\max_(i <- l ++ (eval_ext_tree_trace_aux tau f n (map f l))) i).+1))) n (map f l).
+    eval_ext_tree_aux tau (from_pref a (map f (iota 0 (\max_(q <- l ++ (eval_ext_tree_trace_aux tau f n (map f l))) q).+1))) n (map f l).
 Proof.
   elim: n l => [| n ihn l] //=.
-  case: (tau _) => [i |] //.
+  case: (tau _) => [q |] //.
   rewrite from_pref_map_iota; last first.
     by rewrite big_cat /= maxnC leq_max leq_bigmax_seq ?mem_head.
   - by rewrite -map_rcons ihn cat_rcons. 
 Qed.
 
 (*Same for the trace of eval_ext_tree*)
-Lemma eval_ext_tree_trace_from_pref o (tau : ext_tree I O A) f n k l :
-  \max_(i <- l ++ (eval_ext_tree_trace_aux tau f n (map f l))) i <= k ->
+Lemma eval_ext_tree_trace_from_pref a (tau : ext_tree Q A R) f n k l :
+  \max_(q <- l ++ (eval_ext_tree_trace_aux tau f n (map f l))) q <= k ->
   eval_ext_tree_trace_aux tau f n (map f l) =
-    eval_ext_tree_trace_aux tau (from_pref o (map f (iota 0 (S k)))) n (map f l).
+    eval_ext_tree_trace_aux tau (from_pref a (map f (iota 0 (S k)))) n (map f l).
 Proof.
   elim: n l => [| n ihn] l //=.
-  case: (tau _) => [i |] // h.
+  case: (tau _) => [q |] // h.
   rewrite from_pref_map_iota; last first.
   - by move/bigmax_leqP_seq: h; apply; rewrite // mem_cat mem_head orbT.
   - by rewrite -map_rcons in h *; rewrite ihn // cat_rcons.
@@ -175,47 +175,47 @@ Qed.
 
 (*A technical lemma to prove that eval_ext_tree using lists as partial oracles
  is monotone*)
- Lemma eval_ext_tree_pref_monotone_aux o (tau : ext_tree I O A) f n a l (ll := eval_ext_tree_trace_aux tau f n [seq f i | i <- l] : seq I
+ Lemma eval_ext_tree_pref_monotone_aux a (tau : ext_tree Q A R) f n r l (ll := eval_ext_tree_trace_aux tau f n [seq f i | i <- l] : seq Q
  ):
- eval_ext_tree_aux tau f n (map f l) = output a ->
- eval_ext_tree_aux tau (from_pref o (map f (iota 0 (n + (\max_(i <- l ++ ll) i).+1))))
+ eval_ext_tree_aux tau f n (map f l) = output r ->
+ eval_ext_tree_aux tau (from_pref a (map f (iota 0 (n + (\max_(i <- l ++ ll) i).+1))))
    (n + (\max_(i <- l ++ ll) i).+1) (map f l) = 
-   output a.
+   output r.
 Proof.
   move=> h.
   apply: eval_ext_tree_monotone.
-  rewrite -h (eval_ext_tree_from_pref o).
+  rewrite -h (eval_ext_tree_from_pref a).
   apply: eval_ext_tree_continuous.
   rewrite addnS -eval_ext_tree_trace_from_pref -/ll ?leq_addl // from_pref_finite_equal.
   - by rewrite from_pref_finite_equal // big_cat /= leq_maxr.
   - by apply: (leq_trans _ (leq_addl _ _)); rewrite big_cat leq_maxr.
 Qed.  
 
-Lemma eval_ext_tree_pref_monotone (tau : ext_tree I O A) f n a o :
-  eval_ext_tree tau f n = output a ->
-  eval_ext_tree tau (from_pref o (map f (iota 0 (n + (\max_(i <- eval_ext_tree_trace tau f n) i).+1))))
-    (n + (\max_(i <- eval_ext_tree_trace tau f n) i).+1) = output a.
+Lemma eval_ext_tree_pref_monotone (tau : ext_tree Q A R) f n r a :
+  eval_ext_tree tau f n = output r ->
+  eval_ext_tree tau (from_pref a (map f (iota 0 (n + (\max_(i <- eval_ext_tree_trace tau f n) i).+1))))
+    (n + (\max_(i <- eval_ext_tree_trace tau f n) i).+1) = output r.
 Proof.
   exact: eval_ext_tree_pref_monotone_aux _ _ _ _ _ nil.
 Qed.
 
 (*Turning ext_tree to Brouwer ext_tree*)
-Definition extree_to_extree (tau : ext_tree I O A) (o : O) : ext_tree I O A :=
-  fun l => eval_ext_tree tau (from_pref o l) (size l).
+Definition extree_to_extree (tau : ext_tree Q A R) (a : A) : ext_tree Q A R :=
+  fun l => eval_ext_tree tau (from_pref a l) (size l).
 
-Definition extree_to_Bextree (tau : ext_tree I O A) (o : O) : Bext_tree :=
+Definition extree_to_Bextree (tau : ext_tree Q A R) (a : A) : Bext_tree :=
   fun l =>
-    let m := (\max_(i <- (eval_ext_tree_trace tau (from_pref o l) (size l))) i).+1 in
+    let m := (\max_(i <- (eval_ext_tree_trace tau (from_pref a l) (size l))) i).+1 in
     if m <= size l then
-      (match extree_to_extree tau o l with
-            | output a => Some a
-            | ask i => None
+      (match extree_to_extree tau a l with
+            | output r => Some r
+            | ask q => None
        end)
     else None.
 
-Lemma extree_to_Bextree_spec tau alpha n a o :
-  eval_ext_tree tau alpha n = output a ->
-  extree_to_Bextree tau o (map alpha (iota 0 (n + (\max_(i <- eval_ext_tree_trace tau alpha n) i).+1))) = Some a.
+Lemma extree_to_Bextree_spec tau alpha n r a :
+  eval_ext_tree tau alpha n = output r ->
+  extree_to_Bextree tau a (map alpha (iota 0 (n + (\max_(i <- eval_ext_tree_trace tau alpha n) i).+1))) = Some r.
 Proof.
   intros he.
   rewrite /extree_to_Bextree /extree_to_extree size_map size_iota.
@@ -227,15 +227,15 @@ Proof.
   - rewrite {}/x.
   set m1 := (X in n + X).
   rewrite (eval_ext_tree_trace_monotone m1 he) /m1 addnS.
-  rewrite -[LHS](eval_ext_tree_trace_from_pref o (l := [::])) //.
+  rewrite -[LHS](eval_ext_tree_trace_from_pref a (l := [::])) //.
   by rewrite -addnS -(eval_ext_tree_trace_monotone _ he) leq_addl.
 Qed.
 
 
-Lemma ext_tree_to_Bext_tree_valid tau o:
-  Bvalid_ext_tree (extree_to_Bextree tau o).
+Lemma ext_tree_to_Bext_tree_valid tau a:
+  Bvalid_ext_tree (extree_to_Bextree tau a).
 Proof.
-  move=> f k a.
+  move=> f k r.
   rewrite /extree_to_Bextree /extree_to_extree !size_map !size_iota.
   case: k => [| k] //.
   set m1 := (X in X < _); set m2 := (X in X < k.+2).
@@ -253,28 +253,28 @@ Proof.
   rewrite /m1 /m2 -/fk -/fk1.
   suff -> : eval_ext_tree_trace tau fk k.+1 = eval_ext_tree_trace tau fk1 k.+2 by [].
   rewrite -[_.+2]addn1 /eval_ext_tree_trace. 
-  rewrite -[RHS](@eval_ext_tree_trace_monotone _ _ _ _ _ _ _ a); last by rewrite -[LHS]e1.
+  rewrite -[RHS](@eval_ext_tree_trace_monotone _ _ _ _ _ _ _ r); last by rewrite -[LHS]e1.
   by apply: eval_ext_tree_trace_continuous; rewrite !from_pref_finite_equal // ltnW.
   Qed.
  
 Hint Resolve ext_tree_to_Bext_tree_valid.
 
 (*Continuity via ext_trees implies continuity via Brouwer ext_trees*)
-Lemma seq_cont_to_Brouwer_aux F (o : O) tau alpha :
-  (exists n : I, eval_ext_tree tau alpha n = output (F alpha)) ->
-  exists n : I, Beval_ext_tree (extree_to_Bextree tau o) alpha n = Some (F alpha).
+Lemma seq_cont_to_Brouwer_aux F (a : A) tau alpha :
+  (exists n : Q, eval_ext_tree tau alpha n = output (F alpha)) ->
+  exists n : Q, Beval_ext_tree (extree_to_Bextree tau a) alpha n = Some (F alpha).
 Proof.
   case=> n Htau.
   exists (n + (\max_(i <- eval_ext_tree_trace tau alpha n) i).+1).
   rewrite /Beval_ext_tree -[[::]]/(map alpha (iota 0 0)).
   move: {3 4}0 => k.
-  move/(extree_to_Bextree_spec o): Htau.
+  move/(extree_to_Bextree_spec a): Htau.
   set m := n + _.
-  suff aux ttau mm kk f a :
-    ttau (map f (iota 0 (mm + kk))) = Some a ->
+  suff aux ttau mm kk f r :
+    ttau (map f (iota 0 (mm + kk))) = Some r ->
     (forall i j a', ttau (map f (iota 0 j)) = Some a' ->
                     ttau (map f (iota 0 (j + i))) = Some a') ->
-                    Beval_ext_tree_aux ttau f mm (map f (iota 0 kk)) kk = Some a.
+                    Beval_ext_tree_aux ttau f mm (map f (iota 0 kk)) kk = Some r.
     move=> h; apply: aux; last by move=> i j aa; apply: Bvalid_plus.
     exact: Bvalid_plus.
     clear => e h.
@@ -285,13 +285,13 @@ Proof.
   Qed.
 
 (*Getting rid of the o:O assumption*)
-Definition extree_to_Bextree_noo (tau : ext_tree I O A) : Bext_tree :=
+Definition extree_to_Bextree_noo (tau : ext_tree Q A R) : Bext_tree :=
   fun l => match l with
            | nil => match (tau l) with
-                    | output a => Some a
+                    | output r => Some r
                     | ask _ => None
                     end
-           | o :: q => extree_to_Bextree tau o (o::q)
+           | a :: q => extree_to_Bextree tau a (a::q)
            end.
 
 Lemma extree_to_Bextree_noo_eq tau f n k :
@@ -319,7 +319,7 @@ Proof.
   cbn in *.
   remember (tau nil) as r ; destruct r.
   1: change [:: alpha 0] with (map alpha (iota 0 1)) ; now erewrite extree_to_Bextree_noo_eq.
-  suff: @output I _ a = output (F alpha) ; [intros H ; now inversion H |].
+  suff: @output Q _ r = output (F alpha) ; [intros H ; now inversion H |].
   rewrite - Htau ; symmetry.
   now eapply (@eval_ext_tree_monotone _ _ _ _ _ 0).
 Qed.
@@ -344,11 +344,11 @@ Local Notation itree := (@Itree nat A R).
 Fixpoint Bieval (b : Bitree) (f : Q -> A) (n : nat) : option R :=
   match n with
   | 0 => match b with
-         | Bret o => Some o
+         | Bret a => Some a
          | Bvis k => None
          end
   | S n => match b with
-           | Bret o => Some o
+           | Bret a => Some a
            | Bvis k => Bieval (k (f 0)) (f \o S) n
            end
   end.
@@ -392,11 +392,11 @@ Fixpoint Bitree_to_option (i : Bitree)  (l : list A) : option R :=
   match l with
   | nil => match i with
            | Bvis k => None
-           | Bret o => Some o
+           | Bret a => Some a
            end
   | cons a l' => match i with
                  | Bvis k => Bitree_to_option (k a) l'
-                 | Bret o => Some o
+                 | Bret a => Some a
                  end
   end.
 
@@ -417,7 +417,7 @@ Qed.
 CoFixpoint Bitree_to_itree_aux  (b : Bitree) (n : nat) : itree :=
   match b with
   | Bret a => ret a
-  | Bvis k => vis n (fun o => Bitree_to_itree_aux (k o) (S n))
+  | Bvis k => vis n (fun a => Bitree_to_itree_aux (k a) (S n))
   end.
 
 Definition Bitree_to_itree b := Bitree_to_itree_aux b 0.
@@ -461,7 +461,7 @@ Qed.
 CoFixpoint itree_to_Bitree (l : seq A) (d : itree) : Bitree.
 Proof.
   refine (match d with
-          | ret o => Bret o
+          | ret a => Bret a
           | vis n k => Bvis (fun a => _)
           end).
   refine (if n < size l

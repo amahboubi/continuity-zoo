@@ -58,11 +58,11 @@ Section BarInduction.
 (*The aim of this Section is to prove that decidable Bar Induction implies the equivalence
  between Bseq_cont_interaction and dialogue_cont_Brouwer.*)
   
-Variable dBI : forall A T, (forall a, {T a} + {~ (T a)}) -> @BI_ind A T.
-Variables O A : Type.
-Notation I := nat.
-Implicit Type (F : (I -> O) -> A).
-Implicit Type (b : @Bitree O A).
+Variable dBI : forall R T, (forall a, {T a} + {~ (T a)}) -> @BI_ind R T.
+Variables A R : Type.
+Notation Q := nat.
+Implicit Type (F : (Q -> A) -> R).
+Implicit Type (b : @Bitree A R).
 
 Proposition Bseq_cont_to_dialogue_cont_Brouwer F :
   Bseq_cont_interaction F -> dialogue_cont_Brouwer F.
@@ -78,9 +78,9 @@ Proof.
     now rewrite - Bitree_to_option_Bieval.
   }
   eapply dBI in Help.
-  2:{ intros a ; remember (Bitree_to_option b a) as r ; destruct r as [r | ].
+  2:{ intros u ; remember (Bitree_to_option b u) as x ; destruct x as [r | ].
       + left ; exists r ; eauto.
-      + right ; intros [x Hx] ; rewrite - Heqr in Hx ; inversion Hx.
+      + right ; intros [x Hx] ; rewrite - Heqx in Hx ; inversion Hx.
   }
   eapply Delta0_choice in Hb as [HF].
   2:{
@@ -112,13 +112,13 @@ Proof.
     right ; intros [a Hyp] ; now inversion Hyp.
   - clear l Help ; intros u Hu ; cbn.
     remember (Bitree_to_option b u) as r ; destruct r.
-    + exists (spit a) ; intros alpha ; exists 0 ; cbn ; now rewrite cats0.
+    + exists (spit r) ; intros alpha ; exists 0 ; cbn ; now rewrite cats0.
     + exfalso ; destruct Hu as [a Ha] ; rewrite Ha in Heqr.
       now inversion Heqr.
   - intros u k IHk ; cbn in *.
     unshelve eexists.
-    + apply bite ; intros o.
-      exact (proj1_sig (IHk o)).
+    + apply bite ; intros a.
+      exact (proj1_sig (IHk a)).
     + intros alpha ; cbn ; rewrite n_comp_n_plus addn0.
       destruct (IHk (alpha (size u))) as [x IHx].
       destruct (IHx alpha) as [n Hn] ; cbn in *.
@@ -136,16 +136,16 @@ Section ContinuousInduction.
   allows to derive decidable Bar Induction. 
  Thus, together with the previous Section, the two axioms are equivalent.*)  
 
-Variable O : Type.
-Notation I := nat.
-Notation A := (seq O).
-Implicit Type (F : (I -> O) -> A).
-Implicit Type (b : @Bitree O A).
+Variable A : Type.
+Notation Q := nat.
+Notation R := (seq A).
+Implicit Type (F : (Q -> A) -> R).
+Implicit Type (b : @Bitree A R).
 
 Variable CI : forall F, Bseq_cont_interaction F -> dialogue_cont_Brouwer F.
 
-CoFixpoint pred_to_Bitree_aux (P : seq O -> bool) (l : seq O) : @Bitree O A :=
-  if (P l) then Bret _ l else Bvis (fun o => pred_to_Bitree_aux P (rcons l o)).
+CoFixpoint pred_to_Bitree_aux (P : seq A -> bool) (l : seq A) : @Bitree A R :=
+  if (P l) then Bret _ l else Bvis (fun a => pred_to_Bitree_aux P (rcons l a)).
 
 Fixpoint beval_trace {X Y} (b : @Btree X Y) (f : nat -> X) : list X :=
   match b with
@@ -155,7 +155,7 @@ Fixpoint beval_trace {X Y} (b : @Btree X Y) (f : nat -> X) : list X :=
 
   
 
-Lemma Bieval_pred_to_Bitree_spec (P : seq O -> bool) (l : seq O) alpha n u :
+Lemma Bieval_pred_to_Bitree_spec (P : seq A -> bool) (l : seq A) alpha n u :
   Bieval (pred_to_Bitree_aux P l) alpha n = Some u ->
   P u.
 Proof.
@@ -165,7 +165,7 @@ Proof.
     now apply IHn in Heq.
 Qed.
 
-Fixpoint Bieval_trace (b : @Bitree O A) alpha n : nat :=
+Fixpoint Bieval_trace (b : @Bitree A R) alpha n : nat :=
   match n with
   | 0 => 0
   | S n => match b with
@@ -174,7 +174,7 @@ Fixpoint Bieval_trace (b : @Bitree O A) alpha n : nat :=
            end
   end.
 
-Lemma Bieval_trace_spec (b : @Bitree O A) alpha n u :
+Lemma Bieval_trace_spec (b : @Bitree A R) alpha n u :
   Bieval b alpha n = Some u ->
   Bieval b alpha (Bieval_trace b alpha n) = Some u.
 Proof.
@@ -184,7 +184,7 @@ Proof.
     now apply IHn.
 Qed.
 
-Lemma Bieval_pred_trace (P : seq O -> bool) (alpha : I -> O) (n : nat) (l u : A) :
+Lemma Bieval_pred_trace (P : seq A -> bool) (alpha : Q -> A) (n : nat) (l u : R) :
   Bieval (pred_to_Bitree_aux P l) (n_comp alpha (size l)) n = Some u ->
   u = l ++ (map alpha (iota (size l)
                          (Bieval_trace (pred_to_Bitree_aux P l) (n_comp alpha (size l)) n))).
@@ -199,7 +199,7 @@ Proof.
     now rewrite size_rcons in IHn ; cbn in * ; specialize (IHn Heq).
 Qed.    
 
-Lemma barred_Bseq_cont_aux (P : seq O -> bool) (alpha : I -> O) (u : seq O) :
+Lemma barred_Bseq_cont_aux (P : seq A -> bool) (alpha : Q -> A) (u : seq A) :
   (exists v, prefix (n_comp alpha (size u)) v /\ P (u ++ v)) ->
   exists v n, 
     Bieval (pred_to_Bitree_aux P u) (n_comp alpha (size u)) n = Some v.
@@ -216,7 +216,7 @@ Proof.
         unfold prefix in * ; cbn in *.
         apply (f_equal (drop 1)) in Hpref ; cbn in * ; do 2 (rewrite drop0 in Hpref).
         rewrite -> Hpref at 1.
-        suff: forall n m (f : I -> O), [seq f i | i <- iota m.+1 n] =
+        suff: forall n m (f : Q -> A), [seq f i | i <- iota m.+1 n] =
                           [seq (f \o succn) i | i <- iota m n].
         { intros H ; now rewrite H. }
         clear ; induction n as [ | n IHn] ; intros alpha m ; [auto | ].
@@ -230,11 +230,11 @@ Proof.
         now inversion Hpref.
 Qed.
 
-Lemma barred_Bseq_cont (P : seq O -> bool) :
+Lemma barred_Bseq_cont (P : seq A -> bool) :
   barred P ->
   inhabited (forall alpha,
         {n : nat &
-               { u : seq O |
+               { u : seq A |
                  P u /\
                    Bieval (pred_to_Bitree_aux P nil) alpha n = Some u}}).
 Proof.
@@ -258,7 +258,7 @@ Proof.
   destruct Hbar as [v [n Heval]].
   exists n, v ; split ; cbn in * ; auto.
   remember (P v) as b ; destruct b ; auto.
-  revert alpha v Heqb Heval ; generalize (@nil O) as l.
+  revert alpha v Heqb Heval ; generalize (@nil A) as l.
   induction n as [ | n IHn] ; intros ; cbn in *.
   - remember (P l) as b' ; destruct b' ; inversion Heval ; cbn in *.
     subst ; rewrite - Heqb' in Heqb ; now inversion Heqb.
@@ -268,58 +268,58 @@ Proof.
 Qed.
 
 Definition pred_to_fun
-  (P : seq O -> bool)
+  (P : seq A -> bool)
   (H : forall alpha,
       {n : nat &
-             {u : seq O |
+             {u : seq A |
                P u /\
                  Bieval (pred_to_Bitree_aux P nil) alpha n = Some u}}) :
-  (I -> O) -> A :=
+  (Q -> A) -> R :=
   fun alpha => proj1_sig (projT2 (H alpha)).
 
 
 
-Definition pref_o (m : nat) (o : O) (alpha : I -> O) (n : I) :=
-  if n <= m then o else alpha n.
+Definition pref_a (m : nat) (a : A) (alpha : Q -> A) (n : Q) :=
+  if n <= m then a else alpha n.
 
-Lemma pref_o_eq m o : forall alpha, pref_o m o alpha m = o.
+Lemma pref_a_eq m a : forall alpha, pref_a m a alpha m = a.
 Proof.
-  intros alpha ; unfold pref_o in *.
+  intros alpha ; unfold pref_a in *.
   now rewrite leqnn.
 Qed.
 
-Lemma pref_o_alpha m o : forall alpha n, m < n -> pref_o m o alpha n = alpha n.
+Lemma pref_a_alpha m a : forall alpha n, m < n -> pref_a m a alpha n = alpha n.
 Proof.
-  intros alpha n H ; unfold pref_o.
+  intros alpha n H ; unfold pref_a.
   rewrite ltnNge in H ; rewrite (Bool.negb_involutive_reverse (n <= m)).
   now rewrite H.
 Qed.
 
-Lemma pref_o_beval (b : @Btree O A) m o n:
+Lemma pref_a_beval (b : @Btree A R) m a n:
   m < n ->
-  forall alpha, beval b (n_comp (pref_o m o alpha) n) =
+  forall alpha, beval b (n_comp (pref_a m a alpha) n) =
                   beval b (n_comp alpha n).
 Proof.
   revert m n ; induction b as [ | ? IH] ; intros * Hinf alpha ; [reflexivity |].
   cbn.
-  do 2 (rewrite n_comp_n_plus addn0) ; rewrite pref_o_alpha ; [ | assumption].
+  do 2 (rewrite n_comp_n_plus addn0) ; rewrite pref_a_alpha ; [ | assumption].
   specialize (IH (alpha n) m n.+1 (ltnW Hinf)) ; cbn in * ; erewrite IH ; eauto.  
 Qed.  
 
 
-Lemma pref_o_Bieval b m o n j:
+Lemma pref_a_Bieval b m a n j:
   m < n ->
-  forall alpha, Bieval b (n_comp (pref_o m o alpha) n) j =
+  forall alpha, Bieval b (n_comp (pref_a m a alpha) n) j =
                   Bieval b (n_comp alpha n) j.
 Proof.
   revert m n b ; induction j as [ | i IHi] ; intros * Hinf alpha ; [reflexivity |].
   cbn in * ; destruct b as [ | k] ; [reflexivity | ].
-  do 2 (rewrite n_comp_n_plus addn0) ; rewrite pref_o_alpha ; [ | assumption].
+  do 2 (rewrite n_comp_n_plus addn0) ; rewrite pref_a_alpha ; [ | assumption].
   specialize (IHi m n.+1 (k (alpha n)) (ltnW Hinf)) ; cbn in *;  eapply IHi ; eauto.  
 Qed.  
 
 
-Proposition CoCI_BI (P : list O -> bool) :
+Proposition CoCI_BI (P : list A -> bool) :
   barred P -> inductively_barred P.
 Proof.
   intros Hbar.
@@ -334,13 +334,13 @@ Proof.
   apply CI in Fcon ; destruct Fcon as [b Hb].
   unfold F, pred_to_fun in Hb.
   unfold inductively_barred ; revert aux F Hb.
-  suff: forall (l : seq O)
-               (aux : forall alpha : I -> O,
-                   {n : I & {u : A | P u /\
+  suff: forall (l : seq A)
+               (aux : forall alpha : Q -> A,
+                   {n : Q & {u : R | P u /\
                                        Bieval (pred_to_Bitree_aux P l)
                                          (n_comp alpha (size l)) n = Some u}}),
-      (forall alpha : I -> O, ` (projT2 (aux alpha)) = beval b (n_comp alpha (size l))) ->
-      hereditary_closure (fun x : A => P x) l.
+      (forall alpha : Q -> A, ` (projT2 (aux alpha)) = beval b (n_comp alpha (size l))) ->
+      hereditary_closure (fun x : R => P x) l.
   { intros H ??? ; eapply H ; eauto. }
   clear Hbar ; induction b as [ | k IHk].
   - intros l aux Heq ; cbn in *.
@@ -359,40 +359,40 @@ Proof.
     1, 2: apply: hereditary_sons=> aa.
     + by move/(_ (fun _ => aa)): Hyp => Hyp //.
     apply: ihn => alpha.
-    rewrite -(Hyp (pref_o (size l) aa alpha)) n_comp_n_plus addn0 pref_o_eq.
-    rewrite size_rcons -(@pref_o_Bieval _ (size l) aa (S (size l)) n) //.
+    rewrite -(Hyp (pref_a (size l) aa alpha)) n_comp_n_plus addn0 pref_a_eq.
+    rewrite size_rcons -(@pref_a_Bieval _ (size l) aa (S (size l)) n) //.
   - cbn in * ; intros l aux Heq.
     case_eq (P l) ; intros eqP ; [ econstructor ; assumption | ].
-    apply hereditary_sons ; intros o.
+    apply hereditary_sons ; intros a.
     (*We show that the evaluation of pred_to_ext_tree P using
-      (pref_o alpha) leads to the same result as when using alpha. *)
+      (pref_a alpha) leads to the same result as when using alpha. *)
     suff: forall alpha,
-        {a : A &
-               Bieval (pred_to_Bitree_aux P (rcons l o)) (n_comp alpha (size (rcons l o)))
-                 (projT1 (aux (pref_o (size l) o alpha))).-1 =
-                 Some a} ; [ intros Hyp | intros alpha].
-    + unshelve eapply (IHk o).
+        {r : R &
+               Bieval (pred_to_Bitree_aux P (rcons l a)) (n_comp alpha (size (rcons l a)))
+                 (projT1 (aux (pref_a (size l) a alpha))).-1 =
+                 Some r} ; [ intros Hyp | intros alpha].
+    + unshelve eapply (IHk a).
       * intros alpha.
-        exists (projT1 (aux (pref_o (size l) o alpha))).-1.
+        exists (projT1 (aux (pref_a (size l) a alpha))).-1.
         exists (projT1 (Hyp alpha)) ; split ; [ | apply (projT2 (Hyp alpha))].
         eapply Bieval_pred_to_Bitree_spec ; exact (projT2 (Hyp alpha)).
-      * intros alpha ; specialize (Heq (pref_o (size l) o alpha)) ; cbn in *.
-        rewrite n_comp_n_plus addn0 pref_o_eq in Heq.
+      * intros alpha ; specialize (Heq (pref_a (size l) a alpha)) ; cbn in *.
+        rewrite n_comp_n_plus addn0 pref_a_eq in Heq.
         revert Heq ; generalize (Hyp alpha) ; rewrite size_rcons.
-        generalize (aux (pref_o (size l) o alpha)) ; clear aux Hyp.
+        generalize (aux (pref_a (size l) a alpha)) ; clear aux Hyp.
         intros [n [u [HPu Hu]]] [v Heqv] Hequ ; cbn in *.
-        have H: u = beval (k o) (n_comp alpha (size l) \o succn).
-        { rewrite Hequ ; now apply (@pref_o_beval _ _ _ (size l).+1). }
+        have H: u = beval (k a) (n_comp alpha (size l) \o succn).
+        { rewrite Hequ ; now apply (@pref_a_beval _ _ _ (size l).+1). }
         rewrite - H ; clear H Hequ.
         destruct n ; cbn in * ; rewrite eqP in Hu ; [ inversion Hu | ].
-        rewrite n_comp_n_plus addn0 pref_o_eq in Hu.
+        rewrite n_comp_n_plus addn0 pref_a_eq in Hu.
         suff: Some u = Some v by (intros H ; inversion H).
         rewrite - Heqv - Hu.
-        now eapply (@pref_o_Bieval _ (size l) o (S (size l)) n).
-    + erewrite <- (@pref_o_Bieval _ (size l) o) ; [ | now rewrite size_rcons].
-      destruct (aux (pref_o (size l) o alpha)) as [m [v [HPv Hv]]] ; cbn in *.
+        now eapply (@pref_a_Bieval _ (size l) a (S (size l)) n).
+    + erewrite <- (@pref_a_Bieval _ (size l) a) ; [ | now rewrite size_rcons].
+      destruct (aux (pref_a (size l) a alpha)) as [m [v [HPv Hv]]] ; cbn in *.
       destruct m ; cbn in * ; rewrite eqP in Hv ; [ now inversion Hv | ].
-      rewrite n_comp_n_plus addn0 pref_o_eq in Hv.
+      rewrite n_comp_n_plus addn0 pref_a_eq in Hv.
       exists v ; now rewrite size_rcons.
 Qed.
 
@@ -405,12 +405,12 @@ End ContinuousInduction.
 Section GeneralisedBarInduction.
 (*We generalize the previous result and aim to prove that 
   Sequential continuity + Generalized Bar Induction 
-   implies Dialogue continuity for any type I with decidable equality.*)
-Variable I : eqType.
-Variables O A : Type.
-Implicit Type (F : (I -> O) -> A).
-Variable HGBI : forall (T : list (I * O) -> Prop), (forall u, decidable (T u)) -> GBI T.
-Notation Itree := (@Itree I O A).
+   implies Dialogue continuity for any type Q with decidable equality.*)
+Variable Q : eqType.
+Variables A R : Type.
+Implicit Type (F : (Q -> A) -> R).
+Variable HGBI : forall (T : list (Q * A) -> Prop), (forall u, decidable (T u)) -> GBI T.
+Notation Itree := (@Itree Q A R).
 
 (*We start with two small lemmas about Add that will be useful later on.*)
 
@@ -432,17 +432,17 @@ Proof.
     now econstructor.
 Qed.
 
-(*We define is_fun_list, a predicate on lists u : seq (I * O)
+(*We define is_fun_list, a predicate on lists u : seq (Q * A)
  describing the fact that u is a finite approximation of some
- function f : I -> O.*)
+ function f : Q -> O.*)
 
-Definition is_fun_list (u : seq (I * O)) :=
+Definition is_fun_list (u : seq (Q * A)) :=
   forall i j j', List.In (i, j) u -> List.In (i, j') u -> j = j'.
 
-(*Without much surprise, [seq (i, f i) | i <- u] for some list u : seq I
+(*Without much surprise, [seq (i, f i) | q <- u] for some list u : seq I
  is a finite approximation of some function.*)
 
-Lemma is_fun_map (u : seq I) (f : I -> O) :
+Lemma is_fun_map (u : seq Q) (f : Q -> A) :
   is_fun_list [seq (i, f i) | i <- u].
 Proof.
   have aux: forall i j, List.In (i, j) [seq (i, f i) | i <- u] -> j = f i.
@@ -455,7 +455,7 @@ Qed.
 
 
 (*is_fun_list is downwards closed.*)
-Lemma is_fun_list_incl (u v : seq (I * O)) :
+Lemma is_fun_list_incl (u v : seq (Q * A)) :
   is_fun_list v ->
   List.incl u v ->
   is_fun_list u.
@@ -465,7 +465,7 @@ Proof.
 Qed.
 
 (*We can concatenate two finite approximations if their domains are disjoint.*)
-Lemma is_fun_cat_notin_dom (u v : seq (I * O))
+Lemma is_fun_cat_notin_dom (u v : seq (Q * A))
   (Hu : is_fun_list u)
   (Hv : is_fun_list v)
   (Hyp : forall i, ~ (List.In i (map fst u)) \/ ~ (List.In i (map fst v))) :
@@ -498,10 +498,10 @@ Qed.
   
 (*Some lemmas about adding elements at the beginning or the end 
  of some finite approximation u.*)  
-Lemma is_fun_cons_notin_dom (u : seq (I * O)) (i : I) (o : O)
+Lemma is_fun_cons_notin_dom (u : seq (Q * A)) (q : Q) (a : A)
   (Hu : is_fun_list u)
-  (H : ~ (List.In i (map fst u))) :
-  is_fun_list ((i,o) :: u).
+  (H : ~ (List.In q (map fst u))) :
+  is_fun_list ((q,a) :: u).
 Proof.
   rewrite - cat1s ; apply is_fun_cat_notin_dom ; [ | assumption | ].
   { intros i' j j' Hinj Hinj' ; cbn in *.
@@ -509,14 +509,14 @@ Proof.
     destruct Hinj' as [Heq' | ] ; [ inversion Heq' ; now subst | now exfalso].
   }
   intros i'.
-  case: (@eqP I i i') ; [intros Heq ; subst ; now right | intros Hnoteq ; left].
+  case: (@eqP Q q i') ; [intros Heq ; subst ; now right | intros Hnoteq ; left].
   cbn ; intros [Heq | Hfalse] ; [ now apply Hnoteq | assumption].
 Qed.
 
-Lemma is_fun_rcons_notin_dom (u : seq (I * O)) (i : I) (o : O)
+Lemma is_fun_rcons_notin_dom (u : seq (Q * A)) (q : Q) (a : A)
   (Hu : is_fun_list u)
-  (H : ~ (List.In i (map fst u))) :
-  is_fun_list (rcons u (i,o)).
+  (H : ~ (List.In q (map fst u))) :
+  is_fun_list (rcons u (q,a)).
 Proof.
   rewrite - cats1 ; apply is_fun_cat_notin_dom ; [ assumption | | ].
   { intros i' j j' Hinj Hinj' ; cbn in *.
@@ -524,42 +524,42 @@ Proof.
     destruct Hinj' as [Heq' | ] ; [ inversion Heq' ; now subst | now exfalso].
   }
   intros i'.
-  case: (@eqP I i i') ; [intros Heq ; subst ; now left | intros Hnoteq ; right].
+  case: (@eqP Q q i') ; [intros Heq ; subst ; now left | intros Hnoteq ; right].
   cbn ; intros [Heq | Hfalse] ; [ now apply Hnoteq | assumption].
 Qed.  
     
 (*Since we have finite approximations of functions,
  we can consider them as partial functions, through eval_list.*)
-Fixpoint eval_list (u : seq (I * O)) (i : I) : option O :=
+Fixpoint eval_list (u : seq (Q * A)) (q : Q) : option A :=
   match u with
   | nil => None
-  | (i', o') :: v => if i == i' then Some o' else eval_list v i
+  | (q', o') :: v => if q == q' then Some o' else eval_list v q
   end.
 
 (*Some lemmas about eval_list.*)
-Lemma eval_list_In u i o :
-  eval_list u i = Some o ->
-  List.In (i, o) u.
+Lemma eval_list_In u q a :
+  eval_list u q = Some a ->
+  List.In (q, a) u.
 Proof.
-  revert i o ; induction u as [ | [i' o'] v IHv] ; intros i o Heq ; cbn in *.
+  revert q a ; induction u as [ | [i' o'] v IHv] ; intros q a Heq ; cbn in *.
   { now inversion Heq. }
-  case (@eqP I i i') ; [intros Heqi ; subst ; left | intros Hnoteqi].
+  case (@eqP Q q i') ; [intros Heqi ; subst ; left | intros Hnoteqi].
   { erewrite eq_refl in Heq ; inversion Heq  ; now subst. }
-  eapply (introF (b:= i == i') eqP) in Hnoteqi.
+  eapply (introF (b:= q == i') eqP) in Hnoteqi.
   rewrite Hnoteqi in Heq.
   apply IHv in Heq ; now right.
 Qed.
 
   
-Lemma In_eval_list u i o :
+Lemma In_eval_list u q a :
   is_fun_list u ->
-  List.In (i, o) u ->
-  eval_list u i = Some o.
+  List.In (q, a) u ->
+  eval_list u q = Some a.
 Proof.
-  revert i o ; induction u as [ | [i' o'] v IHv] ; intros i o Hfun Hin ; cbn in *.
+  revert q a ; induction u as [ | [i' o'] v IHv] ; intros q a Hfun Hin ; cbn in *.
   { now inversion Hin. }
   destruct Hin as [Heq | Hin] ; [inversion Heq ; subst ; now rewrite eq_refl | ].
-  case (@eqP I i i') ; [intros Heq ; subst | intros Hnoteq].
+  case (@eqP Q q i') ; [intros Heq ; subst | intros Hnoteq].
   { f_equal.
     eapply Hfun ; [left ; reflexivity | now right ].
   }
@@ -569,23 +569,23 @@ Proof.
 Qed.
 
 
-Lemma eval_list_In_is_fun u i o :
+Lemma eval_list_In_is_fun u q a :
   is_fun_list u ->
-  eval_list u i = Some o ->
-  is_fun_list (u ++ [:: (i, o)]).
+  eval_list u q = Some a ->
+  is_fun_list (u ++ [:: (q, a)]).
 Proof.
-  intros Hfun Heq q a a' Hina Hina'. 
-  apply List.in_app_or in Hina, Hina'.
-  destruct Hina as [Hina | Heqa].
-  2:{ destruct Heqa as [Heqa | Hfalse] ; [ inversion Heqa ; clear Heqa ; subst | now inversion Hfalse].
-      destruct Hina' as [Hina' | Heqa']; [ apply In_eval_list in Hina' ; [ | assumption] | ].
-      2:{ destruct Heqa' as [Heqa' | Hfalse] ; [ inversion Heqa' ; now subst | now inversion Hfalse]. }
-      rewrite Heq in Hina' ; now inversion Hina'.
+  intros Hfun Heq q' a' a'' Hina' Hina''. 
+  apply List.in_app_or in Hina', Hina''.
+  destruct Hina' as [Hina' | Heqa'].
+  2:{ destruct Heqa' as [Heqa' | Hfalse] ; [ inversion Heqa' ; clear Heqa' ; subst | now inversion Hfalse].
+      destruct Hina'' as [Hina'' | Heqa'']; [ apply In_eval_list in Hina'' ; [ | assumption] | ].
+      2:{ destruct Heqa'' as [Heqa'' | Hfalse] ; [ inversion Heqa'' ; now subst | now inversion Hfalse]. }
+      rewrite Heq in Hina'' ; now inversion Hina''.
   }
-  destruct Hina' as [Hina' | Heqa'] ; [eapply Hfun ; now eauto | ].
-  destruct Heqa' as [Heqa' | Hfalse] ; [ inversion Heqa' ; subst | now inversion Hfalse].
-  apply In_eval_list in Hina ; [ | assumption].
-  rewrite Heq in Hina ; now inversion Hina.
+  destruct Hina'' as [Hina'' | Heqa''] ; [eapply Hfun ; now eauto | ].
+  destruct Heqa'' as [Heqa'' | Hfalse] ; [ inversion Heqa'' ; subst | now inversion Hfalse].
+  apply In_eval_list in Hina' ; [ | assumption].
+  rewrite Heq in Hina' ; now inversion Hina'.
 Qed.  
     
             
@@ -594,22 +594,22 @@ Lemma eval_list_notin u q :
   eval_list u q = None ->
   ~ List.In q [seq i.1 | i <- u].
 Proof.
-  revert q ; induction u as [ | [i' o'] v IHv] ; intros i Heq Hin ; [assumption | ].
+  revert q ; induction u as [ | [q' o'] v IHv] ; intros q Heq Hin ; [assumption | ].
   cbn in * ; destruct Hin as [Heq' | Hin] ; [subst | ].
   { rewrite eq_refl in Heq ; now inversion Heq. }
   eapply IHv ; [ | eassumption].
-  destruct (i == i') ; [now inversion Heq | assumption].
+  destruct (q == q') ; [now inversion Heq | assumption].
 Qed.
 
-Lemma eval_list_none_fun u q o :
+Lemma eval_list_none_fun u q a :
   is_fun_list u ->
   eval_list u q = None ->
-  is_fun_list (u ++ [:: (q,o)]).
+  is_fun_list (u ++ [:: (q,a)]).
 Proof.
   intros Hfun Hnone ; eapply is_fun_cat_notin_dom ; [assumption | | ].
   -  intros x y y' [Hyp1 | Hyp1] [Hyp2 | Hyp2] ; inversion Hyp1 ; inversion Hyp2 ; now subst.
   - intros i.
-    destruct (@eqP I q i) as [Heq | Hnoteq] ; [ subst ; left | ].
+    destruct (@eqP Q q i) as [Heq | Hnoteq] ; [ subst ; left | ].
     + now apply eval_list_notin.
     + cbn ; right ; intros [Hyp | Hyp] ; now auto. 
 Qed.      
@@ -630,34 +630,34 @@ Proof.
     intros Heq ; now eapply IHu ; eauto.
 Qed.
 
-Lemma eval_list_monotone (u v : seq (I * O)) (i : I) (o : O) :
+Lemma eval_list_monotone (u v : seq (Q * A)) (q : Q) (a : A) :
   is_fun_list v ->
   List.incl u v ->
-  eval_list u i = Some o ->
-  eval_list v i = Some o.
+  eval_list u q = Some a ->
+  eval_list v q = Some a.
 Proof.
   intros Hfun Hincl Heq.
   apply In_eval_list ; [assumption | ].
   apply Hincl ; now apply eval_list_In in Heq.
 Qed.
 
-Lemma eval_list_incl_none (u v : seq (I * O)) (i : I):
+Lemma eval_list_incl_none (u v : seq (Q * A)) (q : Q):
   is_fun_list v ->
   List.incl u v ->
-  eval_list v i = None ->
-  eval_list u i = None.
+  eval_list v q = None ->
+  eval_list u q = None.
 Proof.
   intros Hfun Hincl Heq.
-  remember (eval_list u i) as aux ; destruct aux as [o | ] ; [ | reflexivity].
+  remember (eval_list u q) as aux ; destruct aux as [o | ] ; [ | reflexivity].
   erewrite (eval_list_monotone Hfun Hincl) in Heq ; [eassumption | eauto].
 Qed.
 
-Lemma eval_list_map_In (alpha : I -> O) :
-  forall u i o, eval_list [seq (i, alpha i) | i <- u] i = Some o -> o = alpha i.
+Lemma eval_list_map_In (alpha : Q -> A) :
+  forall u q a, eval_list [seq (i, alpha i) | i <- u] q = Some a -> a = alpha q.
 Proof.
-  intros u i o H.
-  revert H ; induction u ; cbn ; intros ; [now inversion H | ].
-  destruct (@eqP I i a) ; subst ; [now inversion H | ].
+  intros u q a H.
+  revert H ; induction u as [ | x u IHu] ; cbn ; intros ; [now inversion H | ].
+  destruct (@eqP Q q x) ; subst ; [now inversion H | ].
   now apply IHu.
 Qed.
 
@@ -668,16 +668,16 @@ Qed.
  with a finite approximation of a function, represented via eval_list.*)
 
 
-Fixpoint ieval_finapp (i : Itree) (l : seq (I * O)) (n : nat) : result :=
+Fixpoint ieval_finapp (i : Itree) (l : seq (Q * A)) (n : nat) : result :=
   match n with
   | 0 => match i with
-         | ret o => output o
+         | ret r => output r
          | vis q k => ask q
          end
   | S n => match i with
-           | ret o => output o
+           | ret r => output r
            | vis q k => match (eval_list l q) with
-                        | Some o => ieval_finapp (k o) l n
+                        | Some a => ieval_finapp (k a) l n
                         | None => ask q
                         end
            end
@@ -687,29 +687,29 @@ Fixpoint ieval_finapp (i : Itree) (l : seq (I * O)) (n : nat) : result :=
 (*We now prove some technical lemmas, showing that 
  ieval_finapp is monotone in different ways.*)
 Lemma ieval_finapp_monotone_output_list
-  (tau : Itree) (u v: seq (I * O)) (n : nat) (a : A) :
+  (tau : Itree) (u v: seq (Q * A)) (n : nat) (r : R) :
   is_fun_list v ->
   List.incl u v ->
-  ieval_finapp tau u n = output a ->
-  ieval_finapp tau v n = output a.
+  ieval_finapp tau u n = output r ->
+  ieval_finapp tau v n = output r.
 Proof.
-  revert tau u v a; induction n as [| n IHn] ; intros * Hfun Hincl Heq ; [assumption| ].
-  cbn in * ; destruct tau as [r | q k] ; [assumption | ].
-  remember (eval_list u q) as ev ; destruct ev as [r' | ] ; [| now inversion Heq ].
+  revert tau u v r; induction n as [| n IHn] ; intros * Hfun Hincl Heq ; [assumption| ].
+  cbn in * ; destruct tau as [r' | q k] ; [assumption | ].
+  remember (eval_list u q) as ev ; destruct ev as [r'' | ] ; [| now inversion Heq ].
   erewrite eval_list_monotone ; eauto.
 Qed.
 
 Lemma ieval_finapp_monotone_output_fuel
-  (tau : Itree) (u: seq (I * O)) (n m : nat) (a : A) :
-  ieval_finapp tau u n = output a ->
-  ieval_finapp tau u (n + m) = output a.
+  (tau : Itree) (u: seq (Q * A)) (n m : nat) (r : R) :
+  ieval_finapp tau u n = output r ->
+  ieval_finapp tau u (n + m) = output r.
 Proof.
   elim: n tau => [ | n ihn] [aa <- | q k] //=; first by case: m.
-  by case: (eval_list u q) => // o /ihn.
+  by case: (eval_list u q) => // a /ihn.
 Qed.
   
 Lemma ieval_finapp_monotone_ask_list
-  (tau : Itree) (u v: seq (I * O)) (n : nat) (q : I) :
+  (tau : Itree) (u v: seq (Q * A)) (n : nat) (q : Q) :
   is_fun_list v ->
   List.incl u v ->
   eval_list v q = None ->
@@ -730,7 +730,7 @@ Qed.
 
 
 Lemma ieval_finapp_monotone_ask_fuel
-  (tau : Itree) (u : seq (I * O)) (n m : nat) (q : I) :
+  (tau : Itree) (u : seq (Q * A)) (n m : nat) (q : Q) :
   is_fun_list u ->
   eval_list u q = None ->
   ieval_finapp tau u n = ask q ->
@@ -742,7 +742,7 @@ Proof.
 Qed.
 
 Lemma ieval_finapp_monotone_ask_list_nomorefuel
-  (tau : Itree) (u v: seq (I * O)) (n : nat) (q : I) (a : O) :
+  (tau : Itree) (u v: seq (Q * A)) (n : nat) (q : Q) (a : A) :
   is_fun_list v ->
   List.incl u v ->
   eval_list u q = Some a ->
@@ -760,30 +760,30 @@ Qed.
 
 
 (*We define the trace of evaluation of an interaction tree.*)
-Fixpoint ieval_trace (i : Itree) (f : I -> O) (n : nat) : list I :=
+Fixpoint ieval_trace (i : Itree) (f : Q -> A) (n : nat) : list Q :=
   match n with
   | 0 => nil
   | S m => match i with
-           | ret o => nil
+           | ret a => nil
            | vis q k => q :: (ieval_trace (k (f q)) f m)
            end
   end.
 
-(*If we first evaluate an interaction tree i with a function f : I -> O and
+(*If we first evaluate an interaction tree i with a function f : Q -> A and
   reach an output, then we can evaluate i with a finite approximation
   built from the trace of the previous evaluation.
  This will be useful to go from ieval to ieval_finapp
  in the final theorem.*)
 
-Lemma ieval_finapp_trace tau f n a :
-  ieval tau f n = output a ->
+Lemma ieval_finapp_trace tau f n r :
+  ieval tau f n = output r ->
   ieval_finapp tau [seq (i, f i) | i <- ieval_trace tau f n] (size (ieval_trace tau f n)) =
-    output a.
+    output r.
 Proof.
   assert (aux := @is_fun_map (ieval_trace tau f n) f) ; revert aux.
   change (ieval_trace tau f n) with (nil ++ (ieval_trace tau f n)) at 1 2.
-  generalize (@nil I) as u.
-  revert f a tau ; induction n as [ | n IHn] ; intros * aux Heq.  
+  generalize (@nil Q) as u.
+  revert f r tau ; induction n as [ | n IHn] ; intros * aux Heq.  
   - cbn in * ; destruct tau ; now inversion Heq.
   - cbn in * ; destruct tau as [ | q k] ; [now inversion Heq | ].
     suff : eval_list [seq (i, f i) | i <- u ++ q :: ieval_trace (k (f q)) f n] q = Some (f q).
@@ -811,7 +811,7 @@ Proof.
         f_equal. 
         eapply ieval_output_unique; eauto. 
   }
-  pose (T:= fun (l : seq (I * O)) =>
+  pose (T:= fun (l : seq (Q * A)) =>
               exists a, ieval_finapp tau l (size l) = output a).
   have Help : ABbarred T.
   { intros alpha.
@@ -831,14 +831,14 @@ Abort.
   We will do so through several intermediate steps :
 
  - We will first define a predicate 
-      itree_indbarred : Itree -> seq (I * O)) -> Type 
+      itree_indbarred : Itree -> seq (Q * A)) -> Type 
    such that itree_indbarred tau nil implies
    {d : dialogue & forall alpha, exists n,
         ieval tau alpha n = output (deval d alpha)}.
    This will allow us to go from interaction trees to dialogue trees;
 
  - We will then define a predicate 
-      itree_indbarredP : Itree -> seq (I * O) -> Prop
+      itree_indbarredP : Itree -> seq (Q * A) -> Prop
    tailored to go through singleton elimination.
    We will then prove that 
       itree_indbarredP tau l -> itree_indbarred tau l,
@@ -871,10 +871,10 @@ Abort.
     because of the lack of fuel, and it allows us to change n with n.+1.
   - finally, itree_beta deals with the case when the computation is blocked
     because l does not contain the answer to some query q. In that case, we
-    branch over every possible answer a : A with l ++ [::(q, a)].
+    branch over every possible answer r : R with l ++ [::(q, a)].
  *)
 
-Inductive itree_indbarred (d : Itree) (l : seq (I * O)) (n : nat) : Type :=
+Inductive itree_indbarred (d : Itree) (l : seq (Q * A)) (n : nat) : Type :=
 | itree_eta r : is_fun_list l ->
                 ieval_finapp d l n = output r ->
                 itree_indbarred d l n
@@ -895,13 +895,13 @@ Inductive itree_indbarred (d : Itree) (l : seq (I * O)) (n : nat) : Type :=
 
 Lemma itree_indbarred_dialogue_aux
   (tau : Itree)
-  (l : list (I * O)) (n : nat)
+  (l : list (Q * A)) (n : nat)
   (Hyp : itree_indbarred tau l n) :
   {d : dialogue & forall alpha,
         l = map (fun i => (i, alpha i)) (map fst l) ->
         exists n, ieval tau alpha n = output (deval d alpha)}.
 Proof.
-  induction Hyp as [l n r Hfun Heval | l n i o Hfun Hask Hsome k [d IHd] |
+  induction Hyp as [l n r Hfun Heval | l n i a Hfun Hask Hsome k [d IHd] |
                      l n i Hfun Hask Hnone k IHk].
   - exists (eta r).
     intros alpha Heqalpha ; exists n ; cbn in *.
@@ -915,13 +915,13 @@ Proof.
     revert u tau H ; induction n ; cbn ; intros ; [assumption | ].
     destruct tau as [ | q k] ; [ assumption | ].
     remember (eval_list [seq (i, alpha i) | i <- u] q) as aux2.
-    destruct aux2 as [o | ] ; [ | now inversion H].
+    destruct aux2 as [a | ] ; [ | now inversion H].
     eapply IHn.
-    suff: o = alpha q by (intros Heq ; subst ; eassumption).
+    suff: a = alpha q by (intros Heq ; subst ; eassumption).
     eapply eval_list_map_In ; eauto.
   - exists d ; intros alpha Heqalpha.
     now apply (IHd alpha) ; clear IHd.
-  - exists (beta i (fun o => projT1 (IHk o))).
+  - exists (beta i (fun a => projT1 (IHk a))).
     intros alpha Heqalpha ; cbn in *.
     eapply (projT2 (IHk (alpha i))).
     do 2 rewrite map_cat ; now rewrite - Heqalpha.
@@ -947,7 +947,7 @@ Qed.
 
 Unset Elimination Schemes.
 
-Inductive itree_indbarredP (tau : Itree) (l: seq (I * O)) (n : nat) : Prop :=
+Inductive itree_indbarredP (tau : Itree) (l: seq (Q * A)) (n : nat) : Prop :=
 | itree_in : is_fun_list l ->
              ((exists q, ieval_finapp tau l n = ask q /\
                            eval_list l q = None /\
@@ -966,21 +966,21 @@ Set Elimination Schemes.
 
 Fixpoint itree_indbarredP_rect
   (tau : Itree)
-  (P : seq (I * O) -> nat -> Type)
-  (Hout : forall (l : seq (I * O)) (n : nat) (r : A) (Hfun : is_fun_list l)
+  (P : seq (Q * A) -> nat -> Type)
+  (Hout : forall (l : seq (Q * A)) (n : nat) (r : R) (Hfun : is_fun_list l)
                  (e : ieval_finapp tau l n = output r), 
       P l n)
-  (Hsucc : forall (l : seq (I * O)) (n : nat) (q : I) (a : O) (Hfun : is_fun_list l)
+  (Hsucc : forall (l : seq (Q * A)) (n : nat) (q : Q) (a : A) (Hfun : is_fun_list l)
                  (Heq : ieval_finapp tau l n = ask q)
                  (Hnone : eval_list l q = Some a)
                  (e : itree_indbarredP tau l n.+1),
       P l n.+1 -> P l n)
-  (Hask : forall (l : seq (I * O)) (n : nat) (q : I) (Hfun : is_fun_list l)
+  (Hask : forall (l : seq (Q * A)) (n : nat) (q : Q) (Hfun : is_fun_list l)
                  (Heq : ieval_finapp tau l n = ask q)
                  (Hnone : eval_list l q = None)
-                 (e : forall a : O, itree_indbarredP tau (l ++ [:: (q,a)]) n),
-      (forall a : O, P (l ++ [:: (q,a)]) n) -> P l n)
-  (l : seq (I * O)) (n : nat) (e : itree_indbarredP tau l n) : P l n.
+                 (e : forall a : A, itree_indbarredP tau (l ++ [:: (q,a)]) n),
+      (forall a : A, P (l ++ [:: (q,a)]) n) -> P l n)
+  (l : seq (Q * A)) (n : nat) (e : itree_indbarredP tau l n) : P l n.
 Proof.
   destruct e as [Hnodup Hq].
   remember (ieval_finapp tau l n) as aux.
@@ -996,7 +996,7 @@ Proof.
         rewrite Hnone in Heqaux2 ; now inversion Heqaux2.
       * inversion Heq' ; subst.
         rewrite Hq' in Heqaux2 ; inversion Heqaux2 ; now subst.
-    + assert (Hyp : forall a : O, itree_indbarredP tau (l ++ [:: (q, a)]) n); last first.
+    + assert (Hyp : forall a : A, itree_indbarredP tau (l ++ [:: (q, a)]) n); last first.
       { eapply (Hask l n q Hnodup) ; [now auto | now symmetry | assumption | ] ; intros a.
         apply (itree_indbarredP_rect tau P Hout Hsucc Hask) ; now apply Hyp.
       }
@@ -1015,28 +1015,28 @@ Defined.
 
 Lemma itree_indbarredP_ind
   (tau : Itree)
-  (P : seq (I * O) -> nat -> Prop)
-  (Hout : forall (l : seq (I * O)) (n : nat) (r : A) (Hfun : is_fun_list l)
+  (P : seq (Q * A) -> nat -> Prop)
+  (Hout : forall (l : seq (Q * A)) (n : nat) (r : R) (Hfun : is_fun_list l)
                  (e : ieval_finapp tau l n = output r), 
       P l n)
-  (Hsucc : forall (l : seq (I * O)) (n : nat) (q : I) (a : O) (Hfun : is_fun_list l)
+  (Hsucc : forall (l : seq (Q * A)) (n : nat) (q : Q) (a : A) (Hfun : is_fun_list l)
                  (Heq : ieval_finapp tau l n = ask q)
                  (Hnone : eval_list l q = Some a)
                  (e : itree_indbarredP tau l n.+1),
       P l n.+1 -> P l n)
-  (Hask : forall (l : seq (I * O)) (n : nat) (q : I) (Hfun : is_fun_list l)
+  (Hask : forall (l : seq (Q * A)) (n : nat) (q : Q) (Hfun : is_fun_list l)
                  (Heq : ieval_finapp tau l n = ask q)
                  (Hnone : eval_list l q = None)
-                 (e : forall a : O, itree_indbarredP tau (l ++ [:: (q,a)]) n),
-      (forall a : O, P (l ++ [:: (q,a)]) n) -> P l n)
-  (l : seq (I * O)) (n : nat) (e : itree_indbarredP tau l n) : P l n.
+                 (e : forall a : A, itree_indbarredP tau (l ++ [:: (q,a)]) n),
+      (forall a : A, P (l ++ [:: (q,a)]) n) -> P l n)
+  (l : seq (Q * A)) (n : nat) (e : itree_indbarredP tau l n) : P l n.
 Proof.
   eapply itree_indbarredP_rect ; eauto.
 Qed.  
 
 
 (*itree_indbarredP indeed implies itree_indbarred.*)
-Lemma itree_indbarred_spec (tau : Itree) (l : seq (I * O)) (n : nat) :
+Lemma itree_indbarred_spec (tau : Itree) (l : seq (Q * A)) (n : nat) :
   itree_indbarredP tau l n ->
   itree_indbarred tau l n.
 Proof.
@@ -1089,27 +1089,27 @@ Lemma itree_indbarredP_change_fuel tau u n m
   (Hu : itree_indbarredP tau u n) :
   itree_indbarredP tau u m.
 Proof.
-  revert m ; induction Hu as [u n a Hnodup Heqa | u n q o Hfunu Heq Hsome _ IHu |
+  revert m ; induction Hu as [u n r Hnodup Heqr | u n q r Hfunu Heq Hsome _ IHu |
                                u n q Hfunu Heq Hnoneu _ IHu] ; intros m.
   - econstructor ; [ assumption | ].
     case: (leqP n m) ; intros Hinf ; [ | apply leqW in Hinf ; cbn in Hinf];
       apply subnKC in Hinf.
-    + rewrite - Hinf; right ; left ; exists a.
+    + rewrite - Hinf; right ; left ; exists r.
       now eapply ieval_finapp_monotone_output_fuel.
     + revert Hinf; rewrite subSS; generalize (n - m) as k.
-      intros k; revert m n Heqa ; induction k ; intros m n Heqa Hinf.
+      intros k; revert m n Heqr ; induction k ; intros m n Heqa Hinf.
       * suff -> : m = n by eauto.
         lia.
       * remember (ieval_finapp tau u m) as aux eqn: Heqaux.
-        destruct aux as [q | r] ; [ | now eauto].
+        destruct aux as [q | ] ; [ | now eauto].
         right ; right.
-        remember (eval_list u q) as aux2 eqn: Heqaux2; destruct aux2 as [o | ].
-        -- exists q, o ; split ; [auto | split ; [auto | ] ].
+        remember (eval_list u q) as aux2 eqn: Heqaux2; destruct aux2 as [a | ].
+        -- exists q, a ; split ; [auto | split ; [auto | ] ].
            econstructor ; [ assumption | ].
            eapply (IHk m.+1) ; [eauto | now rewrite addSn - addnS].
         -- symmetry in Heqaux2. 
-            have {Hinf} Hinf : n = m + k.+1 by lia.
-            by move: Heqa; rewrite Hinf (ieval_finapp_monotone_ask_fuel _ _ Heqaux2).
+           have {Hinf} Hinf : n = m + k.+1 by lia.
+           by move: Heqa; rewrite Hinf (ieval_finapp_monotone_ask_fuel _ _ Heqaux2).
   - now eapply IHu.
   - econstructor ; [ assumption | ].
     case: (leqP n m) ; intros Hinf ; [ | apply leqW in Hinf ; cbn in Hinf] ;
@@ -1122,8 +1122,8 @@ Proof.
         lia. 
       * remember (ieval_finapp tau u m) as aux eqn: Heqaux.
         destruct aux as [q' | r] ; [ | now eauto].
-        remember (eval_list u q') as aux2 eqn: Heqaux2; destruct aux2 as [o | ].
-        -- right ; right ; exists q', o ; split ; [auto | split ; [auto | ] ].
+        remember (eval_list u q') as aux2 eqn: Heqaux2; destruct aux2 as [a | ].
+        -- right ; right ; exists q', a ; split ; [auto | split ; [auto | ] ].
            econstructor ; [ assumption | ].
            eapply (IHk m.+1) ; [eauto | now rewrite addSn - addnS].
         -- symmetry in Heqaux2.
@@ -1146,8 +1146,8 @@ Proof.
     destruct tau ; eauto ; inversion Hasku ; subst.
     now erewrite Heval, eval_list_monotone ; eauto.
   - cbn in *.
-    destruct tau as [ | i k ]; eauto.
-    remember (eval_list u i) as aux2 ; destruct aux2 as [ o | ].
+    destruct tau as [ | q' k ]; eauto.
+    remember (eval_list u q') as aux2 ; destruct aux2 as [ a' | ].
     2:{ inversion Hasku ; subst.
         rewrite Heval in Heqaux2 ; now inversion Heqaux2.
     }
@@ -1167,11 +1167,11 @@ Qed.
  of an element to the list u anywhere in the list, and not only at the end.
  This is the longest and most technical proof of the file.*)
 
-Lemma Add_induction_step tau (u v : seq (I * O)) (n : nat) (i : I) (o : O) :
-  eval_list u i = None ->
-  List.Add (i, o) u v ->
+Lemma Add_induction_step tau (u v : seq (Q * A)) (n : nat) (q : Q) (a : A) :
+  eval_list u q = None ->
+  List.Add (q, a) u v ->
   (itree_indbarredP tau v n) ->
-  (forall a w, List.Add (i, a) u w ->
+  (forall a w, List.Add (q, a) u w ->
                itree_indbarredP tau w n) ->
   itree_indbarredP tau u n.
 Proof.
@@ -1179,11 +1179,11 @@ Proof.
   have Hincl : List.incl u v.
   { intros x Hin ; eapply List.Add_in ; [eassumption | now right]. }
   revert u Hincl Hnone Hadd Hyp.
-  induction Hv as [l n a Hnodup Heqa | l n q o' Hfunl Heq Hsome k IHk |
-                    l n q Hfunl Heq Hnonel k IHk] ; intros.
+  induction Hv as [l n r Hnodup Heqa | l n q' a' Hfunl Heq Hsome k IHk |
+                    l n q' Hfunl Heq Hnonel k IHk] ; intros.
   all: have Hfunu : is_fun_list u by (eapply is_fun_list_incl ; eassumption). 
   - remember (ieval_finapp tau u n) as aux.
-    destruct aux as [q' | r] ; [ | econstructor ; now eauto].
+    destruct aux as [q' | r'] ; [ | econstructor ; now eauto].
     remember (eval_list u q') as aux2 ; destruct aux2 as [a' | ].
     + econstructor ; [assumption | right ; right ; exists q', a' ].
       split ; [now auto | split ; [now auto | ] ].
@@ -1191,16 +1191,16 @@ Proof.
       eapply (ieval_finapp_monotone_ask_list_nomorefuel (v := l)) in Heqaux ;
         eauto.
       rewrite Heqaux in Heqa ; now inversion Heqa.
-    + destruct (@eqP I q' i) as [Heq' | Hnoteq] ; [subst | ].
+    + destruct (@eqP Q q' q) as [Heq' | Hnoteq] ; [subst | ].
       * econstructor ; [assumption | ].
-        left ; exists i ; split ; [auto | split ; [assumption | ] ].
+        left ; exists q ; split ; [auto | split ; [assumption | ] ].
         intros a' ; apply (Hyp a').
         rewrite cats1 ; now apply Add_rcons.
       * exfalso.
         suff: ieval_finapp tau l n = ask q'.
         { intros Heq' ; rewrite Heq' in Heqa ; now inversion Heqa. }
         eapply ieval_finapp_monotone_ask_list ; eauto.
-        eapply eval_list_incl_none with (u ++ [:: (i, o)]) ; eauto.
+        eapply eval_list_incl_none with (u ++ [:: (q, a)]) ; eauto.
         -- now apply eval_list_none_fun.
         -- intros x Hinx.
            eapply (List.Add_in Hadd) in Hinx.
@@ -1208,23 +1208,23 @@ Proof.
         -- apply eval_list_notin_cat ; [now auto | cbn].
            intros [Heqi | Hfalse] ; auto.
   - remember (ieval_finapp tau u n) as aux.
-    destruct aux as [q' | r] ; [ | econstructor ; now eauto].
-    remember (eval_list u q') as aux2 ; destruct aux2 as [a | ].
+    destruct aux as [q'' | r] ; [ | econstructor ; now eauto].
+    remember (eval_list u q'') as aux2 ; destruct aux2 as [a'' | ].
     + econstructor ; [ auto | ].
-      right ; right ; exists q',a.
+      right ; right ; exists q'',a''.
       split ; [now auto | split ; [now auto | ] ].
       eapply IHk ; eauto.
-      intros a' w Haddw ; eapply itree_indbarredP_change_fuel ; eauto.
-    + destruct (@eqP I q' i) as [Heqi | Hnoteq] ; [subst | exfalso ].
+      intros a''' w Haddw ; eapply itree_indbarredP_change_fuel ; eauto.
+    + destruct (@eqP Q q'' q) as [Heqi | Hnoteq] ; [subst | exfalso ].
       * econstructor ; [assumption | left].
-        exists i ; split ; [auto | split ; [auto | ] ].
-        intros a ; apply (Hyp a).
+        exists q ; split ; [auto | split ; [auto | ] ].
+        intros a'' ; apply (Hyp a'').
         rewrite cats1 ; now apply Add_rcons.
-      * suff: eval_list l q' = None ; [ intros auxl | ].
-        -- suff: ask (R := A) q = ask q' by
+      * suff: eval_list l q'' = None ; [ intros auxl | ].
+        -- suff: ask (R := R) q' = ask q'' by
              (intros H ; inversion H ; subst ; rewrite auxl in Hsome ; inversion Hsome).
            rewrite - Heq ; now eapply ieval_finapp_monotone_ask_list ; eauto.
-        -- eapply eval_list_incl_none with (u ++ [::(i, o)]).
+        -- eapply eval_list_incl_none with (u ++ [::(q, a)]).
            ++ now apply eval_list_none_fun.
            ++ intros x Hinx ; eapply (List.Add_in Hadd) in Hinx.
               destruct Hinx as [Hinx | Hinx] ; eapply List.in_or_app ; [| now left].
@@ -1232,38 +1232,38 @@ Proof.
            ++ eapply eval_list_notin_cat ; auto ; cbn.
               intros [Hin | Hin] ; inversion Hin ; now auto.
   - remember (ieval_finapp tau u n) as aux.
-    destruct aux as [q' | r].
+    destruct aux as [q'' | r].
     2: econstructor ; [ assumption | right ; left ; now exists r ].
-    remember (eval_list u q') as aux2 ; destruct aux2 as [a | ].
+    remember (eval_list u q'') as aux2 ; destruct aux2 as [a' | ].
     + econstructor ; [ assumption | ].
-      right ; right ; exists q',a.
+      right ; right ; exists q'',a'.
       split ; [now auto | split ; [now auto | ] ].
       remember (ieval_finapp tau u n.+1) as aux3.
-      destruct aux3 as [q'' | r] ; [ | econstructor ; now eauto].
-      have Heqq: q'' = q ; [ | subst].
-      { suff: ask (R := A) q'' = ask q by (intros H ; inversion H).
+      destruct aux3 as [q''' | r] ; [ | econstructor ; now eauto].
+      have Heqq: q''' = q' ; [ | subst].
+      { suff: ask (R := R) q''' = ask q' by (intros H ; inversion H).
         eapply (ieval_finapp_monotone_ask_fuel 1) in Heq ; eauto.
         rewrite Heqaux3 - Heq addn1.
         eapply ieval_finapp_one_step_fuel ; eauto.
       }
       econstructor ; [assumption | left].
-      exists q ; split ; [auto | split ; [now apply eval_list_incl_none with l | ] ].
-      intros o'.
-      have Hnoneu: eval_list (u ++ [:: (q, o')]) i = None.
+      exists q' ; split ; [auto | split ; [now apply eval_list_incl_none with l | ] ].
+      intros a''.
+      have Hnoneu: eval_list (u ++ [:: (q', a'')]) q = None.
       { apply eval_list_notin_cat ; [assumption | cbn].
         intros [Heqi | Hfalse] ; [ subst | now inversion Hfalse].
-        suff: eval_list l i = Some o by (intros H ; rewrite Hnonel in H ; now inversion H).
+        suff: eval_list l q = Some a by (intros H ; rewrite Hnonel in H ; now inversion H).
         apply (In_eval_list Hfunl), (List.Add_in Hadd) ; now left.
       }
       eapply itree_indbarredP_change_fuel with n.
-      eapply (IHk o') ; eauto.
+      eapply (IHk a'') ; eauto.
       -- apply List.incl_app ; [now apply List.incl_appl | ].
          apply List.incl_appr, List.incl_refl.
       -- now apply Add_cat.
-      -- intros a' w Haddw.
-         eapply itree_indbarredP_monotone with ((i,a') :: u).
-         ** now apply Hyp with a', List.Add_head.
-         ** eapply is_fun_list_incl with ((u ++ [:: (q, o')]) ++ [::(i, a')]).
+      -- intros a''' w Haddw.
+         eapply itree_indbarredP_monotone with ((q,a''') :: u).
+         ** now apply Hyp with a''', List.Add_head.
+         ** eapply is_fun_list_incl with ((u ++ [:: (q', a'')]) ++ [::(q, a''')]).
             { apply eval_list_none_fun ; auto ; apply eval_list_none_fun ; auto.
               apply eval_list_incl_none with l ; eauto.
             }
@@ -1274,22 +1274,22 @@ Proof.
          ** intros x Hinx.
             eapply (List.Add_in Haddw) ; rewrite - cat_cons.
             apply List.in_or_app ; now left.
-    + suff: q' = i \/ (q' <> i /\ q' = q) ; [intros [Heqi | [Hnoteq Heqq] ] ; subst | ].
+    + suff: q'' = q \/ (q'' <> q /\ q'' = q') ; [intros [Heqi | [Hnoteq Heqq] ] ; subst | ].
       * econstructor ; [assumption | ].
-        left ; exists i ; split ; [auto | split ; [ auto | intros o'] ].
+        left ; exists q ; split ; [auto | split ; [ auto | intros o'] ].
         apply (Hyp o') ; rewrite cats1 ; now apply Add_rcons.
       * econstructor ; [assumption | ].
-        left ; exists q ; split ; [auto | split ; [ auto | ] ].
-        intros o' ; eapply (IHk o').
+        left ; exists q' ; split ; [auto | split ; [ auto | ] ].
+        intros a' ; eapply (IHk a').
         -- apply List.incl_app ; [now apply List.incl_appl | ].
            apply List.incl_appr, List.incl_refl.
         -- apply eval_list_notin_cat ; [assumption | ].
            cbn ; intros [Heqi | Hfalse] ; subst ; now auto.
         -- now apply Add_cat.
-        -- intros a w Haddw.
-           eapply itree_indbarredP_monotone with ((i,a) :: u).
-           ++ now apply Hyp with a, List.Add_head.
-           ++ eapply is_fun_list_incl with ((u ++ [:: (q, o')]) ++ [::(i, a)]).
+        -- intros a'' w Haddw.
+           eapply itree_indbarredP_monotone with ((q,a'') :: u).
+           ++ now apply Hyp with a'', List.Add_head.
+           ++ eapply is_fun_list_incl with ((u ++ [:: (q', a')]) ++ [::(q, a'')]).
               { apply eval_list_none_fun ; auto ; [ now apply eval_list_none_fun | ].
                 apply eval_list_notin_cat ; auto ; cbn.
                 intros [Heqi | Hfalse] ; [now subst | now inversion Hfalse].
@@ -1301,22 +1301,22 @@ Proof.
            ++ intros x Hinx.
               eapply (List.Add_in Haddw) ; rewrite - cat_cons.
               apply List.in_or_app ; now left.
-      * destruct (@eqP I q' i) as [ | Hnoteq] ; [now left | right ; split ; auto].
-        suff: ask (R := A) q = ask q' by (inversion 1).
+      * destruct (@eqP Q q'' q) as [ | Hnoteq] ; [now left | right ; split ; auto].
+        suff: ask (R := R) q' = ask q'' by (inversion 1).
         erewrite <- Heq ; eauto.
         eapply ieval_finapp_monotone_ask_list ; eauto.
-        eapply eval_list_incl_none with ((i,o) :: u).
+        eapply eval_list_incl_none with ((q,a) :: u).
         -- eapply is_fun_cons_notin_dom ; eauto ; now apply eval_list_notin.
         -- intros x Hinx ; now apply (List.Add_in Hadd) in Hinx.
         -- cbn ; erewrite ifN_eq ; [now auto | ].
-           now eapply contra_not_neq with (q' = i).
+           now eapply contra_not_neq with (q'' = q).
 Qed.
 
 (*The bulk of the proof is done, we now need to show that indbarred implies itree_indbarredP.
-*We first prove an auxiliary lemma assuming that O is inhabited.*)
+*We first prove an auxiliary lemma assuming that A is inhabited.*)
 
 Lemma indbarred_fun_list_itree_indbarredP_aux
-  tau (l : seq (I * O)) (o : O) :
+  tau (l : seq (Q * A)) (a : A) :
   indbarred
     (fun u => exists a, ieval_finapp tau u (size u) = output a) l ->
   is_fun_list l ->
@@ -1327,7 +1327,7 @@ Proof.
   - eapply itree_indbarredP_change_fuel with (size v) ; eauto.
     econstructor ; [eassumption | right ; left ; exists r].
     now eapply ieval_finapp_monotone_output_list ; eauto.
-  - unshelve eapply Add_induction_step with (v ++ [::(q,o)]) q o.
+  - unshelve eapply Add_induction_step with (v ++ [::(q,a)]) q a.
     + rewrite - (cat0s v) ; apply eval_list_notin_cat; auto.
     + rewrite cats1 ; now apply Add_rcons.
     + eapply itree_indbarredP_change_fuel, IHk.
@@ -1348,10 +1348,10 @@ Proof.
 Qed.
 
 
-(* We now prove the real lemma by destructing the list l to retrieve o : O.*)
+(* We now prove the real lemma by destructing the list l to retrieve a : O.*)
 
 
-Lemma indbarred_fun_list_itree_indbarredP tau (l : seq (I * O)) :
+Lemma indbarred_fun_list_itree_indbarredP tau (l : seq (Q * A)) :
   indbarred
     (fun u => exists a, ieval_finapp tau u (size u) = output a) l ->
   is_fun_list l ->
@@ -1359,13 +1359,13 @@ Lemma indbarred_fun_list_itree_indbarredP tau (l : seq (I * O)) :
 Proof.
   destruct l as [ | [i o] l] ; intros Hyp Hfun.
   2: now eapply indbarred_fun_list_itree_indbarredP_aux ; eauto.
-  econstructor ; [intros i j K H ; inversion H | cbn ].
+  econstructor ; [intros q j K H ; inversion H | cbn ].
   destruct tau as [r | q k] ; [eauto | ].
   left ; exists q ; split ; [auto | split ; [auto | ] ].
   intros o.
   eapply itree_indbarredP_monotone with nil.
   - now eapply indbarred_fun_list_itree_indbarredP_aux.
-  - intros i a a' [Ha | Ha] [Ha' | Ha'] ; inversion Ha ; inversion Ha' ; now subst.
+  - intros q' a a' [Ha | Ha] [Ha' | Ha'] ; inversion Ha ; inversion Ha' ; now subst.
   - now apply List.incl_nil_l.
 Qed.
   
@@ -1377,7 +1377,7 @@ Theorem GBI_GCI F :
   dialogue_cont F.
 Proof.
   intros [tau HF].
-  pose (T:= fun (l : seq (I * O)) =>
+  pose (T:= fun (l : seq (Q * A)) =>
               exists a, ieval_finapp tau l (size l) = output a).
   have Help : ABbarred T.
   { intros alpha.
@@ -1386,7 +1386,7 @@ Proof.
     rewrite size_map.
     now eapply ieval_finapp_trace.
   }
-  have fun_nil : is_fun_list (@nil (I * O)) by (intros i j j' Hinj ; inversion Hinj).
+  have fun_nil : is_fun_list (@nil (Q * A)) by (intros q j j' Hinj ; inversion Hinj).
   apply HGBI in Help. 
   2:{ unfold T ; clear.
       intros u ; destruct (ieval_finapp tau u (size u)) ; [right | left] ; eauto.
@@ -1430,7 +1430,7 @@ Section ContinuousBarInduction.
 
   Fixpoint beval_list (b : @Btree A R) (l : seq A) : option R :=
     match b with
-    | spit o => Some o
+    | spit r => Some r
     | bite k => match l with
                 | nil => None
                 | x :: q => beval_list (k x) q
