@@ -153,7 +153,8 @@ Lemma ieval_output_unique tau f n1 n2 r1 r2 :
   ieval tau f n2 = output r2 ->
   r1 = r2.
 Proof.
-  elim: n1 n2 tau => [| n1 ihn1] [| n2] /= [q | r i] // [] e1 [] e2; subst => //.
+  elim: n1 n2 tau => [| n1 ihn1] [| n2] /= [q | r i] // e1 e2 ;
+                     inversion e1 ; inversion e2 ; subst => //.
   by apply: ihn1; eauto.
 Qed.
 
@@ -998,7 +999,7 @@ Proof.
   { apply: MmodM.
     set l := M _.
     apply/eq_in_map=> x hx.
-    have {hx} hx : x < m.+1 by rewrite ltnS /m; apply: leq_bigmax_seq.
+    have {} hx : x < m.+1 by rewrite ltnS /m; apply: leq_bigmax_seq.
     by rewrite /from_pref (nth_map 0) ?size_iota // nth_iota. }
   rewrite minnSS /= minnn -eqM leqnn; congr output; apply: MmodF.
   apply/eq_in_map=> x hx.

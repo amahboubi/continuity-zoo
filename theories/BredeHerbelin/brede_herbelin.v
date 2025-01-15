@@ -11,8 +11,8 @@ Open Scope bh_scope.
 
 
 Section Ord.
-  Variables A B : Type.
-Implicit Type (T : seq (nat * B) -> Type).
+  Variables A : Type.
+Implicit Type (T : seq (nat * A) -> Type).
 
 Fixpoint ord_aux {C} (u : list C) (n : nat) : list (nat * C) :=
   match u with
@@ -78,7 +78,7 @@ Proof.
   by rewrite ihu addnS.
 Qed.
 
-Lemma ord_nth {C} b (u : list C) n m : (n + m, nth b u m) = nth (n + m, b) (ord_aux u n) m.
+Lemma ord_nth {C} a (u : list C) n m : (n + m, nth a u m) = nth (n + m, a) (ord_aux u n) m.
 Proof.
   rewrite ordP nth_zip ?size_iota //.
   case: (ltnP m (size u)) => hs; first by rewrite nth_iota.
@@ -98,11 +98,11 @@ Proof.
   eassumption.
 Qed.
 
-Lemma ord_nth_in {C} n m b (u : list C) :
+Lemma ord_nth_in {C} n m a (u : list C) :
   n < size u ->
-  List.In (nth (n + m, b) (ord_aux u m) n) (ord_aux u m).
+  List.In (nth (n + m, a) (ord_aux u m) n) (ord_aux u m).
 Proof.
-  elim: u n m b => [| c u ihu] [| n] m b h //=; first by left.
+  elim: u n m a => [| c u ihu] [| n] m a h //=; first by left.
   right. 
   rewrite -[n.+1 + m]addnS. 
   exact: ihu.
@@ -132,7 +132,7 @@ Proof.
 Qed.    
 
 Lemma ord_sizeu_notin :
-  forall (l : seq B) n,  ~ List.In (n + size l) [seq i.1 | i <- ord_aux l n].
+  forall (l : seq A) n,  ~ List.In (n + size l) [seq i.1 | i <- ord_aux l n].
 Proof.
   induction l ; intros ; cbn ; [easy |].
   intros H.
@@ -197,7 +197,7 @@ Qed.
 Lemma ord_inf_size_aux u n m :
   n <= m ->
   m < (size u + n) ->
-  {b : B & List.In (m, b) (ord_aux u n)}.
+  {a : A & List.In (m, a) (ord_aux u n)}.
 Proof.
   revert n m ; induction u ; intros n m Hn Hm.
   have aux : n < n by (eapply leq_ltn_trans ; [eassumption | exact Hm]).
@@ -215,22 +215,22 @@ Proof.
     now rewrite (IHn m Hyp).
   }
   clear Hn ; intros Hn.
-  edestruct (IHu n.+1 m Hn) as [b Hb].
-  2:{ exists b ; now right. }
+  edestruct (IHu n.+1 m Hn) as [a' Ha'].
+  2:{ exists a' ; now right. }
   change (m < (size u + n).+1 = true) in Hm.
   now erewrite <- plus_n_Sm.
 Qed.
 
 Lemma ord_inf_size u n :
   n < size u ->
-  {b : B & List.In (n, b) (ord u) }.
+  {a : A & List.In (n, a) (ord u) }.
 Proof.
   unfold ord ; intros Hn.
   eapply ord_inf_size_aux ; [easy |].
   now erewrite <- plus_n_O.
 Qed.
 
-Lemma ord_map_aux u n (alpha : nat -> B) : ord_aux [seq alpha i | i <- u] n =
+Lemma ord_map_aux u n (alpha : nat -> A) : ord_aux [seq alpha i | i <- u] n =
                                 [seq (i.1, alpha i.2) | i <- ord_aux u n ].
 Proof.
   revert n alpha ; induction u ; [ reflexivity |] ; intros.
@@ -247,31 +247,31 @@ Proof.
   now eapply IHj.
 Qed.
 
-Lemma ord_dec (u : seq (nat * B)) : {v & { n & u = ord_aux v n} } +
+Lemma ord_dec (u : seq (nat * A)) : {v & { n & u = ord_aux v n} } +
                                       { forall v n, u = ord_aux v n -> False}.
 Proof.
-  induction u as [ | u b IHu] using last_ind.
+  induction u as [ | u a IHu] using last_ind.
   { left ; exists nil ; exists 0 ; reflexivity. }
   destruct IHu as [[v [n Heqvn]] | Hfalse] ; [ | right].
   2:{ intros v n Heq ; subst.
       destruct v as [ | v c _] using last_ind ; [ destruct u ; cbn in * ; inversion Heq | ].
       rewrite ord_rcons in Heq.
-      assert (aux := f_equal (last b) Heq) ;  do 2 rewrite last_rcons in aux ; subst.
+      assert (aux := f_equal (last a) Heq) ;  do 2 rewrite last_rcons in aux ; subst.
       eapply rcons_injl in Heq ; subst.
       now apply (Hfalse v n).
   }
-  destruct b as [m b] ; subst.
-  destruct v as [ | b' v] ; cbn in * ; [left |].
-  { exists [:: b], m ; reflexivity. }
+  destruct a as [m a] ; subst.
+  destruct v as [ | a' v] ; cbn in * ; [left |].
+  { exists [:: a], m ; reflexivity. }
   case: (PeanoNat.Nat.eq_dec m ((size v) + n.+1)) ;
     [intros Heq ; subst ; left | intros Hnoteq ; right].
-  { exists ((b' :: rcons v b)), n ; subst; cbn ; now rewrite ord_rcons. }
+  { exists ((a' :: rcons v a)), n ; subst; cbn ; now rewrite ord_rcons. }
   intros w k Heq ; subst.
-  destruct w as [ | b'' w] ; cbn in * ; [now inversion Heq | ].
+  destruct w as [ | a'' w] ; cbn in * ; [now inversion Heq | ].
   inversion Heq as [[H1 H2 Heq']] ; subst ; clear Heq.
   destruct w as [ | w c _] using last_ind ; [ destruct v ; cbn in * ; inversion Heq' | ].
   rewrite ord_rcons in Heq'.
-  assert (aux := f_equal (last (m, b)) Heq') ; do 2 rewrite last_rcons in aux.
+  assert (aux := f_equal (last (m, a)) Heq') ; do 2 rewrite last_rcons in aux.
   inversion aux ; subst.
   eapply rcons_injl, ord_inj in Heq' ; subst. 
   now apply Hnoteq.
@@ -354,10 +354,10 @@ Qed.
 End Technical.
 
 Section GDC_GBI_Definition.
-  Variables A B : Type.
-  Implicit Type (T : seq (A * B) -> Prop).
+  Variables Q A : Type.
+  Implicit Type (T : seq (Q * A) -> Prop).
 
-Inductive ABUparborification T : list (A * B) -> Prop :=
+Inductive ABUparborification T : list (Q * A) -> Prop :=
 | Tarbor l l' : T l -> List.incl l' l -> ABUparborification T l'.
 
 Definition ABDownarborification T u : Prop :=
@@ -368,27 +368,27 @@ Notation " ⇑⁻ T " := (ABUparborification T) (at level 80) : bh_scope.
 Notation " ⇓⁻ T " := (ABDownarborification T) (at level 80) : bh_scope.
   
 Definition ABchoicefun T :=
-  exists alpha : A -> B, forall u : list A, T [seq (i, alpha i) | i <- u].
+  exists alpha : Q -> A, forall u : list Q, T [seq (i, alpha i) | i <- u].
 
-CoInductive ABapprox T : list (prod A B) -> Prop :=
+CoInductive ABapprox T : list (prod Q A) -> Prop :=
   approx u : (⇓⁻ T) u ->
-             (forall a : A, ~ List.In a (map fst u) ->
-                              exists b : B, ABapprox T (rcons u (a, b))) ->
+             (forall q : Q, ~ List.In q (map fst u) ->
+                              exists a : A, ABapprox T (rcons u (q, a))) ->
              ABapprox T u.
 
 Definition GDC := forall T,  ABapprox T nil -> ABchoicefun T.
 
 Definition ABbarred T :=
-  forall α : A -> B, exists u : list A, T [seq (i, α i) | i <- u].
+  forall α : Q -> A, exists u : list Q, T [seq (i, α i) | i <- u].
 
-Inductive indbarred T : list (A * B) -> Prop :=
+Inductive indbarred T : list (Q * A) -> Prop :=
   | ieta u' u : T u -> List.incl u u' -> indbarred T u'
-  | ibeta a v : ~ List.In a (map fst v) ->
-              (forall b, indbarred T (v ++ [:: (a,b)])) -> indbarred T v.
+  | ibeta q v : ~ List.In q (map fst v) ->
+              (forall a, indbarred T (v ++ [:: (q, a)])) -> indbarred T v.
 
-Inductive indbarred_spec T :  list (A * B) -> Prop := 
+Inductive indbarred_spec T :  list (Q * A) -> Prop := 
  |Eta : forall u l, T (l ++ u) -> indbarred_spec T l
- |Beta : forall u' u a b, T u' -> indbarred_spec T (rcons (u' ++ u) (a, b)).
+ |Beta : forall u' u q a, T u' -> indbarred_spec T (rcons (u' ++ u) (q, a)).
 
 Arguments Eta {T} u l.
 
@@ -400,23 +400,23 @@ Definition GBI T := ABbarred T -> indbarred T [::].
 End GDC_GBI_Definition.
 
 Section DC_GDC_BI_GBI.
-  Variables B : Type.
-  Implicit Type (T : seq (nat * B) -> Prop).
+  Variables A : Type.
+  Implicit Type (T : seq (nat * A) -> Prop).
 
 Notation " ⇑⁻ T " := (ABUparborification T) (at level 80) : bh_scope.
 
 Notation " ⇓⁻ T " := (ABDownarborification T) (at level 80) : bh_scope.
 
-Definition is_tree (P : list B -> Prop) :=
+Definition is_tree (P : list A -> Prop) :=
   forall u n, P u -> P (take n u).
 
-Definition Downarborification (P : list B -> Prop) (u : list B) : Prop :=
+Definition Downarborification (P : list A -> Prop) (u : list A) : Prop :=
   forall n, P (take n u).
 
 Notation " ↓⁻ T " := (Downarborification T) (at level 80) : bh_scope.
 
 
-CoInductive pruning (P : list B -> Prop) : list B -> Prop :=
+CoInductive pruning (P : list A -> Prop) : list A -> Prop :=
   prune a u : P u -> pruning P (rcons u a) -> pruning P u.
 
 Lemma pruning_cat P u n : pruning P u -> exists v, size v = n /\ pruning P (u ++ v).
@@ -429,10 +429,10 @@ elim: n u => [| n ihn] u pru.
   by rewrite -sw -cat_rcons.
 Qed.
 
-Definition choicefun (P : list B -> Prop) :=
-  exists alpha : nat -> B,  forall n : nat, P [seq (alpha i) | i <- iota 0 n].
+Definition choicefun (P : list A -> Prop) :=
+  exists alpha : nat -> A,  forall n : nat, P [seq (alpha i) | i <- iota 0 n].
 
-Definition DC := forall (P : list B -> Prop), pruning P nil -> choicefun P.
+Definition DC := forall (P : list A -> Prop), pruning P nil -> choicefun P.
 
 Definition ABis_tree T :=
   forall u v, List.incl v u -> T u -> T v.
@@ -544,26 +544,26 @@ Proof.
 Qed.
 
 
-Definition TtoP (T : list (nat * B) -> Prop) (l : list B) : Prop :=
+Definition TtoP (T : list (nat * A) -> Prop) (l : list A) : Prop :=
   T (ord l).
 
 Notation " [| T |] " := (TtoP T) (at level 0) : bh_scope.
 
 
-Inductive PtoT (P : list B -> Prop) : list (nat * B) -> Prop :=
+Inductive PtoT (P : list A -> Prop) : list (nat * A) -> Prop :=
 | ptot : forall l, P l -> PtoT P (ord l).
 
-Definition PtoT_dual (P : list B -> Prop) : list (nat * B) -> Prop :=
+Definition PtoT_dual (P : list A -> Prop) : list (nat * A) -> Prop :=
   fun u => forall v, u = ord v -> P v.
 
 Notation " [ P ]ₐ " := (PtoT P) (at level 0) : bh_scope.
 Notation " [ P ]ₑ " := (PtoT_dual P) (at level 0) : bh_scope.
 
 
-Definition TtoP_PtoT_ret (P : list B -> Prop) : forall l, P l -> [| [ P ]ₐ |] l :=
+Definition TtoP_PtoT_ret (P : list A -> Prop) : forall l, P l -> [| [ P ]ₐ |] l :=
   fun l Hl => ptot Hl.
 
-Lemma TtoP_PtoT_inv (P : list B -> Prop) : forall l, [| [ P ]ₐ |] l -> P l.
+Lemma TtoP_PtoT_inv (P : list A -> Prop) : forall l, [| [ P ]ₐ |] l -> P l.
 Proof.
   intros u H.
   inversion H.
@@ -571,14 +571,14 @@ Proof.
 Qed.  
 
 
-Lemma PtoT_TtoP_inv (T : list (nat * B) -> Prop) l :
+Lemma PtoT_TtoP_inv (T : list (nat * A) -> Prop) l :
   [ [| T |] ]ₐ l -> T l. 
 Proof.
   unfold TtoP ; intros H.
   inversion H ; now subst.
 Qed.
 
-Lemma PtoT_TtoP_ret (T : list (nat * B) -> Prop) u :
+Lemma PtoT_TtoP_ret (T : list (nat * A) -> Prop) u :
   T (ord u) -> [ [| T |] ]ₐ (ord u). 
 Proof.
   intro H ; econstructor.
@@ -586,10 +586,10 @@ Proof.
 Qed.
 
 Definition DCProp11 :=
-  forall (P : list B -> Prop) u, P u ->  [| ⇑⁻ [ P ]ₐ |] u.
+  forall (P : list A -> Prop) u, P u ->  [| ⇑⁻ [ P ]ₐ |] u.
 
 Definition BIProp11Down :=
-  forall (P : list B -> Prop) u, monotone P -> P u -> [| ⇓⁺ [ P ]ₑ |] u.
+  forall (P : list A -> Prop) u, monotone P -> P u -> [| ⇓⁺ [ P ]ₑ |] u.
 
 Definition DCProp11_rev :=
   forall P u, is_tree P -> [| ⇑⁻ [ P ]ₐ |] u -> P u.
@@ -698,7 +698,7 @@ Proof.
   generalize (@erefl _ (ord u)).
   generalize (ord u) at 2 3 ; intros l Heq Happ. revert l Happ u Heq. 
   refine (cofix aux l Happ := match Happ as H in ABapprox _ u0 return
-                            forall u : seq B, ord u = u0 -> pruning (TtoP T) u with
+                            forall u : seq A, ord u = u0 -> pruning (TtoP T) u with
                             | approx l Harb Hyp => _
                             end).
   intros u Heq ; subst.
@@ -737,10 +737,10 @@ Proof.
   }
 intros n _.
 case: (leqP (size u) n)=> hns; last first.
-- (* have [b hb] : {b : B & List.In (n, b) (ord u)} by apply: ord_inf_size.  *)
-  assert ({b : B & List.In (n, b) (ord u)}) as [b hb].
+- (* have [a ha] : {a : A & List.In (n, a) (ord u)} by apply: ord_inf_size.  *)
+  assert ({a : A & List.In (n, a) (ord u)}) as [a ha].
     by apply: ord_inf_size.
-  exists b; apply: (aux _ Hprun').
+  exists a; apply: (aux _ Hprun').
   rewrite /ord ord_rcons addn0 -!cats1.
   apply: List.incl_appl => //.
   apply: List.incl_app=> //.
@@ -748,11 +748,11 @@ case: (leqP (size u) n)=> hns; last first.
 - (* have [v [sv pruv]] := pruning_cat (n - size u) Hprun'. *)
   pose v_etc := pruning_cat (n - size u) Hprun'.
   case v_etc => v [sv pruv].
-(*  have [b hb] :  {b : B & List.In (n, b) (ord (rcons u c ++ v))}.*)
-  assert ({b : B & List.In (n, b) (ord (rcons u c ++ v))}) as [b hb].
+(*  have [b hb] :  {b : A & List.In (n, a) (ord (rcons u c ++ v))}.*)
+  assert ({a : A & List.In (n, a) (ord (rcons u c ++ v))}) as [a ha].
     apply: ord_inf_size.
     by rewrite size_cat size_rcons sv addSn subnKC.
-  exists b; apply: (aux _ pruv).
+  exists a; apply: (aux _ pruv).
   rewrite -cats1.
   apply: List.incl_app; last by apply: List.incl_cons.
   rewrite cat_rcons /ord ord_cat.
@@ -812,8 +812,8 @@ Proof.
   induction m ; intros * IHk Hincl Heq.
   {  case: (leqP n.+1 (size u)).
      { intros Hninf.
-       eapply ord_inf_size in Hninf as [b Hb].
-       eapply (IHk b).
+       eapply ord_inf_size in Hninf as [a Ha].
+       eapply (IHk a).
        eapply List.incl_app ; [assumption | ].
        eapply List.incl_cons ; [ assumption | now eapply List.incl_nil_l].
      }
@@ -823,7 +823,7 @@ Proof.
      eapply (proj1 (PeanoNat.Nat.le_succ_l (size u) n.+1)).
      exact (@leP (size u).+1 n.+1 Hinf).
   }
-  econstructor 2 ; intros b.
+  econstructor 2 ; intros a.
   eapply IHm ; [assumption | | ].
   { unfold ord ; erewrite ord_rcons, <- plus_n_O.
     erewrite <- cats1.
@@ -842,7 +842,7 @@ Proof.
   unshelve econstructor 2.
   exact (size l).
   { unfold ord ; exact (@ord_sizeu_notin _ l 0). }
-  unfold ord in * ; intros a ; specialize (IHl a).
+  unfold ord in * ; intros q ; specialize (IHl q).
   erewrite ord_rcons, <- plus_n_O in IHl.
   now rewrite cats1.
 Qed.  
@@ -933,7 +933,7 @@ Proof.
   erewrite ord_map_aux, ord_iota_aux, <- map_comp.
   unshelve erewrite (eq_map (g:= fun i => (i, alpha i))) ; [ | intros ? ; reflexivity].
   eapply Hmon ; [ | eassumption].
-  intros [n b] Hin.
+  intros [n a] Hin.
   eapply map_incl ; [ | eassumption ].
   now eapply incl_iota_max.
 Qed.
@@ -993,7 +993,7 @@ Proof.
   now rewrite <- map_take, take_iota, minnn in Halpha.
 Qed.
 
-Lemma pruning_pruning_Downarbor (P : list B -> Prop) l :
+Lemma pruning_pruning_Downarbor (P : list A -> Prop) l :
   (P l -> forall n, P (take n l)) ->
   pruning P l ->
   pruning (Downarborification P) l.
@@ -1002,7 +1002,7 @@ Proof.
   refine (cofix aux l Hprun :=
             match Hprun as H in pruning _ l0
                   return (P l0 -> forall n, P (take n l0)) -> pruning _ l0 with
-            | prune b u Hu Hyp => _
+            | prune a u Hu Hyp => _
             end).
   intros Htake.
   econstructor.
@@ -1020,7 +1020,7 @@ Proof.
 Qed.
 
 (*For the first direction, we prove that GDC is equivalent to its restriction to
- predicates T : list (nat * B) -> Prop that are trees.*)
+ predicates T : list (nat * A) -> Prop that are trees.*)
 
 
 Lemma GDC_tree T :
@@ -1038,7 +1038,7 @@ Proof.
   }
   apply HGDC ; [now apply DownABarbor_is_tree | ].
   clear HGDC.
-  revert Happ ; generalize (@nil (nat * B)).
+  revert Happ ; generalize (@nil (nat * A)).
   cofix H ; intros u Happ.
   destruct Happ as [u Hu Happ].
   econstructor.
@@ -1046,8 +1046,8 @@ Proof.
     apply Hu ; eapply List.incl_tran ; eassumption.
   }
   intros n Hnotin.
-  specialize (Happ n Hnotin) as [b Happ].
-  exists b.
+  specialize (Happ n Hnotin) as [a Happ].
+  exists a.
   now apply H.
 Qed.  
 
@@ -1068,13 +1068,13 @@ and pruning_pruning_Downarbor to only deal with arborifications of the predicate
 at hand.*)
 
 
-Lemma Theorem5rev : (@GDC nat B) -> DC.
+Lemma Theorem5rev : (@GDC nat A) -> DC.
 Proof.
   intros Hyp P Hprun.
   apply choicefun_Downarbor_choicefun.
   apply ABchoice_PtoT_choice; [apply arbor_is_tree | ].
   unfold GDC in Hyp ; apply Hyp.
-  change (@nil (nat * B)) with (ord (@nil B)).
+  change (@nil (nat * A)) with (ord (@nil A)).
   apply pruning_ABapprox_PtoT.
   eapply pruning_pruning_Downarbor ; [ | assumption ]. 
   intros n ; cbn ; now destruct Hprun.
@@ -1086,7 +1086,7 @@ Qed.
 
 (*The first one, dual of choicefun_Downarbor_choicefun, goes though.*)
 
-Lemma barred_barred_Upmon (P : list B -> Prop) :
+Lemma barred_barred_Upmon (P : list A -> Prop) :
   barred P ->
   barred (Upmonotonisation P).
 Proof.
@@ -1101,7 +1101,7 @@ Qed.
 (*Unfortunately, the second one, dual of pruning_pruning_Downarbor, does not seem
  provable. *)
 
-Lemma hered_Upmon_hered (P : list B -> Prop) l :
+Lemma hered_Upmon_hered (P : list A -> Prop) l :
   (forall n, P (take n l) -> P l) ->
   hereditary_closure (Upmonotonisation P) l ->
   hereditary_closure P l.
@@ -1112,7 +1112,7 @@ Proof.
     econstructor ; apply (HP (size l)).
     now rewrite take_size_cat.
   }
-  econstructor 2 ; intros b ; apply IHk.
+  econstructor 2 ; intros a ; apply IHk.
   intros n.
   case: (leqP n (size u)) ; intros Hinf.
   2:{ erewrite <- cats1, take_cat.
@@ -1121,12 +1121,12 @@ Proof.
   }
   erewrite <- cats1 , takel_cat ; [ | assumption].
   intros Hn ; apply HP in Hn.
-  (*There is no way to derive P (u ++ [:: b])) from the hypotheses.*)
+  (*There is no way to derive P (u ++ [:: a])) from the hypotheses.*)
 Abort.
 
 (*A weaker version is true, assuming that the predicate P is decidable.*)
 
-Lemma hered_Upmon_hered_dec (P : list B -> Prop) (l : list B) :
+Lemma hered_Upmon_hered_dec (P : list A -> Prop) (l : list A) :
   (forall u, {P u} + {~ P u}) ->
   hereditary_closure (Upmonotonisation P) l ->
   (forall n, P (take n l) -> False) ->
@@ -1137,8 +1137,8 @@ Proof.
     apply (Hnot (size u)).
     now erewrite take_size_cat.
   }
-  econstructor 2 ; intros b.
-  destruct (Hdec (rcons u b)) as [ | Hypnot] ; [now econstructor | ].
+  econstructor 2 ; intros a.
+  destruct (Hdec (rcons u a)) as [ | Hypnot] ; [now econstructor | ].
   apply IHk.
   intros n.
   erewrite <- cats1, take_cat.
@@ -1152,8 +1152,8 @@ Qed.
  restriction to monotone predicates.*)
   
 Lemma GBI_monot :
-  (forall T : list (nat * B) -> Prop, ABmonotone T -> GBI T) ->
-  forall (T : list (nat * B) -> Prop), GBI T.
+  (forall T : list (nat * A) -> Prop, ABmonotone T -> GBI T) ->
+  forall (T : list (nat * A) -> Prop), GBI T.
 Proof.
   intros HBI T Hbar.
   suff: forall l,
@@ -1179,12 +1179,12 @@ Qed.
 
 
 Lemma BI_GBI : 
-  (forall P : list B -> Prop, BI_ind P) ->
-  forall (T : list (nat * B) -> Prop), GBI T.
+  (forall P : list A -> Prop, BI_ind P) ->
+  forall (T : list (nat * A) -> Prop), GBI T.
 Proof.
   intros HBI.
   apply GBI_monot ; intros T Hmon HTbar.
-  change (@nil (nat * B)) with (ord (@nil B)).
+  change (@nil (nat * A)) with (ord (@nil A)).
   apply inductively_barred_indbarred.
   apply HBI.
   apply ABbarred_barred_TtoP ; assumption.
@@ -1196,7 +1196,7 @@ End DC_GDC_BI_GBI.
 
 Section Additional_Lemmas.
 
-  Variable B : Type.
+  Variable A : Type.
 
   Notation " ⇑⁺ T " := (ABUpmonotonisation T) (at level 80) : bh_scope.
 
@@ -1216,23 +1216,23 @@ Section Additional_Lemmas.
 (*These lemmas with Upmonotonisation are true, even though they do not appear
   in the proof of equivalence between GBI and BI in Brede-Herbelin's paper.*)
 Definition BIProp11Up :=
-  forall (P : list B -> Prop) l, P l -> [| ⇑⁺  [ P ]ₐ |] l.
+  forall (P : list A -> Prop) l, P l -> [| ⇑⁺  [ P ]ₐ |] l.
 
 
 Definition BIProp11Up_rev :=
-  forall (P : list B -> Prop) l, monotone P -> [| ⇑⁺  [ P ]ₐ |] l -> P l.
+  forall (P : list A -> Prop) l, monotone P -> [| ⇑⁺  [ P ]ₐ |] l -> P l.
 
 Definition BIProp12Up :=
-  forall (P : list B -> Prop) u,
+  forall (P : list A -> Prop) u,
     monotone P -> indbarred (⇑⁺ [ P ]ₐ) (ord u) ->
     hereditary_closure P u.
 
 Definition BIProp12Up_rev :=
-  forall (P : list B -> Prop) u, hereditary_closure P u ->
+  forall (P : list A -> Prop) u, hereditary_closure P u ->
                                  indbarred (⇑⁺  [ P ]ₐ) (ord u).
 
 Definition BIProp13Up_rev :=
-  forall (P : seq B -> Prop), monotone P -> barred P -> ABbarred (⇑⁺ [ P ]ₐ).
+  forall (P : seq A -> Prop), monotone P -> barred P -> ABbarred (⇑⁺ [ P ]ₐ).
 
 
 Lemma P_ABUp_PtoTB : BIProp11Up.
@@ -1296,8 +1296,8 @@ End Additional_Lemmas.
 
 Section GBI_dec.
 
-  Variables B : eqType.
-  Implicit Type (T : seq (nat * B) -> Prop).
+  Variables A : eqType.
+  Implicit Type (T : seq (nat * A) -> Prop).
 
 Notation " ⇑⁺ T " := (ABUpmonotonisation T) (at level 80) : bh_scope.
 
@@ -1314,7 +1314,7 @@ Notation " [ P ]ₐ " := (PtoT P) (at level 0) : bh_scope.
 Notation " [ P ]ₑ " := (PtoT_dual P) (at level 0) : bh_scope.
 
 Definition ABmonotone_size T :=
-  (forall l l' : seq (nat * B), List.incl l l' -> size l <= size l' -> T l -> T l').
+  (forall l l' : seq (nat * A), List.incl l l' -> size l <= size l' -> T l -> T l').
 
 Inductive ABUpmonotonisation_size (C : Type) (T : seq C -> Prop) : seq C -> Prop :=
   Tmon_size : forall l l' : seq C, T l ->
@@ -1344,7 +1344,7 @@ Definition top (v : seq X) (l : seq X) : seq (seq X) :=
 Lemma top_cons v u x : x \in v -> {subset u <= v} -> x :: u \in top v u.
 Proof.
 move=> vx subuv.
-by rewrite /top mem_map=> // a b [].
+by rewrite /top mem_map=> // q a [].
 Qed.
 
 (* (exhaustive) sequence of sequences u of length n such that 
@@ -1418,17 +1418,17 @@ Proof.
     apply Hfalse.
     exists l ; exists l' ; split ; trivial.
   }
-  induction u as [ | u b IHu] using last_ind.
+  induction u as [ | u a IHu] using last_ind.
   { destruct (Hdec nil) as [Htrue | Hfalse] ; [left | right].
     { exists nil ; exists nil ; split ; now trivial. }
     intros [v [w [Heq Hv]]] ; apply Hfalse.
     symmetry in Heq ; apply List.app_eq_nil in Heq as [Heqv Heqw] ; now subst.
   }
-  destruct (Hdec (rcons u b)) as [Htrue | Hfalse] ; [left | ].
-  { exists (rcons u b) ; exists nil ; rewrite cats0 ; now split. }
+  destruct (Hdec (rcons u a)) as [Htrue | Hfalse] ; [left | ].
+  { exists (rcons u a) ; exists nil ; rewrite cats0 ; now split. }
   destruct IHu as [Hu | Hu] ; [left | right].
   { destruct Hu as [v [w [Heq Hv]]] ; subst ; rewrite <- cats1.
-    exists v ; exists (w ++ (cons b nil)) ; split ; [ | assumption].
+    exists v ; exists (w ++ (cons a nil)) ; split ; [ | assumption].
     now rewrite catA.
   }
   intros [v [w [Heq Hv]]].
@@ -1436,30 +1436,30 @@ Proof.
   { apply Hfalse ; rewrite cats0 in Heq ; now subst. }
   apply Hu ; exists v ; exists w; split ; [ | assumption].
   rewrite <- rcons_cat in Heq.
-  assert (aux := f_equal (last b) Heq) ;  do 2 rewrite last_rcons in aux ; subst.
+  assert (aux := f_equal (last a) Heq) ;  do 2 rewrite last_rcons in aux ; subst.
   eapply rcons_injl.
   exact Heq.
 Qed.
 
-Lemma PtoT_dec (P : list B -> Prop) :
+Lemma PtoT_dec (P : list A -> Prop) :
   (forall u, {P u} + {~ P u}) ->
   (forall u, {[P ]ₐ u} + {~ [P ]ₐ u}).
 Proof.
   intros Hdec u.
   destruct u ; [destruct (Hdec nil) as [Htrue | Hfalse] ; [left | right] | ].
-  { change (@nil (nat * B)) with (ord (@nil B)) ; now econstructor. }
+  { change (@nil (nat * A)) with (ord (@nil A)) ; now econstructor. }
   { intros Hyp ; inversion Hyp as [u Hu Heq] ; apply Hfalse.
-    change (@nil (nat * B)) with (ord (@nil B)) in Heq ; unfold ord in *.
+    change (@nil (nat * A)) with (ord (@nil A)) in Heq ; unfold ord in *.
     now apply ord_inj in Heq ; subst.
   }
   case: (ord_dec (p :: u)) ; [intros [v [n Heq]] ; subst | intros Hnoteq].
-  { destruct v as [ | b v ] ; cbn in * ; inversion Heq ; subst.
+  { destruct v as [ | a v ] ; cbn in * ; inversion Heq ; subst.
     destruct n ; [ | right].
     2:{ intros Hyp ; inversion Hyp ; unfold ord in *.
         destruct l ; cbn in * ; now inversion H. }
     clear Heq.
-    change ((0, b) :: ord_aux v 1) with (ord (b :: v)). 
-    destruct (Hdec (b :: v)) as [Htrue | Hfalse] ; [left ; now econstructor | right].
+    change ((0, a) :: ord_aux v 1) with (ord (a :: v)). 
+    destruct (Hdec (a :: v)) as [Htrue | Hfalse] ; [left ; now econstructor | right].
     intros Hyp ; inversion Hyp as [u Hu Heq] ; unfold ord in *.
     apply ord_inj in Heq ; subst ; now apply Hfalse.
   }
@@ -1485,7 +1485,7 @@ Lemma ABUpmono_size_dec T :
 Proof.
   intros Hdec u.
   destruct (included_size u) as [L HL].
-  suff: decidable (exists2 v : seq (nat * B), v \in L & T v).
+  suff: decidable (exists2 v : seq (nat * A), v \in L & T v).
   { intros [Hyp | Hnot]; [left | right].
     - destruct Hyp as [v Hin HT].
       apply HL in Hin as [Hincl Hsize].
@@ -1501,7 +1501,7 @@ Proof.
 Qed.  
 
 (* This is the crucial decidability argument for the next result *)
-Lemma ABUp_Up_dec (P : list B -> Prop) u : 
+Lemma ABUp_Up_dec (P : list A -> Prop) u : 
   (forall v, decidable (P v)) -> decidable ((⇑⁺ [↑⁺ P ]ₐ) u).
 Proof.
   move=> Hdec.
@@ -1518,7 +1518,7 @@ Proof.
   (* Q2 describes a decision algorithm for Q1 *)
   pose Q2 w := exists n :'I_(size w).+1, (* size of v1 ++ v2 *)
                exists m : (size w).-tuple bool, (* selecting the elements of ord (v1 ++ v2) in w *)
-               exists v : seq (nat * B), 
+               exists v : seq (nat * A), 
                [/\ (v \in permutations (mask m w)), (* the actual ord (v1 ++ v2) *)
                (unzip1 v = iota 0 n) & (* unzip1 v1 ++ v2 should form a iota *)
                (exists k : 'I_n.+1, P (unzip2 (take k v)))]. (* a prefix v is in P *)
@@ -1531,7 +1531,7 @@ Proof.
       by have /NoDupP := ord_NoDup 0 (v1 ++ v2). (* apply/NoDuP does not work ? *)
     exists (Ordinal p1) => /=.
     have /count_subseqP [vw /subseqP [m sm em] evw]: 
-      forall x : nat * B, count_mem x (ord (v1 ++ v2)) <= count_mem x w.
+      forall x : nat * A, count_mem x (ord (v1 ++ v2)) <= count_mem x w.
        move=> x /=; apply: leq_uniq_count; last exact/inclP.
        apply/NoDupP; exact: ord_NoDup.
     have pm : size m == size w by apply/eqP.
@@ -1580,8 +1580,8 @@ Proof.
 Qed.
 
 Lemma GBI_BI_dec :
-  (forall (T : list (nat * B) -> Prop), (forall u, decidable (T u)) -> GBI T) ->
-  forall P : list B -> Prop, (forall u, decidable (P u)) -> BI_ind P.
+  (forall (T : list (nat * A) -> Prop), (forall u, decidable (T u)) -> GBI T) ->
+  forall P : list A -> Prop, (forall u, decidable (P u)) -> BI_ind P.
 Proof.
   intros HGBI P Hdec Hbar.
   destruct (Hdec nil) as [Hnil | Hnotnil] ; [now econstructor | ].
@@ -1592,10 +1592,9 @@ Proof.
 now apply monot_barred.
 Qed.
 
-Print GBI_monot.
 (*
 Lemma ABUpmono_dec T : (forall u, decidable (T u)) ->
-                       forall u : seq (nat * B), decidable ((⇑⁺ T) u).
+                       forall u : seq (nat * A), decidable ((⇑⁺ T) u).
 Proof.
   intros Hdec u.
   set Q := (X in (X u)).
@@ -1610,15 +1609,15 @@ Proof.
   (* Q2 describes a decision algorithm for Q1 *)
   pose Q2 w := exists n :'I_(size w).+1, (* size of v1 ++ v2 *)
                exists m : (size w).-tuple bool, (* selecting the elements of ord (v1 ++ v2) in w *)
-               exists v : seq (nat * B), 
+               exists v : seq (nat * A), 
                  [/\ (v \in permutations (mask m w)) & (* the actual ord (v1 ++ v2) *)
                    T v].
   have Q2P w : Q2 w <-> Q1 w.
   split; last first. *)
 
 Lemma GBI_monot_dec :
-  (forall T : seq (nat * B) -> Prop, ABmonotone_size T -> (forall u, decidable (T u)) -> GBI T) ->
-  forall T : seq (nat * B) -> Prop, (forall u, decidable (T u)) -> GBI T.
+  (forall T : seq (nat * A) -> Prop, ABmonotone_size T -> (forall u, decidable (T u)) -> GBI T) ->
+  forall T : seq (nat * A) -> Prop, (forall u, decidable (T u)) -> GBI T.
 Proof.
   intros HBI T Hdec Hbar.
   suff: forall l,
@@ -1658,7 +1657,7 @@ Proof.
   erewrite ord_map_aux, ord_iota_aux, <- map_comp.
   unshelve erewrite (eq_map (g:= fun i => (i, alpha i))) ; [ | intros ? ; reflexivity].
   eapply Hmon ; [ | | eassumption].
-  + intros [n b] Hin.
+  + intros [n a] Hin.
     eapply map_incl ; [ | eassumption ].
     eapply List.incl_tran ; [ now eapply incl_iota_max | ].
     rewrite iotaD.
@@ -1668,14 +1667,14 @@ Proof.
 Qed.
 
 Lemma BI_GBI_dec :
-  (forall P : list B -> Prop, (forall u, decidable (P u)) -> BI_ind P) ->
-  forall (T : list (nat * B) -> Prop), (forall u, decidable (T u)) -> GBI T.
+  (forall P : list A -> Prop, (forall u, decidable (P u)) -> BI_ind P) ->
+  forall (T : list (nat * A) -> Prop), (forall u, decidable (T u)) -> GBI T.
 Proof.
   intros HBI ; eapply GBI_monot_dec.
   intros T Hmon Hdec Hbar.  
   destruct (Hdec nil) as [Hnil | Hnotnil].
   1:{ econstructor ; [eassumption | now eapply List.incl_refl]. }
-  change (@nil (nat * B)) with (ord (@nil B)).
+  change (@nil (nat * A)) with (ord (@nil A)).
   eapply inductively_barred_indbarred.
   apply HBI ; unfold TtoP.
   1: intros u ; now eapply Hdec.
@@ -1753,9 +1752,9 @@ Section GDC_gen.
   Qed.
 
 
-  Lemma ABbarred_choicefun {A B}
+  Lemma ABbarred_choicefun {Q A}
     (DNE : forall P : Prop, ~ ~ P -> P)
-    (T : seq (A * B) -> Prop) :
+    (T : seq (Q * A) -> Prop) :
     ~ ABchoicefun (fun l => ~ T l) -> ABbarred T .
   Proof.
     intros Hyp.
@@ -1836,36 +1835,38 @@ End GDC_gen.
 
 
 Section BI_mon.
-  Variable (B : Type).
+  Variable (A : Type).
 
     
-Inductive hered_mon (T : list B -> Prop) : list B -> Prop :=
+Inductive hered_mon (T : list A -> Prop) : list A -> Prop :=
   | sefl_mon u u' : T u -> hered_mon T (u ++ u')
-  | sons_mon u : (forall b, hered_mon T (rcons u b)) -> hered_mon T u.
+  | sons_mon u : (forall a, hered_mon T (rcons u a)) -> hered_mon T u.
 
 Definition BI_alt P := barred P -> hered_mon P [::].
 
 
 (*In this section, we show that a monotonised version of hereditary_closure
-   is equivalent to GBI for predicates on natural numbers.*)
+  is equivalent to GBI for predicates on natural numbers.
+  We start with the fact that BI_alt for all predicates implies GBI 
+  for all predicates*)
   
 Lemma BI_GBI_alt : 
-  (forall P : list B -> Prop, BI_alt P) ->
-  forall (T : list (nat * B) -> Prop), GBI T.
+  (forall P : list A -> Prop, BI_alt P) ->
+  forall (T : list (nat * A) -> Prop), GBI T.
 Proof.
   intros HBI.
   apply GBI_monot.
   intros T Hmon HTbar.
-  change (@nil (nat * B)) with (ord (@nil B)).
+  change (@nil (nat * A)) with (ord (@nil A)).
   suff: hered_mon (TtoP T) nil.
-  { generalize (@nil B) ; clear.
+  { generalize (@nil A) ; clear.
     intros l ; induction 1 as [ u v Hyp | u k IHk].
     { unfold TtoP in Hyp ; econstructor ; [eassumption | ].
       unfold ord ; erewrite ord_cat.
       apply List.incl_appl ; now eapply List.incl_refl. }
     unshelve econstructor 2 ; [exact (size u) | | ].
     { unfold ord ; exact (@ord_sizeu_notin _ u 0). }
-    unfold ord in * ; intros a ; specialize (IHk a).
+    unfold ord in * ; intros q ; specialize (IHk q).
     erewrite ord_rcons, <- plus_n_O in IHk.
     now rewrite cats1.
   }
@@ -1873,16 +1874,15 @@ Proof.
   apply ABbarred_barred_TtoP ; assumption.
 Qed.
 
-(*GBI for all predicates also implies BI for decidable predicates, making use of 
- barred_Upmon_barred and hered_Upmon_hered_dec. *)
+(*GBI for all predicates also implies BI_alt for all predicates. *)
 
 Lemma GBI_BI_alt :
-  (forall (T : list (nat * B) -> Prop), GBI T) ->
-  forall (P : list B -> Prop), BI_alt P.
+  (forall (T : list (nat * A) -> Prop), GBI T) ->
+  forall (P : list A -> Prop), BI_alt P.
 Proof.
   intros HGBI P Hbar.
   suff: hered_mon (Upmonotonisation P) nil.
-  { generalize (@nil B) ; induction 1 as [u v Hyp | u k IHk].
+  { generalize (@nil A) ; induction 1 as [u v Hyp | u k IHk].
     2: econstructor 2 ; now apply IHk.
     destruct Hyp ; rewrite <- catA.
     now econstructor.
@@ -1894,7 +1894,7 @@ Proof.
   }
   apply barred_ABbarred_PtoT in Hbar_alt ; [ | now apply Upmonot_monotone].
   apply HGBI in Hbar_alt.
-  change (@nil (nat * B)) with (ord (@nil B)) in Hbar_alt.
+  change (@nil (nat * A)) with (ord (@nil A)) in Hbar_alt.
   apply indbarred_inductively_barred_Down_dual in Hbar_alt.
   induction Hbar_alt.
   { destruct H ; econstructor ; erewrite <- cats0 ; now  econstructor. }

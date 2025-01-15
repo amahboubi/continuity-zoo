@@ -42,9 +42,9 @@ Section Kawai.
 
 Variables A R : Type.
 
-Definition neighborhoodfunction (γ : list A -> option R) :=
+Definition neighborhoodfunction (γ : seq A -> option R) :=
   (forall α : nat -> A, exists n : nat, γ (map α (iota 0 n)) <> None) /\
-    forall a b : list A, γ a <> None -> γ a = γ (a ++ b).
+    forall a b : seq A, γ a <> None -> γ a = γ (a ++ b).
 
 
 Definition neigh_realises γ (F : (nat -> A) -> R) :=
@@ -58,7 +58,7 @@ Definition neigh_cont F :=
 (*In fact, we do not need the second hypothesis of neigh_realises in neigh_cont, 
   as it can be retrieved from neighborhoodfunction gamma.*)
  
-Lemma useless_hypothesis (tau : list A -> option R) F :
+Lemma useless_hypothesis (tau : seq A -> option R) F :
   neighborhoodfunction tau ->
   (forall alpha, exists m, tau (map alpha (iota 0 m)) = Some (F alpha)) ->
   neigh_cont F.
@@ -90,7 +90,7 @@ Qed.
   
 (*A first result is that neighborhood functions are well-founded, valid
  Brouwer extensional trees.*)
-Lemma neighborhood_wf_valid_Bext_tree (tau : list A -> option R) :
+Lemma neighborhood_wf_valid_Bext_tree (tau : seq A -> option R) :
   neighborhoodfunction tau <-> (wf_Bext_tree tau /\ Bvalid_ext_tree tau).
 Proof.
   split ; intros [Hwf Hval].
@@ -186,9 +186,9 @@ Qed.
 
 
 (*Let us now define Brouwer_operation. As explained, it is 
- an inductive predicate on functions of type list nat -> option nat.*)
+ an inductive predicate on functions of type seq nat -> option nat.*)
 
-Inductive Brouwer_operation : (list A -> option R) -> Prop :=
+Inductive Brouwer_operation : (seq A -> option R) -> Prop :=
 | Bconst γ n : (forall a, γ a = Some n) -> Brouwer_operation γ
 | Bsup γ : γ nil = None ->
            (forall n, Brouwer_operation (fun a => γ (n :: a))) ->
@@ -200,7 +200,7 @@ However, Brouwer_operation as it stands is too intensional.
  We thus start by defining Brouwer_operation_at, a variant of Brouwer_operation
  that does not require function extensionality.*)
 
-Inductive Brouwer_operation_at : (list A -> option R) -> list A -> Prop :=
+Inductive Brouwer_operation_at : (seq A -> option R) -> seq A -> Prop :=
 | Bconst_at l γ n : (forall a, γ (l ++ a) = Some n) -> Brouwer_operation_at γ l
 | Bsup_at l γ : γ l = None ->
            (forall n, Brouwer_operation_at γ (rcons l n)) ->
@@ -208,12 +208,13 @@ Inductive Brouwer_operation_at : (list A -> option R) -> list A -> Prop :=
 
 (*Using Function Extensionality, the two predicates are equivalent.*)
 
-Require Import FunctionalExtensionality.
 
 Lemma Brouwer_operation_at_spec l γ :
+  (forall X Y (f g : forall x : X, Y x), (forall x : X, f x = g x) -> f = g) ->
   Brouwer_operation (fun a => γ (l ++ a)) <->
   Brouwer_operation_at γ l.
 Proof.
+  intros funext.
   split.
   - intros H.
     remember (fun a : seq A => γ (l ++ a)) as γ_l.
@@ -225,14 +226,14 @@ Proof.
       rewrite cats0 in H.
       eapply Bsup_at => //.
       intros. eapply H1.
-      eapply functional_extensionality_dep_good.
+      eapply funext.
       intros. now rewrite cat_rcons.
   - induction 1.
     + eapply Bconst => //.
     + eapply Bsup.
       1: rewrite cats0 => //.
       intros.
-      erewrite functional_extensionality_dep_good.
+      erewrite funext.
       1: eapply H1.
       intros. cbn. rewrite cat_rcons => //.
 Qed.
@@ -240,13 +241,13 @@ Qed.
 (*We now define Brouwer_operation_at', similar to Brouwer_operation but with only
  one constructor, to be able to escape Prop.*)
 
-Inductive Brouwer_operation_at' (γ : list A -> option R) (l : list A) : Prop :=
+Inductive Brouwer_operation_at' (γ : seq A -> option R) (l : seq A) : Prop :=
 | Bsup_at' : (γ l = None \/ ~ (exists n, forall a, γ (l ++ a) = Some n) ->
                 (forall n, Brouwer_operation_at' γ (rcons l n))) ->
                 Brouwer_operation_at' γ l.
 
 (*Brouwer_operation_at_Type is similar to Brouwer_operation_at', but lives in Type.*)
-Inductive Brouwer_operation_at_Type (γ : list A -> option R) (l : list A) : Type :=
+Inductive Brouwer_operation_at_Type (γ : seq A -> option R) (l : seq A) : Type :=
 | Bsup_at_Type : (γ l = None ->
               (forall n, Brouwer_operation_at_Type γ (rcons l n))) ->
              Brouwer_operation_at_Type γ l.
@@ -284,7 +285,7 @@ Definition Bneigh_cont F :=
 Lemma K0K_aux γ l :
   Brouwer_operation_at γ l ->
   (forall α : nat -> A, exists n : nat, γ (l ++ (map α (iota 0 n))) <> None) /\
-    forall a b : list A, γ (l ++ a) <> None -> γ (l ++ a) = γ (l ++ a ++ b).
+    forall a b : seq A, γ (l ++ a) <> None -> γ (l ++ a) = γ (l ++ a ++ b).
 Proof.
   induction 1.
   - split.
@@ -420,7 +421,7 @@ Qed.
 (*It is quite straightforward to turn a neighborhood function into a coinductive
  Brouwer tree*)
 
-CoFixpoint neigh_to_Bitree (e : list A -> option R) (l : list A) :
+CoFixpoint neigh_to_Bitree (e : seq A -> option R) (l : seq A) :
   @Bitree A R :=
   match e l with
   | None => Bvis (fun a => neigh_to_Bitree e (rcons l a))

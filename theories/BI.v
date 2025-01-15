@@ -1108,7 +1108,7 @@ Proof.
            econstructor ; [ assumption | ].
            eapply (IHk m.+1) ; [eauto | now rewrite addSn - addnS].
         -- symmetry in Heqaux2. 
-           have {Hinf} Hinf : n = m + k.+1 by lia.
+           have {} Hinf : n = m + k.+1 by lia.
            by move: Heqa; rewrite Hinf (ieval_finapp_monotone_ask_fuel _ _ Heqaux2).
   - now eapply IHu.
   - econstructor ; [ assumption | ].
@@ -1127,7 +1127,7 @@ Proof.
            econstructor ; [ assumption | ].
            eapply (IHk m.+1) ; [eauto | now rewrite addSn - addnS].
         -- symmetry in Heqaux2.
-           have {Hinf} Hinf : n = m + k.+1 by lia.
+           have {} Hinf : n = m + k.+1 by lia.
            move: Heq; rewrite Hinf (ieval_finapp_monotone_ask_fuel _ _ Heqaux2) //.
            by eauto.
 Qed.

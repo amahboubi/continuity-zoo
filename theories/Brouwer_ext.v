@@ -496,9 +496,9 @@ Lemma itree_to_BitreeP (n m : nat) (d : itree) (alpha : Q -> A) (r : R) :
   ieval d alpha n = output r ->
   exists k, Bieval (itree_to_Bitree (map alpha (iota 0 m)) d) (n_comp alpha m) k = Some r.
 Proof.
-  elim: n d m => [| n ihn] [rr | q k] m //= [] Hyp.
-  - by exists 0; rewrite Hyp.
-  - by exists 0; rewrite Hyp.
+  elim: n d m => [| n ihn] [rr | q k] m //=  Hyp ; inversion Hyp ; subst.
+  - by exists 0.
+  - by exists 0. 
   - have {Hyp ihn} [i Hj] := ihn (k (alpha q)) m.+1 Hyp.
     exists (i.+1 + (q.+1 - m)).
     case: (posnP (q.+1 - m)) => Heqx.
