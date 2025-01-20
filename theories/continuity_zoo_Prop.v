@@ -1,7 +1,7 @@
 Require Import Program Lia ConstructiveEpsilon.
 From mathcomp Require Import zify.
 From Equations Require Import Equations.
-Require Import extra_principles.
+Require Import extra_principles Util.
 From mathcomp Require Import all_ssreflect.
 
 Set Implicit Arguments.
@@ -1160,6 +1160,67 @@ Qed.
 
 End sec.
 
+Section FinQuestion.
+  (*In this Section we prove that if Q is finite then any function
+   that is existentially modulus continuous is uniformly continuous.*)
+
+Variables Q A R : Type.
+
+Variable L : list Q.
+Hypothesis L_spec : forall q : Q, List.In q L.
+
+Lemma all_uniform F : ex_modulus_cont F -> @uni_cont Q A R F.
+Proof.
+  intros Hyp ; exists L.
+  intros f g heq.
+  specialize (Hyp f) ; destruct Hyp as [l Hl].
+  apply Hl ; clear Hl.
+  induction l as [ | q l IHl] ; [reflexivity | ].
+  cbn ; f_equal ; [ | assumption ].
+  have map_map (u : seq Q) (h : Q -> A) :  List.map h u = map h u.
+  { induction u as [ | x v IHv] ; [reflexivity | cbn ; now f_equal]. }
+  clear IHl F l ; specialize (L_spec q).
+  do 2 (rewrite - map_map in heq).
+  have Hf := List.in_map f L q L_spec. 
+  have Hg := List.in_map g L q L_spec.
+  revert heq Hf Hg L_spec ; clear map_map.
+  induction L as [ | q' l IHl] ; intros ; [now inversion Hf | cbn in *].
+  destruct L_spec as [Heq | Hin] ; subst ; [now inversion heq | ].
+  apply IHl ; [now inversion heq | | | assumption].
+  1,2: now apply List.in_map.
+Qed.
+ 
+End FinQuestion.
+
+Section Dialogue_not_uniform.
+(*We prove in this Section that a dialogue continuous function may not 
+  be uniformly continuous*)
+  Definition F : (nat -> nat) -> nat := fun f => f (f 0).
+
+  Lemma dialogue_F : dialogue_cont F.
+  Proof.
+    exists (beta 0 (fun a => beta a (fun a' => eta a'))).
+    intros f ; reflexivity.
+  Qed.
+  
+  Lemma dialogue_not_uniform : uni_cont F -> False.
+  Proof.
+    intros [L HL].
+    unfold modulus_at in HL.
+    have [n [Hinf Hn]] := Notallin L.
+    pose (f := fun (m : nat) => if m == n then 0 else n).
+    pose (g := fun (m : nat) => if m == n then 1 else n).
+    suff: F f = F g.
+    - unfold F, g, f.
+      apply negbTE in Hinf ; rewrite Hinf.
+      rewrite eq_refl ; intros H ; inversion H.
+    -
+      
+      
+    
+  
+End Dialogue_not_uniform.
+
 (** ** Continuity for Cantor space  *)
 
 Section Cantor.
@@ -1272,10 +1333,12 @@ Proof.
   eapply IHl.
 Qed.
 
+
 (*We now go the other way around.*)
 
 End fix_types.
-
+(*We prove here that when the answer type A is finite, then any 
+  dialogue continuous function is uniformly continuous*)
 Variable R : Type.
 Variable Q : Type.
 Variable A : Type.
@@ -1288,6 +1351,7 @@ Fixpoint dialogue_to_list (d : @dialogue Q A R) : list Q :=
   | eta a => nil
   | beta q k => q :: flatten (map (fun a => dialogue_to_list (k a)) L)
   end.
+
 
 Lemma dialogue_is_uniform F : dialogue_cont F -> @uni_cont Q A R F.
 Proof.

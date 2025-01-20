@@ -1,4 +1,4 @@
-Require Import continuity_zoo_Prop.
+Require Import Util continuity_zoo_Prop.
 
 Definition DNE := forall P, ~~ P -> P.
 
@@ -48,16 +48,6 @@ Require Import Lia.
 Lemma inconsistent :
   Cont nat bool Prop ->  False.
 Proof.
-  have notallin : forall (l : seq nat) (n : nat),
-      (\max_(i <- l) i) < n -> n \in l = false.
-  { induction l as [ | x l IHl] ; [reflexivity | intros n Hinfn].
-    rewrite in_cons ; rewrite big_cons in Hinfn.
-    rewrite gtn_max in Hinfn.
-    apply andb_prop in Hinfn as [H1 H2].
-    apply Bool.orb_false_intro.
-    + now apply gtn_eqF.
-    + now apply IHl.
-  }
   intros HC. red in HC.
   specialize (HC (fun f => forall n, f n = true)). 
   apply dialogue_to_seq_cont in HC.
@@ -71,9 +61,8 @@ Proof.
     1: reflexivity.
     clear Hm ; generalize (m xpredT) as l ; clear m.
     admit.
-  - specialize (H (\max_(i <- (m xpredT)) i).+1).
-    specialize (notallin (m xpredT) (\max_(i <- (m xpredT)) i).+1).
-    rewrite notallin in H.
-    + now inversion H.
-    + now apply ltnSn.
+  - have [n [Hinf Hyp]] := @Notallin (m xpredT).
+    specialize (H n).
+    rewrite Hyp in H.
+    now inversion H.
 Admitted.
