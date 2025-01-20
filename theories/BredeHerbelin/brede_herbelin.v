@@ -598,7 +598,7 @@ Definition BIProp11Down_rev :=
   forall P u, [| ⇓⁺ [ P ]ₑ |] u -> P u.
 
 Definition DCProp12 :=
-  forall T u, ABis_tree T -> ABapprox T (ord u) -> pruning [| T |] u.
+  forall T u, ABapprox T (ord u) -> pruning [| T |] u.
 
 Definition BIProp12 :=
   forall T u, ABmonotone T -> indbarred T (ord u) -> hereditary_closure [| T |] u.
@@ -694,7 +694,7 @@ Qed.
 
 Lemma ABapprox_pruning_TtoP : DCProp12.
 Proof.
-  intros T u Htree.
+  intros T u.
   generalize (@erefl _ (ord u)).
   generalize (ord u) at 2 3 ; intros l Heq Happ. revert l Happ u Heq. 
   refine (cofix aux l Happ := match Happ as H in ABapprox _ u0 return
@@ -779,8 +779,7 @@ Proof.
     econstructor ; [ | now apply (aux _ Hprun) ].
     apply Uparbor_PtoT_P ; eassumption.
   }
-  apply ABapprox_pruning_TtoP ; [ | assumption].
-  now apply UpABarbor_is_tree.
+  now apply ABapprox_pruning_TtoP. 
 Qed.
 
 
@@ -1059,7 +1058,7 @@ Proof.
   intros Hyp T Htree Happ.
   apply choice_TtoP_ABchoice ; [assumption | ].
   apply Hyp.
-  now apply ABapprox_pruning_TtoP ; [assumption | ].
+  now apply ABapprox_pruning_TtoP.
 Qed.  
 
 
@@ -1112,7 +1111,8 @@ Proof.
     econstructor ; apply (HP (size l)).
     now rewrite take_size_cat.
   }
-  econstructor 2 ; intros a ; apply IHk.
+  econstructor 2 ; intros a.
+  apply IHk.
   intros n.
   case: (leqP n (size u)) ; intros Hinf.
   2:{ erewrite <- cats1, take_cat.
@@ -1176,7 +1176,6 @@ Proof.
 Qed.
 
 (*Thus BI implies GBI, mediating by the previous Lemma.*)
-
 
 Lemma BI_GBI : 
   (forall P : list A -> Prop, BI_ind P) ->
