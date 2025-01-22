@@ -1214,11 +1214,17 @@ Section Dialogue_not_uniform.
     - unfold F, g, f.
       apply negbTE in Hinf ; rewrite Hinf.
       rewrite eq_refl ; intros H ; inversion H.
-    -
-      
-      
-    
-  
+    - apply HL.
+      clear Hinf HL.
+      induction L.
+      + reflexivity.
+      + rewrite in_cons eq_sym in  Hn.
+        apply Bool.orb_false_elim in Hn as [H1 H2].
+        cbn ; f_equal.
+        * unfold f, g.
+          rewrite H1 ; reflexivity.
+        * now apply IHL.
+  Qed.
 End Dialogue_not_uniform.
 
 (** ** Continuity for Cantor space  *)
