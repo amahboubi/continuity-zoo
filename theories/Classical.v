@@ -48,21 +48,14 @@ Require Import Lia.
 Lemma inconsistent :
   Cont nat bool Prop ->  False.
 Proof.
-  intros HC. red in HC.
-  specialize (HC (fun f => forall n, f n = true)). 
-  apply dialogue_to_seq_cont in HC.
-  apply seq_cont_to_self_modulus_cont in HC as (m & Hm & _).
-  specialize (Hm (fun n => true)).
-  cbn in Hm.
-  specialize (Hm (fun n => n \in (m (fun _ => true)))). 
-  cbn in Hm.
-  assert (forall n : nat, (n \in m xpredT) = true) as H.
-  - rewrite - Hm.
-    1: reflexivity.
-    clear Hm ; generalize (m xpredT) as l ; clear m.
-    admit.
-  - have [n [Hinf Hyp]] := @Notallin (m xpredT).
-    specialize (H n).
-    rewrite Hyp in H.
-    now inversion H.
-Admitted.
+move/(_ (fun f => forall n, f n)).
+move/dialogue_to_seq_cont/seq_cont_to_self_modulus_cont => [m [Hm _]].
+pose f (n : nat) := true.
+pose g (n : nat) := n \in m f.
+have /Hm e : [seq f i | i <- m f] = [seq g i | i <- m f].
+  by apply/eq_in_map=> /= k hk; rewrite /f /g hk.
+suffices : ~ (forall n, g n) by apply; rewrite -e.
+suffices [k hk] : exists k : nat, k \notin (m f) by move/(_ k); apply/negP.
+have [k [_ hk]]:= Notallin (m f).
+by exists k; rewrite hk.
+Qed.
