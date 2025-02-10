@@ -49,7 +49,7 @@ Lemma inconsistent :
   Cont nat bool Prop ->  False.
 Proof.
 move/(_ (fun f => forall n, f n)).
-move/dialogue_to_seq_cont/seq_cont_to_self_modulus_cont => [m [Hm _]].
+move/dialogue_to_tree_fun_cont/tree_fun_cont_to_self_modulus_cont => [m [Hm _]].
 pose f (n : nat) := true.
 pose g (n : nat) := n \in m f.
 have /Hm e : [seq f i | i <- m f] = [seq g i | i <- m f].

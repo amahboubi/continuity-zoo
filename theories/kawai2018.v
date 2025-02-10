@@ -167,8 +167,8 @@ Qed.
 
 (*We now get to Result 1.*)
 
-Theorem neigh_cont_Bseq_cont F :
-  neigh_cont F <-> Bseq_cont_valid F.
+Theorem neigh_cont_Btree_fun_cont F :
+  neigh_cont F <-> Btree_fun_cont_valid F.
 Proof.
   split.
   - intros [tau [Hneigh Hreal]].
@@ -429,8 +429,8 @@ CoFixpoint neigh_to_Bitree (e : seq A -> option R) (l : seq A) :
   end.
 
 
-Lemma neigh_cont_to_Bseq_cont_interaction F :
-  neigh_cont F -> Bseq_cont_interaction F.
+Lemma neigh_cont_to_Bcoind_dial_cont F :
+  neigh_cont F -> Bcoind_dial_cont F.
 Proof.
   intros [e [Hne Hrel]].
   exists (neigh_to_Bitree e nil).
@@ -492,8 +492,8 @@ Proof.
 Qed.
 
 (*We conclude.*)
-Lemma Bseq_cont_interaction_to_neigh_cont F :
-  Bseq_cont_interaction F -> neigh_cont F.
+Lemma Bcoind_dial_cont_to_neigh_cont F :
+  Bcoind_dial_cont F -> neigh_cont F.
 Proof.
   intros [b Hb].
   suff: forall f, exists n, Bitree_to_option b [seq f i | i <- iota 0 n] = Some (F f) /\
@@ -517,12 +517,12 @@ Proof.
       eapply Bieval_trace_inf ; eauto.
 Qed.
 
-Theorem neigh_cont_iff_Bseq_cont_interaction (F : (nat -> A) -> R) :
-  neigh_cont F <-> Bseq_cont_interaction F.
+Theorem neigh_cont_iff_Bcoind_dial_cont (F : (nat -> A) -> R) :
+  neigh_cont F <-> Bcoind_dial_cont F.
 Proof.
   split.
-  - apply neigh_cont_to_Bseq_cont_interaction.
-  - apply Bseq_cont_interaction_to_neigh_cont.
+  - apply neigh_cont_to_Bcoind_dial_cont.
+  - apply Bcoind_dial_cont_to_neigh_cont.
 Qed.
 
 End Kawai.

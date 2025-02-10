@@ -22,7 +22,7 @@ Arguments ext_tree {_ _ _}, _ _ _.
 Section Brouwer_ext_tree.
 
   (*The goal of this Section is to provide an extensional tree equivalent to Brouwer
-    trees, and to prove that it is equivalent to seq_contW. *)
+    trees, and to prove that it is equivalent to tree_fun_contW. *)
 
 Variable A R : Type.
 Notation Q := nat.
@@ -64,7 +64,7 @@ Fixpoint Beval_ext_tree_aux (tau : Bext_tree) (f : Q -> A) (n : nat) (l : seq A)
 Definition Beval_ext_tree tau f n := Beval_ext_tree_aux tau f n nil 0.
 
 (*Continuity via Brouwer extensional trees*)
-Definition Bseq_cont F :=
+Definition Btree_fun_cont F :=
   exists tau : Bext_tree, forall alpha, exists n : nat, Beval_ext_tree tau alpha n = Some (F alpha).
 
 (*The following is a bunch of lemmas that mimick lemmas about extensional trees,
@@ -77,7 +77,7 @@ Definition Bvalid_ext_tree (tau : Bext_tree) :=
   forall (f : Q -> A) (k : Q) (r : R), tau (map f (iota 0 k)) = Some r ->
                           tau (map f (iota 0 k.+1)) = Some r.
 
-Definition Bseq_cont_valid F :=
+Definition Btree_fun_cont_valid F :=
   exists tau : Bext_tree,
     (forall alpha, exists n : nat, Beval_ext_tree tau alpha n = Some (F alpha)) /\
       (Bvalid_ext_tree tau).
@@ -260,7 +260,7 @@ Proof.
 Hint Resolve ext_tree_to_Bext_tree_valid.
 
 (*Continuity via ext_trees implies continuity via Brouwer ext_trees*)
-Lemma seq_cont_to_Brouwer_aux F (a : A) tau alpha :
+Lemma tree_fun_cont_to_Brouwer_aux F (a : A) tau alpha :
   (exists n : Q, eval_ext_tree tau alpha n = output (F alpha)) ->
   exists n : Q, Beval_ext_tree (extree_to_Bextree tau a) alpha n = Some (F alpha).
 Proof.
@@ -306,13 +306,13 @@ Proof.
   exact (IHn (k.+1)).
 Qed.
 
-Proposition seq_cont_to_Brouwer F : seq_cont F -> Bseq_cont F.
+Proposition tree_fun_cont_to_Brouwer F : tree_fun_cont F -> Btree_fun_cont F.
 Proof.
   intros [tau Htau].
   exists (extree_to_Bextree_noo tau).
   intros alpha.
   specialize (Htau alpha).
-  destruct (seq_cont_to_Brouwer_aux (alpha 0) Htau) as [n Haux].
+  destruct (tree_fun_cont_to_Brouwer_aux (alpha 0) Htau) as [n Haux].
   destruct Htau as [m Htau].
   exists n.
   destruct n; [now inversion Haux |].
@@ -384,7 +384,7 @@ Proof.
 Qed.
 
 
-Definition Bseq_cont_interaction F :=
+Definition Bcoind_dial_cont F :=
   exists τ : Bitree, forall f : Q -> A, exists n : nat, Bieval τ f n = Some (F f).
 
 
@@ -450,7 +450,7 @@ Qed.
 
 
 Lemma Bitree_cont_to_itree_cont (F : (nat -> A) -> R) :
-  Bseq_cont_interaction F -> seq_cont_interaction F.
+  Bcoind_dial_cont F -> coind_dial_cont F.
 Proof.
   intros [b Hb].
   exists (Bitree_to_itree b) ; intros alpha.
@@ -523,7 +523,7 @@ Proof.
 Qed.
 
 Lemma itree_to_Bitree_cont (F : (nat -> A) -> R) :
-  seq_cont_interaction F -> Bseq_cont_interaction F.
+  coind_dial_cont F -> Bcoind_dial_cont F.
 Proof.
   intros [d Hd].
   exists (itree_to_Bitree nil d).

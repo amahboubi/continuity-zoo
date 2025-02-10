@@ -56,7 +56,7 @@ Variant 3 : in "Principles of bar induction and continuity on Baire space",
 Section BarInduction.
 
 (*The aim of this Section is to prove that decidable Bar Induction implies the equivalence
- between Bseq_cont_interaction and dialogue_cont_Brouwer.*)
+ between Bcoind_dial_cont and dialogue_cont_Brouwer.*)
   
 Variable dBI : forall R T, (forall a, {T a} + {~ (T a)}) -> @BI_ind R T.
 Variables A R : Type.
@@ -65,7 +65,7 @@ Implicit Type (F : (Q -> A) -> R).
 Implicit Type (b : @Bitree A R).
 
 Proposition Bseq_cont_to_dialogue_cont_Brouwer F :
-  Bseq_cont_interaction F -> dialogue_cont_Brouwer F.
+  Bcoind_dial_cont F -> dialogue_cont_Brouwer F.
 Proof.
   intros [b Hb].
   pose (T:= fun l => exists r, Bitree_to_option b l = Some r).
@@ -132,7 +132,7 @@ End BarInduction.
 Section ContinuousInduction.
 
 (*The aim of this Section is to prove that assuming as an axiom the 
-  equivalence between Bseq_cont_interaction and dialogue_cont_Brouwer
+  equivalence between Bcoind_dial_cont and dialogue_cont_Brouwer
   allows to derive decidable Bar Induction. 
  Thus, together with the previous Section, the two axioms are equivalent.*)  
 
@@ -142,7 +142,7 @@ Notation R := (seq A).
 Implicit Type (F : (Q -> A) -> R).
 Implicit Type (b : @Bitree A R).
 
-Variable CI : forall F, Bseq_cont_interaction F -> dialogue_cont_Brouwer F.
+Variable CI : forall F, Bcoind_dial_cont F -> dialogue_cont_Brouwer F.
 
 CoFixpoint pred_to_Bitree_aux (P : seq A -> bool) (l : seq A) : @Bitree A R :=
   if (P l) then Bret _ l else Bvis (fun a => pred_to_Bitree_aux P (rcons l a)).
@@ -326,7 +326,7 @@ Proof.
   have aux:= (barred_Bseq_cont Hbar).
   destruct aux as [aux].
   pose (F := pred_to_fun aux).
-  have Fcon : Bseq_cont_interaction F.
+  have Fcon : Bcoind_dial_cont F.
   { exists (pred_to_Bitree_aux P nil).
     intros alpha ; exists (projT1 (aux alpha)).
     now apply (proj2_sig (projT2 (aux alpha))).
@@ -798,7 +798,7 @@ Qed.
   We want to go from seq_cont F to dialogue_cont F.
  Right now, we can do the following. *)
 Lemma GBI_GCI_Fail F :
-  seq_cont_interaction F ->
+  coind_dial_cont F ->
   dialogue_cont F.
 Proof.
   intros HF.
@@ -1373,7 +1373,7 @@ Qed.
 (*We are now ready to prove our theorem.*)
   
 Theorem GBI_GCI F :
-  seq_cont_interaction F ->
+  coind_dial_cont F ->
   dialogue_cont F.
 Proof.
   intros [tau HF].

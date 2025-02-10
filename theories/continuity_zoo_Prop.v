@@ -102,13 +102,13 @@ Fixpoint eval_ext_tree_aux (tau : ext_tree) (f : Q -> A) (n : nat) (l : list A) 
 
 Definition eval_ext_tree tau f n := eval_ext_tree_aux tau f n [::].
 
-Definition seq_cont F :=
+Definition tree_fun_cont F :=
   exists τ : ext_tree, forall f : Q -> A, exists n : nat, eval_ext_tree τ f n = output (F f).
 
 Definition wf_ext_tree (tau : ext_tree) :=
   forall f : nat -> A,  exists n o, tau (map f (iota 0 n)) = output o.
 
-(** *** Sequential continuity via interrogations  *)
+(** *** Tree function continuity via interrogations  *)
 
 (* Interrogations (van Oosten) *)
 Inductive interrogation (f : Q -> A) : seq A -> (seq A -> result) -> Prop :=
@@ -117,13 +117,13 @@ Inductive interrogation (f : Q -> A) : seq A -> (seq A -> result) -> Prop :=
                 interrogation f l τ ->
                 τ l = ask q -> interrogation f (rcons l a) τ.
 
-Definition seq_cont_via_interrogations F :=
+Definition tree_fun_cont_via_interrogations F :=
   exists τ, forall f, exists ans, interrogation f ans τ /\ τ ans = output (F f).
 
-(** *** Sequential continuity via interaction trees  *)
+(** *** Tree function continuity via interaction trees  *)
 
 (* Xia et al.'s interaction trees. Connected to
-of Forster et al.' sequential continuity, see below
+of Forster et al.' tree function continuity, see below
 It is dialogue + delay monad *)
 CoInductive itree (E: Type -> Type) (R: Type) : Type :=
 | Ret (r : R) (* computation terminating with value r *)
@@ -158,7 +158,7 @@ Proof.
   by apply: ihn1; eauto.
 Qed.
 
-Definition seq_cont_interaction F :=
+Definition coind_dial_cont F :=
   exists τ : Itree, forall f : Q -> A, exists n : nat, ieval τ f n = output (F f).
 
 (** ** Modulus continuity  *)
@@ -439,7 +439,7 @@ Qed.
 
 End Brouwer.
 
-Section Sequential.
+Section TreeFunction.
 
 Context {Q A R : Type}.
 
@@ -538,17 +538,17 @@ Definition ext_tree_for F tau :=
  forall f : Q -> A, exists n : nat, eval_ext_tree tau f n = output (F f).
 
 (* May be require more than wf, but also possibly non_empty and/or valid *)
-Definition seq_cont_wf F :=
+Definition tree_fun_cont_wf F :=
   exists tau, wf_ext_tree tau /\ ext_tree_for F tau.
 
 Definition valid_ext_tree tau :=
   forall l r, tau l = output r -> forall a, tau (rcons l a) = output r.
   
-Definition seq_cont_valid (F : (Q -> A) -> R) :=
+Definition tree_fun_cont_valid (F : (Q -> A) -> R) :=
   exists tau, ext_tree_for F tau /\ valid_ext_tree tau.
 
-Lemma seq_cont_wf_to_seq_cont F :
-  seq_cont_wf F -> seq_cont F.
+Lemma tree_fun_cont_wf_to_tree_fun_cont F :
+  tree_fun_cont_wf F -> tree_fun_cont F.
 Proof.
   firstorder.
 Qed.
@@ -563,7 +563,7 @@ Proof.
   exact: ihl'.
 Qed.
 
-(** *** Dialogue continuity implies sequential continuity  *)
+(** *** Dialogue continuity implies tree function continuity  *)
 
 (** From dialogue to extensional trees **)
 
@@ -573,7 +573,7 @@ Fixpoint dialogue_to_ext_tree d (l : seq A) : @result Q R :=
    | beta q k => if l is a :: l then dialogue_to_ext_tree (k a) l else ask q
   end.
   
-(* Dialogue continuity implies any form of sequential continuity *)
+(* Dialogue continuity implies any form of tree function continuity *)
 
 Lemma dialogue_to_ext_tree_wf d : 
   wf_ext_tree (dialogue_to_ext_tree d).
@@ -602,8 +602,8 @@ Proof.
     exact: ihn.
 Qed.
 
-Theorem dialogue_to_seq_cont  (F : (Q -> A) -> R) :
-  dialogue_cont F -> seq_cont F.
+Theorem dialogue_to_tree_fun_cont  (F : (Q -> A) -> R) :
+  dialogue_cont F -> tree_fun_cont F.
 Proof.
   case=> d hd.  
   exists (dialogue_to_ext_tree d) => f. 
@@ -611,7 +611,7 @@ Proof.
   exact: dialogue_to_ext_tree_for. 
 Qed.
 
-(** *** Sequential continuity is equivalent to sequential continuity with interrogations *)
+(** *** Tree function continuity is equivalent to tree function continuity with interrogations *)
 
 Implicit Type f : Q -> A.
 Implicit Type τ : @ext_tree Q A R.
@@ -711,7 +711,7 @@ Proof.
 Qed.
 
 Lemma continuous_via_interrogations_iff (F : (Q -> A) -> R) :
-  seq_cont F <-> seq_cont_via_interrogations F.
+  tree_fun_cont F <-> tree_fun_cont_via_interrogations F.
 Proof.
   split.
   - intros [τ H]. exists τ. intros f.
@@ -720,7 +720,7 @@ Proof.
     eapply interrogation_equiv_eval_ext_tree. eapply H.
 Qed.
 
-(** *** Sequential continuity is equivalent to interaction tree continuity  *)
+(** *** Tree function continuity is equivalent to interaction tree continuity  *)
 
 CoFixpoint ext_tree_to_int_tree (e : @ext_tree Q A R) (l : list A) : Itree :=
   match e l with
@@ -728,8 +728,8 @@ CoFixpoint ext_tree_to_int_tree (e : @ext_tree Q A R) (l : list A) : Itree :=
   | output r => ret r
   end.
 
-Lemma seq_cont_to_seq_cont_interaction (F : (Q -> A) -> R) :
-  seq_cont F -> seq_cont_interaction F.
+Lemma tree_fun_cont_to_coind_dial_cont (F : (Q -> A) -> R) :
+  tree_fun_cont F -> coind_dial_cont F.
 Proof.
   case=> e He.
   exists (ext_tree_to_int_tree e nil) => f.
@@ -758,8 +758,8 @@ elim=> [| n ihn] // q k f l /=.
 by case: (int_tree_to_ext_tree _ _).
 Qed.
 
-Lemma seq_cont_interaction_to_seq_cont (F : (Q -> A) -> R) :
-  seq_cont_interaction F -> seq_cont F.
+Lemma coind_dial_cont_to_tree_fun_cont (F : (Q -> A) -> R) :
+  coind_dial_cont F -> tree_fun_cont F.
 Proof.
   case=> i hi.
   exists (int_tree_to_ext_tree i) => f.
@@ -770,12 +770,12 @@ Proof.
   exact: ihn.
 Qed.
 
-Theorem seq_cont_iff_seq_cont_interaction (F : (Q -> A) -> R) :
-  seq_cont F <-> seq_cont_interaction F.
+Theorem tree_fun_cont_iff_coind_dial_cont (F : (Q -> A) -> R) :
+  tree_fun_cont F <-> coind_dial_cont F.
 Proof.
   split.
-  - exact: seq_cont_to_seq_cont_interaction.
-  - exact: seq_cont_interaction_to_seq_cont.
+  - exact: tree_fun_cont_to_coind_dial_cont.
+  - exact: coind_dial_cont_to_tree_fun_cont.
 Qed.
 
 (** Results about wf and valid trees  *)
@@ -825,8 +825,8 @@ elim: n (@nil A) => [| n ihn] l h /= e.
   + by rewrite -cats1 takel_cat.
 Qed.
 
-Proposition seq_cont_to_seq_cont_valid F :
-  seq_cont F -> seq_cont_valid F.
+Proposition tree_fun_cont_to_tree_fun_cont_valid F :
+  tree_fun_cont F -> tree_fun_cont_valid F.
 Proof.
 case=> tau htau.
 exists (ext_tree_valid tau); split.
@@ -839,7 +839,7 @@ exists (ext_tree_valid tau); split.
   exact: ext_tree_valid_valid.
 Qed.
 
-End Sequential.
+End TreeFunction.
 
 (** ** Modulus continuity  *)
 
@@ -847,7 +847,7 @@ Section Modulus.
 
 Variable Q A R : Type.
 
-(** *** Sequential continuity implies computable modulus continuity  *)
+(** *** Tree function continuity implies computable modulus continuity  *)
 
 (*The trace of evaluation of an extensional tree is a modulus of continuity
  for the evaluation of that extensional tree.*)
@@ -870,7 +870,7 @@ Proof.
 Qed.
 
 (*Continuity via extensional trees implies continuity via moduli*)
-Lemma seq_cont_to_self_modulus_cont (F : (Q -> A) -> R) : seq_cont F -> self_modulus_cont F.
+Lemma tree_fun_cont_to_self_modulus_cont (F : (Q -> A) -> R) : tree_fun_cont F -> self_modulus_cont F.
 Proof.
   move=> [] tau. intros [F_eq_eval] % Delta0_choice.
   2:{ intros f n. destruct eval_ext_tree eqn:E. 1: right. 1: congruence.
@@ -921,10 +921,10 @@ Proof.
   eapply eq_in_map in Hg. now eapply Hg.
 Qed.
 
-(** *** Self-modulating continuity implies sequential continuity for Q = nat *)
+(** *** Self-modulating continuity implies tree function continuity for Q = nat *)
 
 (* In this section, we assume queries are nat, and prove that self-modulating moduli
-of standard continuity imply sequential continuity.*)
+of standard continuity imply tree function continuity.*)
 
 Implicit Type (F : (nat -> A) -> R).
 Implicit Types (tau : @ext_tree nat A R).
@@ -985,8 +985,8 @@ Proof.
         rewrite /from_pref (nth_map 0)  ?size_iota // nth_iota // add0n.
 Qed.
 
-Lemma self_modulus_seq_cont F : 
-  self_modulus_cont F -> seq_cont F.
+Lemma self_modulus_tree_fun_cont F : 
+  self_modulus_cont F -> tree_fun_cont F.
 Proof.
   intros (M & MmodF & MmodM).
   exists (modulus_to_ext_tree F M) => f.
@@ -1011,7 +1011,7 @@ Qed.
 
 End Modulus.
 
-(** ** Sequential continuity is equivalent to self-modulating continuity when Q = nat *)
+(** ** Tree function continuity is equivalent to self-modulating continuity when Q = nat *)
 
 (* Analogues of eqseq_cons for non eqTypes *)
 Lemma eq_cat {T : Type} (s1 s2 s3 s4 : seq T) :
@@ -1136,14 +1136,14 @@ Proof.
   exists (N α) => *; exact: HNY.
 Qed.
 
-Theorem seq_cont_equiv_self_modulus_cont (F : (Q -> A) -> R) :
-  seq_cont F <-> continuous_modulus_cont F.
+Theorem tree_fun_cont_equiv_self_modulus_cont (F : (Q -> A) -> R) :
+  tree_fun_cont F <-> continuous_modulus_cont F.
 Proof.
   split.
-  - intros contF. eapply seq_cont_to_self_modulus_cont in contF as (N & HF & HN). 
+  - intros contF. eapply tree_fun_cont_to_self_modulus_cont in contF as (N & HF & HN). 
     eexists; split; eauto.
     intros f. exists (N f). red in HN. refine (HN f).
-  - intros (N' & HF' & HN'). eapply self_modulus_seq_cont.
+  - intros (N' & HF' & HN'). eapply self_modulus_tree_fun_cont.
     edestruct T14 as (N & HF & HN).
     + eexists. split.
       2:{ intros f. eapply modulus_at_to_modulus_at_nat. exact (HF' f). }
