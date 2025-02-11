@@ -847,6 +847,32 @@ Section Modulus.
 
 Variable Q A R : Type.
 
+(*If F is modulus function continuous then it is existentially modulus continuous.*)
+
+Lemma modulus_ex_modulus (F : (Q -> A) -> R) :
+  comp_modulus_cont F ->
+  ex_modulus_cont F.
+Proof.
+  intros [M HM] alpha.
+  exists (M alpha).
+  intros beta ; now apply (HM).
+Qed.
+
+(*The converse is true assuming the axiom of choice.*)
+
+Lemma ex_modulus_modulus_fun (F : (Q -> A) -> R)
+  (AC: forall R : (Q -> A) -> seq Q -> Prop,
+      (forall x, exists y, R x y) -> exists f, forall x, R x (f x)) :
+  ex_modulus_cont F ->
+  comp_modulus_cont F.
+Proof.
+  intros Hyp.
+  specialize (AC (modulus_at F) Hyp).
+  destruct AC as [M HM].
+  exists M ; intros alpha beta Heq.
+  now eapply HM.
+Qed.
+
 (** *** Tree function continuity implies computable modulus continuity  *)
 
 (*The trace of evaluation of an extensional tree is a modulus of continuity
