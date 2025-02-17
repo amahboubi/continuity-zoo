@@ -7,7 +7,7 @@ To rebuild all Coq files, do
 ```bash
 opam switch create continuity --packages="ocaml-variants.4.14.1+options,ocaml-option-flambda"
 opam repo add coq-released https://coq.inria.fr/opam/released
-opam install  coq.8.19.1 coq-mathcomp-ssreflect coq-mathcomp-zify coq-equations 
+opam install  coq.8.20.1 coq-mathcomp-ssreflect coq-mathcomp-zify coq-equations 
 make
 ```
 
