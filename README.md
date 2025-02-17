@@ -1,7 +1,5 @@
 # continuity-zoo
 
-Putting the pdf of the paper in this directory will make the links to the coqdoc html files work.
-The html files are pre-build.
 To rebuild all Coq files, do
 
 ```bash
@@ -15,6 +13,8 @@ To rebuild all html files, do
 ```bash
 make html
 ```
+
+The html files are also accessible via links from the paper.
 
 The main file is theories/continuity_zoo_Prop.v. It contains several different definitions of continuity as well as proofs regarding how they relate with each other.
 
