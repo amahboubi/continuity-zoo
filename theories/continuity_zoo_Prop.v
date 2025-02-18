@@ -1283,7 +1283,7 @@ Fixpoint list_to_cantor (l : list (prod Q A)) (n : Q) : A :=
 Fixpoint list_to_dialogue F (l : list Q) (acc : list (prod Q A)) :=
   match l with
   | nil => eta (F (list_to_cantor acc))
-  | cons i q => beta i (fun r => list_to_dialogue F q ((i, r) :: acc))
+  | cons q l => beta q (fun a => list_to_dialogue F l ((q, a) :: acc))
   end.
 
 (*The trace of an evaluation of a dialogue tree*)
@@ -1291,7 +1291,7 @@ Fixpoint deval_list_to_dialogue_trace  (l : list Q) (f : Q -> A) (acc: list (pro
   list (prod Q A) :=
   match l with
   | nil => acc
-  | cons i q =>  deval_list_to_dialogue_trace q f ((i, f i) :: acc)
+  | cons q l =>  deval_list_to_dialogue_trace l f ((q, f q) :: acc)
   end.
 
 Lemma list_to_cantor_swap l acc1 acc2 f a1 a2 n :
